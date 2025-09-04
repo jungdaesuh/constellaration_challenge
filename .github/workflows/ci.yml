@@ -23,6 +23,6 @@ jobs:
       - name: Type check
         run: |
           pip install mypy
-          mypy
+          mypy src tests
       - name: Tests
         run: pytest -q
