@@ -10,8 +10,10 @@ from rich.console import Console
 from rich.table import Table
 
 from .data.dataset import fetch_dataset, save_subset
-from .physics.constel_api import example_boundary, evaluate_boundary
+from .eval import forward as eval_forward_metrics
+from .eval import score as eval_score_agg
 from .optim.evolution import run_cma_es_baseline
+from .physics.constel_api import example_boundary
 from .surrogate.train import train_simple_mlp
 
 app = typer.Typer(help="ConstelX CLI — ConStellaration starter tools")
@@ -39,9 +41,15 @@ app.add_typer(data_app, name="data")
 
 @data_app.command("fetch")
 def data_fetch(
-    cache_dir: Path = typer.Option(Path("data/cache"), help="Where to store HF cache/parquets."),
-    nfp: Optional[int] = typer.Option(None, help="Filter by number of field periods (boundary.n_field_periods)."),
-    limit: Optional[int] = typer.Option(1000, help="Take first N examples for quick experiments."),
+    cache_dir: Path = typer.Option(
+        Path("data/cache"), help="Where to store HF cache/parquets."
+    ),
+    nfp: Optional[int] = typer.Option(
+        None, help="Filter by number of field periods (boundary.n_field_periods)."
+    ),
+    limit: Optional[int] = typer.Option(
+        1000, help="Take first N examples for quick experiments."
+    ),
 ):
     ds = fetch_dataset()
     if nfp is not None:
@@ -59,7 +67,9 @@ app.add_typer(eval_app, name="eval")
 
 @eval_app.command("forward")
 def eval_forward(
-    boundary_json: Optional[Path] = typer.Option(None, help="Path to a JSON boundary (SurfaceRZFourier)."),
+    boundary_json: Optional[Path] = typer.Option(
+        None, help="Path to a JSON boundary (SurfaceRZFourier)."
+    ),
     example: bool = typer.Option(False, "--example", help="Use a synthetic example."),
 ):
     if example:
@@ -69,12 +79,30 @@ def eval_forward(
             raise typer.BadParameter("Provide --boundary-json or use --example")
         b = json.loads(boundary_json.read_text())
 
-    result = evaluate_boundary(b)
+    result = eval_forward_metrics(b)
     table = Table(title="Forward metrics")
-    table.add_column("metric"); table.add_column("value")
+    table.add_column("metric")
+    table.add_column("value")
     for k, v in result.items():
         table.add_row(k, f"{v:.6g}" if isinstance(v, (int, float)) else str(v))
     console.print(table)
+
+
+@eval_app.command("score")
+def eval_score(
+    metrics_json: Path = typer.Option(
+        ..., "--metrics-json", help="Path to a JSON file containing a metrics dict."
+    ),
+):
+    """Aggregate a scalar score from a metrics JSON file.
+
+    The JSON must contain a flat dict of metric name to numeric value. Non-numeric
+    entries are ignored. If any numeric value is NaN, the score is +inf.
+    """
+
+    metrics = json.loads(Path(metrics_json).read_text())
+    value = eval_score_agg(metrics)
+    console.print(f"score = {value}")
 
 
 # -------------------- OPTIMIZATION --------------------
@@ -122,8 +150,12 @@ def agent_run(
     population: int = 8,
 ):
     """Minimal loop stub to be extended by the coding agent."""
-    console.print(f"[bold]Agent[/bold] starting: iterations={iterations}, population={population}")
-    console.print("TODO: implement propose/simulate/select/refine using constellaration forward model.")
+    console.print(
+        f"[bold]Agent[/bold] starting: iterations={iterations}, population={population}"
+    )
+    console.print(
+        "TODO: implement propose/simulate/select/refine using constellaration forward model."
+    )
 
 
 if __name__ == "__main__":
