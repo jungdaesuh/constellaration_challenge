@@ -1,98 +1,49 @@
-# CLAUDE.md
+# Repository Guidelines
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+These guidelines help contributors build, test, and extend the ConStelX starter cleanly and consistently.
 
-## Common Development Commands
+## Project Structure & Module Organization
 
-### Environment Setup
+- Source: `constelx/` with submodules: `cli/`, `data/`, `eval/`, `optim/`, `models/` (aka `surrogate/`), `agents/`, `physics/`.
+- Tests: `tests/` mirrors package layout (e.g., `tests/test_eval_forward.py`).
+- Examples & runs: `examples/` for tiny inputs; `runs/<timestamp>/` for artifacts.
 
-```bash
-# Create and activate virtual environment
-python3 -m venv .venv && source .venv/bin/activate
+## Build, Test, and Development Commands
 
-# Install system dependencies (macOS with Homebrew)
-brew install netcdf
+- Create env: `python3 -m venv .venv && source .venv/bin/activate`
+- System deps (macOS): `brew install netcdf`
+- Install (dev + BO): `pip install -e ".[dev,bo]"`
+- Lint: `ruff check .` Format: `ruff format .`
+- Type check: `mypy constelx` (keep clean; Python ≥ 3.10)
+- Tests: `pytest -q` (fast unit + minimal integration)
+- CLI help: `constelx --help`
+  - Quick smoke: `constelx data fetch --nfp 3 --limit 8`
+  - E2E (small): `constelx agent run --nfp 3 --budget 5 --seed 0`
 
-# Install the package with development dependencies
-pip install -e ".[dev,bo]"
-```
+## Coding Style & Naming Conventions
 
-### Development Tools
+- Python: 4‑space indent, max line length 100 (ruff), f‑strings, dataclasses when helpful.
+- Type hints required; `from __future__ import annotations` allowed.
+- Naming: modules/functions/vars `lower_snake_case`; classes `PascalCase`; constants `UPPER_SNAKE`.
+- Keep modules focused; avoid cross‑package imports that create cycles.
 
-```bash
-# Run linting and formatting
-ruff check .
-ruff format .
+## Testing Guidelines
 
-# Run tests
-pytest
+- Framework: `pytest`; name tests `test_*.py` with clear arrange‑act‑assert.
+- Cover: new features need happy‑path + 1–2 edge cases; add a tiny integration test for new CLI.
+- Use small fixtures under `tests/fixtures/`; prefer deterministic seeds.
 
-# Run the main CLI
-constelx --help
-```
+## Commit & Pull Request Guidelines
 
-### Core CLI Commands
+- Commits: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
+- PRs: < ~400 LOC, green `ruff` + `mypy` + `pytest`, include docs and a minimal example.
+- Description: what/why, linked issues, CLI example (if applicable), and notes on performance.
 
-```bash
-# Data operations
-constelx data fetch --nfp 3 --limit 32
+## Architecture & Ops Notes
 
-# Physics evaluation
-constelx eval forward --example
-
-# Optimization baselines
-constelx opt baseline --algo cma-es --steps 50
-
-# Surrogate model training
-constelx surrogate train
-
-# Agent loop (stub)
-constelx agent run --iterations 3 --population 8
-```
-
-## Architecture Overview
-
-This is a Python package for ML + physics-based optimization of stellarator plasma boundaries using the ConStellaration dataset. The project is structured as a CLI-first application with modular components.
-
-### Key Modules
-
-- **`constelx.cli`**: Main CLI interface with typer, organized into subcommands (`data`, `eval`, `opt`, `surrogate`, `agent`)
-- **`constelx.physics`**: Physics wrappers around the `constellaration` package
-  - `constel_api.py`: Core evaluation functions using ConStellaration metrics
-  - `pcfm.py`, `pbfm.py`: Physics-constrained generation modules (stubs)
-  - `constraints.py`: Hard constraint tooling
-- **`constelx.data`**: Dataset access via HuggingFace datasets (`proxima-fusion/constellaration`)
-- **`constelx.optim`**: Optimization algorithms (CMA-ES baseline, BoTorch stubs)
-- **`constelx.surrogate`**: Simple MLP baseline + placeholders for advanced models
-
-### Data Flow
-
-1. **Data**: Fetch filtered subsets from HuggingFace dataset → cache as Parquet
-2. **Physics**: Evaluate boundaries via ConStellaration's VMEC++ interface
-3. **Optimization**: Use CMA-ES or BoTorch to optimize scalar metrics
-4. **Surrogate**: Train ML models to replace expensive forward simulations
-5. **Agent**: Multi-step propose→simulate→select→refine loop
-
-### Dependencies
-
-- **Core**: `constellaration>=0.1.6` for physics evaluation and VMEC++ interfaces
-- **ML**: `torch` (optional on macOS arm64), `datasets`, `pandas`, `numpy`, `scipy`
-- **CLI**: `typer`, `rich` for user interface
-- **Optimization**: `cma` for evolution strategies, `botorch`+`gpytorch` for Bayesian optimization
-- **Dev**: `pytest`, `ruff` for testing and linting
-
-### System Requirements
-
-- Python 3.10+
-- NetCDF library (`brew install netcdf` on macOS, `libnetcdf-dev` on Ubuntu)
-- PyTorch installation may need manual setup on macOS arm64
-
-### Development Notes
-
-- The codebase uses modern Python features (`from __future__ import annotations`)
-- Ruff configuration: line length 100, basic linting enabled
-- This is a starter/skeleton repo with many TODO stubs for extension
-- Physics constraints (PCFM/PBFM) are placeholder modules for future implementation
+- Minimum E2E path: `agents.simple_agent` → `eval.forward` → `eval.score` → `optim.cmaes` → artifacts in `runs/` (config, metrics, best).
+- System requirements: NetCDF present; PyTorch may require manual install on macOS arm64.
+- Reproducibility: log seeds, package versions, and git SHA; prefer small, resumable runs (`--resume`).
 
 # constelx — Coding Agent Runbook
 
