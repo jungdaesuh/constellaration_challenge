@@ -10,14 +10,14 @@ from constelx.cli import app
 runner = CliRunner()
 
 
-def test_eval_forward_example_runs_and_prints_metrics():
+def test_eval_forward_example_runs_and_prints_metrics() -> None:
     result = runner.invoke(app, ["eval", "forward", "--example"])
     assert result.exit_code == 0
     # Expect one of the placeholder metrics in output
     assert "placeholder_metric" in result.stdout
 
 
-def test_eval_score_reads_metrics_json(tmp_path: Path):
+def test_eval_score_reads_metrics_json(tmp_path: Path) -> None:
     metrics = {"a": 1.25, "b": 2.25}
     p = tmp_path / "metrics.json"
     p.write_text(json.dumps(metrics))

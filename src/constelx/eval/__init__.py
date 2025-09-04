@@ -17,7 +17,7 @@ from __future__ import annotations
 from math import inf, isnan
 from typing import Any, Dict, Mapping, TypeAlias
 
-from constellaration.geometry import surface_rz_fourier  # type: ignore[import]
+from constellaration.geometry import surface_rz_fourier
 
 from ..physics.constel_api import evaluate_boundary
 
@@ -54,7 +54,8 @@ def forward(boundary: Mapping[str, Any]) -> Dict[str, Any]:
 
     # Validate inputs to provide clear errors early; convert to pydantic model if needed.
     _ = boundary_to_vmec(boundary)
-    return evaluate_boundary(boundary)
+    # evaluate_boundary expects a plain dict
+    return evaluate_boundary(dict(boundary))
 
 
 def score(metrics: Mapping[str, Any]) -> float:

@@ -5,13 +5,13 @@ import pytest
 from constelx.eval.boundary_param import sample_random, validate
 
 
-def test_sample_random_is_deterministic():
+def test_sample_random_is_deterministic() -> None:
     b1 = sample_random(nfp=3, seed=42)
     b2 = sample_random(nfp=3, seed=42)
     assert b1 == b2
 
 
-def test_validate_rejects_bad_inputs():
+def test_validate_rejects_bad_inputs() -> None:
     b = sample_random(nfp=3, seed=0)
     # Good boundary validates
     validate(b)

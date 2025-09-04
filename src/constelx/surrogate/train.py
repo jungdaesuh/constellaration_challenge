@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd  # type: ignore[import]
-import torch  # type: ignore[import]
-import torch.nn as nn  # type: ignore[import]
-import torch.optim as optim  # type: ignore[import]
+import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 
-def _boundary_cols(df: pd.DataFrame):
+def _boundary_cols(df: pd.DataFrame) -> list[str]:
     return [
         c for c in df.columns if c.startswith("boundary.r_cos") or c.startswith("boundary.z_sin")
     ]
 
 
 class MLP(nn.Module):
-    def __init__(self, d_in: int, d_out: int = 1):
+    def __init__(self, d_in: int, d_out: int = 1) -> None:
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(d_in, 128),
@@ -25,11 +25,11 @@ class MLP(nn.Module):
             nn.Linear(128, d_out),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
 
-def train_simple_mlp(cache_dir: Path, output_dir: Path):
+def train_simple_mlp(cache_dir: Path, output_dir: Path) -> None:
     df = pd.read_parquet(Path(cache_dir) / "subset.parquet")
     X = df[_boundary_cols(df)].fillna(0.0).to_numpy()
     # Toy target: pick one available scalar metric if present, else zeros

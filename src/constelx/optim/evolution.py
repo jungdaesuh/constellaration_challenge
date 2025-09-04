@@ -29,7 +29,7 @@ def run_cma_es_baseline(steps: int = 50) -> float:
     sigma0 = 0.02
     es = cma.CMAEvolutionStrategy(x0, sigma0, {"bounds": [-0.2, 0.2]})
 
-    def make_boundary(x):
+    def make_boundary(x: list[float]) -> Dict[str, Any]:
         b = example_boundary()
         # helical (m=1, n=1) perturbations
         b["r_cos"][1][5] = float(-abs(x[0]))

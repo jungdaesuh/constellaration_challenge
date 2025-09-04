@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from constellaration.metrics import scoring  # type: ignore[import]
-from constellaration.utils import surface_rz_fourier, vmec_utils  # type: ignore[import]
+from constellaration.metrics import scoring
+from constellaration.utils import surface_rz_fourier, vmec_utils
 
 
 def example_boundary() -> dict:

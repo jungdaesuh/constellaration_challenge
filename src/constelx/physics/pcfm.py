@@ -11,16 +11,18 @@ Key ideas to implement:
 - Final projection to enforce h(u1)=0 to numerical precision.
 """
 
-from typing import Callable
+from typing import Any, Callable
 
 
-def project_gauss_newton(u, residual: Callable, jacobian: Callable):
+def project_gauss_newton(
+    u: Any, residual: Callable[[Any], Any], jacobian: Callable[[Any], Any]
+) -> Any:
     """One Gauss–Newton projection step onto linearized constraints."""
     # TODO: implement
     return u
 
 
-def guided_step(u, model, t, dt, constraint):
+def guided_step(u: Any, model: Any, t: float, dt: float, constraint: Callable[[Any], Any]) -> Any:
     """One PCFM-guided update step."""
     # TODO: implement
     return u

@@ -23,7 +23,7 @@ console = Console()
 
 
 @app.command()
-def version():
+def version() -> None:
     """Print version."""
     from . import __version__
 
@@ -31,7 +31,7 @@ def version():
 
 
 @app.command()
-def hello(name: str = "world"):
+def hello(name: str = "world") -> None:
     """Sanity check."""
     console.print(f"Hello, {name} 👋")
 
@@ -48,7 +48,7 @@ def data_fetch(
         None, help="Filter by number of field periods (boundary.n_field_periods)."
     ),
     limit: Optional[int] = typer.Option(1000, help="Take first N examples for quick experiments."),
-):
+) -> None:
     ds = fetch_dataset()
     if nfp is not None:
         ds = ds.filter(lambda x: x == nfp, input_columns=["boundary.n_field_periods"], num_proc=4)
@@ -74,7 +74,7 @@ def eval_forward(
     ),
     nfp: int = typer.Option(3, help="NFP used with --random."),
     seed: int = typer.Option(0, help="Seed used with --random."),
-):
+) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
         raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
 
@@ -84,6 +84,7 @@ def eval_forward(
         b = sample_random(nfp=nfp, seed=seed)
         validate_boundary(b)
     else:
+        assert boundary_json is not None
         b = json.loads(boundary_json.read_text())
 
     result = eval_forward_metrics(b)
@@ -106,7 +107,7 @@ def eval_score(
     output: Optional[Path] = typer.Option(
         None, "--output", help="Optional output CSV path when using --metrics-file."
     ),
-):
+) -> None:
     """Aggregate a scalar score from a metrics JSON file.
 
     The JSON must contain a flat dict of metric name to numeric value. Non-numeric
@@ -122,11 +123,13 @@ def eval_score(
         return
 
     # CSV mode
-    import pandas as pd  # type: ignore[import]
+    import pandas as pd
 
     df = pd.read_csv(metrics_file)
 
-    def row_score(row):
+    from typing import Any
+
+    def row_score(row: Any) -> float:
         # Convert row (Series) to plain dict for aggregator
         return eval_score_agg({k: row[k] for k in df.columns})
 
@@ -148,7 +151,7 @@ def opt_baseline(
     steps: int = 50,
     seed: int = 0,
     algo: str = typer.Option("cma-es", help="One of: cma-es"),
-):
+) -> None:
     random.seed(seed)
     if algo == "cma-es":
         best = run_cma_es_baseline(steps=steps)
@@ -166,7 +169,7 @@ app.add_typer(sur_app, name="surrogate")
 def surrogate_train(
     cache_dir: Path = Path("data/cache"),
     output_dir: Path = Path("outputs/surrogates/mlp"),
-):
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     train_simple_mlp(cache_dir=cache_dir, output_dir=output_dir)
     console.print(f"Saved surrogate to {output_dir}")
@@ -181,7 +184,7 @@ app.add_typer(agent_app, name="agent")
 def agent_run(
     iterations: int = 3,
     population: int = 8,
-):
+) -> None:
     """Minimal loop stub to be extended by the coding agent."""
     console.print(f"[bold]Agent[/bold] starting: iterations={iterations}, population={population}")
     console.print(
