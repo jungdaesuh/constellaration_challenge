@@ -12,6 +12,8 @@ from rich.table import Table
 from .data.dataset import fetch_dataset, save_subset
 from .eval import forward as eval_forward_metrics
 from .eval import score as eval_score_agg
+from .eval.boundary_param import sample_random
+from .eval.boundary_param import validate as validate_boundary
 from .optim.evolution import run_cma_es_baseline
 from .physics.constel_api import example_boundary
 from .surrogate.train import train_simple_mlp
@@ -67,12 +69,21 @@ def eval_forward(
         None, help="Path to a JSON boundary (SurfaceRZFourier)."
     ),
     example: bool = typer.Option(False, "--example", help="Use a synthetic example."),
+    random_boundary: bool = typer.Option(
+        False, "--random", help="Use a random sampled boundary (deterministic with --seed)."
+    ),
+    nfp: int = typer.Option(3, help="NFP used with --random."),
+    seed: int = typer.Option(0, help="Seed used with --random."),
 ):
+    if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
+        raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
+
     if example:
         b = example_boundary()
+    elif random_boundary:
+        b = sample_random(nfp=nfp, seed=seed)
+        validate_boundary(b)
     else:
-        if boundary_json is None:
-            raise typer.BadParameter("Provide --boundary-json or use --example")
         b = json.loads(boundary_json.read_text())
 
     result = eval_forward_metrics(b)
@@ -86,8 +97,14 @@ def eval_forward(
 
 @eval_app.command("score")
 def eval_score(
-    metrics_json: Path = typer.Option(
-        ..., "--metrics-json", help="Path to a JSON file containing a metrics dict."
+    metrics_json: Optional[Path] = typer.Option(
+        None, "--metrics-json", help="Path to a JSON file containing a metrics dict."
+    ),
+    metrics_file: Optional[Path] = typer.Option(
+        None, "--metrics-file", help="Path to a CSV file with metric columns."
+    ),
+    output: Optional[Path] = typer.Option(
+        None, "--output", help="Optional output CSV path when using --metrics-file."
     ),
 ):
     """Aggregate a scalar score from a metrics JSON file.
@@ -95,10 +112,30 @@ def eval_score(
     The JSON must contain a flat dict of metric name to numeric value. Non-numeric
     entries are ignored. If any numeric value is NaN, the score is +inf.
     """
+    if (metrics_json is None) == (metrics_file is None):
+        raise typer.BadParameter("Provide exactly one of --metrics-json or --metrics-file")
 
-    metrics = json.loads(Path(metrics_json).read_text())
-    value = eval_score_agg(metrics)
-    console.print(f"score = {value}")
+    if metrics_json is not None:
+        metrics = json.loads(Path(metrics_json).read_text())
+        value = eval_score_agg(metrics)
+        console.print(f"score = {value}")
+        return
+
+    # CSV mode
+    import pandas as pd  # type: ignore[import]
+
+    df = pd.read_csv(metrics_file)
+
+    def row_score(row):
+        # Convert row (Series) to plain dict for aggregator
+        return eval_score_agg({k: row[k] for k in df.columns})
+
+    df["score"] = df.apply(row_score, axis=1)
+    if output is None:
+        console.print(df.to_string(index=False))
+    else:
+        df.to_csv(output, index=False)
+        console.print(f"Wrote: {output}")
 
 
 # -------------------- OPTIMIZATION --------------------
