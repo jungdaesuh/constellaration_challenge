@@ -1,0 +1,2 @@
+[console_scripts]
+constelx = constelx.cli:app

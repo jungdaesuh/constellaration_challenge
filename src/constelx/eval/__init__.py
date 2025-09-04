@@ -17,13 +17,12 @@ from __future__ import annotations
 from math import inf, isnan
 from typing import Any, Dict, Mapping, TypeAlias
 
-from constellaration.geometry import surface_rz_fourier
+from constellaration.geometry import surface_rz_fourier  # type: ignore[import]
 
 from ..physics.constel_api import evaluate_boundary
 
-# A simple local type alias so call-sites can reference a descriptive type name
-# without importing VMEC internals. In this starter, we use `SurfaceRZFourier`.
-VmecBoundary: TypeAlias = surface_rz_fourier.SurfaceRZFourier
+# A simple local type alias; keep as Any to avoid leaking third-party types.
+VmecBoundary: TypeAlias = Any
 
 
 def boundary_to_vmec(boundary: Mapping[str, Any]) -> VmecBoundary:

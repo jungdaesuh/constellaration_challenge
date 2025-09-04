@@ -18,6 +18,8 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Lint
         run: ruff check .
+      - name: Format check
+        run: ruff format --check .
       - name: Type check
         run: |
           pip install mypy

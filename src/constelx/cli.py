@@ -41,15 +41,11 @@ app.add_typer(data_app, name="data")
 
 @data_app.command("fetch")
 def data_fetch(
-    cache_dir: Path = typer.Option(
-        Path("data/cache"), help="Where to store HF cache/parquets."
-    ),
+    cache_dir: Path = typer.Option(Path("data/cache"), help="Where to store HF cache/parquets."),
     nfp: Optional[int] = typer.Option(
         None, help="Filter by number of field periods (boundary.n_field_periods)."
     ),
-    limit: Optional[int] = typer.Option(
-        1000, help="Take first N examples for quick experiments."
-    ),
+    limit: Optional[int] = typer.Option(1000, help="Take first N examples for quick experiments."),
 ):
     ds = fetch_dataset()
     if nfp is not None:
@@ -150,9 +146,7 @@ def agent_run(
     population: int = 8,
 ):
     """Minimal loop stub to be extended by the coding agent."""
-    console.print(
-        f"[bold]Agent[/bold] starting: iterations={iterations}, population={population}"
-    )
+    console.print(f"[bold]Agent[/bold] starting: iterations={iterations}, population={population}")
     console.print(
         "TODO: implement propose/simulate/select/refine using constellaration forward model."
     )

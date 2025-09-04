@@ -23,4 +23,3 @@ def test_score_nan_returns_inf():
     m_bad = {"valid": 1.0, "invalid": float("nan")}
     s = score(m_bad)
     assert math.isinf(s) and s > 0
-
