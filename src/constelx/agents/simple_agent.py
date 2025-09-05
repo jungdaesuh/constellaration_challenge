@@ -31,6 +31,7 @@ class AgentConfig:
     correction: str | None = None  # e.g., "eci_linear"
     # simple list of constraints when using eci_linear
     constraints: list[dict[str, Any]] | None = None
+    use_physics: bool = False
 
 
 def _timestamp() -> str:
@@ -247,20 +248,48 @@ def run(config: AgentConfig) -> Path:
         nonlocal completed
         it = 0
         idx = 0
+        batch_size = 8 if config.max_workers > 1 else 1
         while completed < budget:
-            seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
-            boundary = sample_random(nfp=config.nfp, seed=seed_val)
-            validate_boundary(boundary)
-            boundary = maybe_correct(boundary)
-            try:
-                metrics = eval_forward(boundary, cache_dir=config.cache_dir)
-                s = eval_score(metrics)
-            except Exception:
+            # Prepare a batch of proposals
+            seeds: List[int] = []
+            batch: List[Dict[str, Any]] = []
+            for _ in range(min(batch_size, budget - completed)):
+                seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
+                b = sample_random(nfp=config.nfp, seed=seed_val)
+                validate_boundary(b)
+                b = maybe_correct(b)
+                seeds.append(seed_val)
+                batch.append(b)
                 idx += 1
-                continue
-            log_entry(it, idx, seed_val, boundary, metrics, s)
-            completed += 1
-            idx += 1
+            # Evaluate
+            if not batch:
+                break
+            if config.max_workers > 1:
+                from ..eval import forward_many
+
+                results = forward_many(
+                    batch, max_workers=config.max_workers, cache_dir=config.cache_dir
+                )
+                for j, (b, m) in enumerate(zip(batch, results)):
+                    try:
+                        s = eval_score(m)
+                    except Exception:
+                        continue
+                    log_entry(it, j, seeds[j], b, m, s)
+                    completed += 1
+            else:
+                for j, b in enumerate(batch):
+                    try:
+                        m = eval_forward(
+                            b,
+                            cache_dir=config.cache_dir,
+                            prefer_vmec=config.use_physics,
+                        )
+                        s = eval_score(m)
+                    except Exception:
+                        continue
+                    log_entry(it, j, seeds[j], b, m, s)
+                    completed += 1
             if idx % 100 == 0:
                 it += 1
 
@@ -293,7 +322,9 @@ def run(config: AgentConfig) -> Path:
                     b["z_sin"][1][5] = float(abs(x[1]))
                     validate_boundary(b)
                     b = maybe_correct(b)
-                    metrics = eval_forward(b, cache_dir=config.cache_dir)
+                    metrics = eval_forward(
+                        b, cache_dir=config.cache_dir, prefer_vmec=config.use_physics
+                    )
                     s = eval_score(metrics)
                 except Exception:
                     # Skip invalid points; penalize in CMA-ES
