@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -26,7 +26,31 @@ class NormEq:
     weight: float = 1.0
 
 
-Constraint = NormEq  # minimal starter: support norm equality
+@dataclass(frozen=True)
+class Var:
+    field: str
+    i: int
+    j: int
+
+
+@dataclass(frozen=True)
+class RatioEq:
+    num: Var
+    den: Var
+    target: float
+    eps: float = 1e-6
+    weight: float = 1.0
+
+
+@dataclass(frozen=True)
+class ProductEq:
+    a: Var
+    b: Var
+    target: float
+    weight: float = 1.0
+
+
+Constraint = Union[NormEq, RatioEq, ProductEq]
 
 
 @dataclass(frozen=True)
@@ -76,12 +100,21 @@ def _build_residual_and_jac(
     def residual(x: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
         rs: List[float] = []
         for con in constraints:
-            # r = sum w_i x_i^2 - r^2
-            s = 0.0
-            for t in con.terms:
-                k = index[(t.field, int(t.i), int(t.j))]
-                s += float(t.w) * float(x[k]) * float(x[k])
-            rs.append(con.weight * (s - float(con.radius) * float(con.radius)))
+            if isinstance(con, NormEq):
+                s = 0.0
+                for t in con.terms:
+                    k = index[(t.field, int(t.i), int(t.j))]
+                    s += float(t.w) * float(x[k]) * float(x[k])
+                rs.append(con.weight * (s - float(con.radius) * float(con.radius)))
+            elif isinstance(con, RatioEq):
+                kn = index[(con.num.field, int(con.num.i), int(con.num.j))]
+                kd = index[(con.den.field, int(con.den.i), int(con.den.j))]
+                denom = float(x[kd]) + float(con.eps)
+                rs.append(con.weight * ((float(x[kn]) / denom) - float(con.target)))
+            else:  # ProductEq
+                ka = index[(con.a.field, int(con.a.i), int(con.a.j))]
+                kb = index[(con.b.field, int(con.b.i), int(con.b.j))]
+                rs.append(con.weight * (float(x[ka]) * float(x[kb]) - float(con.target)))
         return np.asarray(rs, dtype=float)
 
     def jacobian(x: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
@@ -89,9 +122,21 @@ def _build_residual_and_jac(
         n = len(variables)
         J = np.zeros((m, n), dtype=float)
         for r, con in enumerate(constraints):
-            for t in con.terms:
-                k = index[(t.field, int(t.i), int(t.j))]
-                J[r, k] += con.weight * (2.0 * float(t.w) * float(x[k]))
+            if isinstance(con, NormEq):
+                for t in con.terms:
+                    k = index[(t.field, int(t.i), int(t.j))]
+                    J[r, k] += con.weight * (2.0 * float(t.w) * float(x[k]))
+            elif isinstance(con, RatioEq):
+                kn = index[(con.num.field, int(con.num.i), int(con.num.j))]
+                kd = index[(con.den.field, int(con.den.i), int(con.den.j))]
+                denom = float(x[kd]) + float(con.eps)
+                J[r, kn] += con.weight * (1.0 / denom)
+                J[r, kd] += con.weight * (-(float(x[kn]) / (denom * denom)))
+            else:  # ProductEq
+                ka = index[(con.a.field, int(con.a.i), int(con.a.j))]
+                kb = index[(con.b.field, int(con.b.i), int(con.b.j))]
+                J[r, ka] += con.weight * float(x[kb])
+                J[r, kb] += con.weight * float(x[ka])
         return J
 
     return residual, jacobian
@@ -137,20 +182,50 @@ def build_spec_from_json(data: Sequence[Dict[str, Any]]) -> PcfmSpec:
     constraints: List[Constraint] = []
     for item in data:
         t = str(item.get("type", "norm_eq")).lower()
-        if t != "norm_eq":
-            raise ValueError("Only 'norm_eq' is supported in the starter")
-        terms_in = item.get("terms", [])
-        terms: List[Term] = []
-        for td in terms_in:
-            field = str(td["field"])
-            i = int(td["i"])  # required
-            j = int(td["j"])  # required
-            w = float(td.get("w", 1.0))
-            get_var(field, i, j)  # register order
-            terms.append(Term(field=field, i=i, j=j, w=w))
-        radius = float(item["radius"])  # required
-        weight = float(item.get("weight", 1.0))
-        constraints.append(NormEq(terms=terms, radius=radius, weight=weight))
+        if t == "norm_eq":
+            terms_in = item.get("terms", [])
+            terms: List[Term] = []
+            for td in terms_in:
+                field = str(td["field"])
+                i = int(td["i"])  # required
+                j = int(td["j"])  # required
+                w = float(td.get("w", 1.0))
+                get_var(field, i, j)  # register order
+                terms.append(Term(field=field, i=i, j=j, w=w))
+            radius = float(item["radius"])  # required
+            weight = float(item.get("weight", 1.0))
+            constraints.append(NormEq(terms=terms, radius=radius, weight=weight))
+        elif t == "ratio_eq":
+
+            def _v(d: Dict[str, Any]) -> Var:
+                field = str(d["field"])  # required
+                i = int(d["i"])  # required
+                j = int(d["j"])  # required
+                get_var(field, i, j)
+                return Var(field=field, i=i, j=j)
+
+            num = _v(item["num"])  # required
+            den = _v(item["den"])  # required
+            target = float(item["target"])  # required
+            eps = float(item.get("eps", 1e-6))
+            weight = float(item.get("weight", 1.0))
+            constraints.append(RatioEq(num=num, den=den, target=target, eps=eps, weight=weight))
+        elif t == "product_eq":
+
+            def _v(d: Dict[str, Any]) -> Var:
+                field = str(d["field"])  # required
+                i = int(d["i"])  # required
+                j = int(d["j"])  # required
+                get_var(field, i, j)
+                return Var(field=field, i=i, j=j)
+
+            a = _v(item["a"])  # required
+            b = _v(item["b"])  # required
+            target = float(item["target"])  # required
+            weight = float(item.get("weight", 1.0))
+            constraints.append(ProductEq(a=a, b=b, target=target, weight=weight))
+        else:
+            raise ValueError("Unsupported PCFM constraint type: " + t)
 
     return PcfmSpec(variables=variables, constraints=constraints)
 
@@ -158,6 +233,9 @@ def build_spec_from_json(data: Sequence[Dict[str, Any]]) -> PcfmSpec:
 __all__ = [
     "Term",
     "NormEq",
+    "Var",
+    "RatioEq",
+    "ProductEq",
     "PcfmSpec",
     "make_hook",
     "build_spec_from_json",
