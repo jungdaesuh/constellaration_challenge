@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import torch
@@ -26,7 +27,7 @@ class MLP(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+        return cast(torch.Tensor, self.net(x))
 
 
 def train_simple_mlp(cache_dir: Path, output_dir: Path) -> None:

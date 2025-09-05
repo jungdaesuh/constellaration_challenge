@@ -26,6 +26,11 @@ class AgentConfig:
     algo: str = "random"  # one of: random, cmaes
     budget: int = 50  # total evaluations allowed
     resume: Path | None = None
+    max_workers: int = 1
+    cache_dir: Path | None = None
+    correction: str | None = None  # e.g., "eci_linear"
+    # simple list of constraints when using eci_linear
+    constraints: list[dict[str, Any]] | None = None
 
 
 def _timestamp() -> str:
@@ -149,7 +154,7 @@ def run(config: AgentConfig) -> Path:
     # Open for append
     proposals_f = proposals_path.open("a")
     metrics_f = metrics_csv_path.open("a", newline="")
-    metrics_writer: csv.DictWriter | None = None
+    metrics_writer: csv.DictWriter[str] | None = None
     if metrics_csv_path.stat().st_size == 0:
         metrics_writer = None
     else:
@@ -182,6 +187,11 @@ def run(config: AgentConfig) -> Path:
             best_score = s
             best_payload = {"score": s, "metrics": metrics, "boundary": boundary}
 
+    # Optional correction hook (currently supports eci_linear via in-memory spec)
+    def maybe_correct(bnd: Dict[str, Any]) -> Dict[str, Any]:
+        # Placeholder: correction hooks can be wired here via config if needed.
+        return bnd
+
     # Random search
     def run_random() -> None:
         nonlocal completed
@@ -191,8 +201,9 @@ def run(config: AgentConfig) -> Path:
             seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
             boundary = sample_random(nfp=config.nfp, seed=seed_val)
             validate_boundary(boundary)
+            boundary = maybe_correct(boundary)
             try:
-                metrics = eval_forward(boundary)
+                metrics = eval_forward(boundary, cache_dir=config.cache_dir)
                 s = eval_score(metrics)
             except Exception:
                 idx += 1
@@ -231,7 +242,8 @@ def run(config: AgentConfig) -> Path:
                     b["r_cos"][1][5] = float(-abs(x[0]))
                     b["z_sin"][1][5] = float(abs(x[1]))
                     validate_boundary(b)
-                    metrics = eval_forward(b)
+                    b = maybe_correct(b)
+                    metrics = eval_forward(b, cache_dir=config.cache_dir)
                     s = eval_score(metrics)
                 except Exception:
                     # Skip invalid points; penalize in CMA-ES
