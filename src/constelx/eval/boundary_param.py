@@ -120,9 +120,13 @@ def validate(boundary: Mapping[str, Any], *, coeff_abs_max: float = 2.0) -> None
     if not _check_same_shape(r_cos, z_sin):
         raise ValueError("Coefficient arrays r_cos and z_sin must have the same shape")
     if r_sin is not None and not _check_same_shape(r_cos, r_sin):
-        raise ValueError("Coefficient arrays r_cos and r_sin must have the same shape (if provided)")
+        raise ValueError(
+            "Coefficient arrays r_cos and r_sin must have the same shape (if provided)"
+        )
     if z_cos is not None and not _check_same_shape(r_cos, z_cos):
-        raise ValueError("Coefficient arrays r_cos and z_cos must have the same shape (if provided)")
+        raise ValueError(
+            "Coefficient arrays r_cos and z_cos must have the same shape (if provided)"
+        )
 
     # Bounds
     for name, arr in ("r_cos", r_cos), ("z_sin", z_sin):

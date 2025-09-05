@@ -1,3 +1,7 @@
+"""Minimal agent loop utilities."""
+
+# ruff: noqa: I001  (import-sorting suppressed for local grouping)
+
 from __future__ import annotations
 
 import csv
@@ -5,13 +9,14 @@ import json
 import os
 import sys
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Mapping, Tuple
+from typing import Any, Dict, Iterable, List, Mapping
 
-# Local imports kept inside functions in CLI, but module-level here is fine
-from ..eval import forward as eval_forward
-from ..eval import score as eval_score
+import yaml
+
+from ..eval import forward as eval_forward, score as eval_score
 from ..eval.boundary_param import sample_random, validate as validate_boundary
 
 
@@ -25,7 +30,7 @@ class AgentConfig:
 
 
 def _timestamp() -> str:
-    return datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
 
 def _ensure_dir(p: Path) -> None:
@@ -60,6 +65,32 @@ def _gather_env_info() -> Dict[str, Any]:
     }
 
 
+def _git_sha() -> str | None:
+    try:
+        import subprocess
+
+        sha = (
+            subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
+            .decode()
+            .strip()
+        )
+        return sha
+    except Exception:
+        return None
+
+
+def _pkg_versions(pkgs: Iterable[str]) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for p in pkgs:
+        try:
+            out[p] = version(p)
+        except PackageNotFoundError:
+            out[p] = "unknown"
+        except Exception:
+            out[p] = "unknown"
+    return out
+
+
 def run(config: AgentConfig) -> Path:
     """Run a tiny random-search agent loop and write artifacts.
 
@@ -73,11 +104,16 @@ def run(config: AgentConfig) -> Path:
     out_dir = config.out_dir / _timestamp()
     _ensure_dir(out_dir)
 
-    # config.yaml (simple JSON for now to avoid pyyaml)
+    # config.yaml with env info, git SHA, and package versions
     cfg = asdict(config)
-    # ensure JSON-serializable
-    cfg["out_dir"] = str(cfg["out_dir"])  # Path -> str
-    (out_dir / "config.json").write_text(json.dumps(cfg, indent=2))
+    cfg["out_dir"] = str(cfg["out_dir"])  # Path -> str for YAML/JSON compatibility
+    conf = {
+        "run": cfg,
+        "env": _gather_env_info(),
+        "git": {"sha": _git_sha()},
+        "versions": _pkg_versions(["constelx", "numpy", "pandas", "constellaration"]),
+    }
+    (out_dir / "config.yaml").write_text(yaml.safe_dump(conf, sort_keys=False))
 
     proposals_path = out_dir / "proposals.jsonl"
     metrics_csv_path = out_dir / "metrics.csv"
@@ -96,8 +132,12 @@ def run(config: AgentConfig) -> Path:
             seed = (rng_seed + it * 10007 + j * 7919) % (2**31 - 1)
             boundary = sample_random(nfp=config.nfp, seed=seed)
             validate_boundary(boundary)
-            metrics = eval_forward(boundary)
-            s = eval_score(metrics)
+            try:
+                metrics = eval_forward(boundary)
+                s = eval_score(metrics)
+            except Exception:
+                # Skip invalid evaluations; keep stub minimal
+                continue
 
             prop = {"iteration": it, "index": j, "seed": seed, "boundary": boundary}
             proposals.append(prop)
@@ -114,18 +154,21 @@ def run(config: AgentConfig) -> Path:
     best_json_path.write_text(json.dumps(best_payload, indent=2))
 
     # README
-    readme_path.write_text(
-        "\n".join(
-            [
-                "# ConStelX Agent Run",
-                "",
-                f"CLI: constelx agent run --nfp {config.nfp} --iterations {config.iterations} --population {config.population} --seed {config.seed}",
-                f"Created: {datetime.utcnow().isoformat()}Z",
-                "",
-                "## Environment",
-                json.dumps(_gather_env_info(), indent=2),
-            ]
-        )
-    )
+    readme_lines = [
+        "# ConStelX Agent Run",
+        "",
+        "CLI:",
+        (
+            f"constelx agent run --nfp {config.nfp} "
+            f"--iterations {config.iterations} "
+            f"--population {config.population} "
+            f"--seed {config.seed}"
+        ),
+        f"Created: {datetime.now(UTC).isoformat()}",
+        "",
+        "## Environment",
+        json.dumps(_gather_env_info(), indent=2),
+    ]
+    readme_path.write_text("\n".join(readme_lines))
 
     return out_dir

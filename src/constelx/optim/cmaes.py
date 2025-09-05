@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, Iterable, Sequence, Tuple
+from typing import Callable, Sequence, Tuple
 
 try:
     import cma
@@ -45,4 +45,3 @@ def optimize(
         history.append(min(scores))
         es.tell(xs, scores)
     return best_x, history
-

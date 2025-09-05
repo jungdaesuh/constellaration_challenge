@@ -36,7 +36,7 @@ def test_agent_run_small_creates_artifacts(tmp_path: Path) -> None:
     out = subdirs[0]
 
     # Check required files
-    for name in ["config.json", "proposals.jsonl", "metrics.csv", "best.json", "README.md"]:
+    for name in ["config.yaml", "proposals.jsonl", "metrics.csv", "best.json", "README.md"]:
         assert (out / name).exists(), f"missing {name}"
 
     best = json.loads((out / "best.json").read_text())
