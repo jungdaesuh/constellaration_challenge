@@ -15,7 +15,7 @@ def _boundary_cols(df: pd.DataFrame) -> list[str]:
     ]
 
 
-class MLP(nn.Module):
+class MLP(nn.Module):  # type: ignore[misc]
     def __init__(self, d_in: int, d_out: int = 1) -> None:
         super().__init__()
         self.net = nn.Sequential(
