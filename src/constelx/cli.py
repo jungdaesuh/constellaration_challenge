@@ -270,6 +270,16 @@ def agent_run(
         "--use-physics",
         help="Prefer VMEC validation if constellaration is installed; fallback otherwise.",
     ),
+    # PCFM tuning (applies when --correction pcfm)
+    pcfm_gn_iters: Optional[int] = typer.Option(
+        None, help="PCFM Gauss–Newton iterations (override constraints file)."
+    ),
+    pcfm_damping: Optional[float] = typer.Option(
+        None, help="PCFM initial damping lambda (override constraints file)."
+    ),
+    pcfm_tol: Optional[float] = typer.Option(
+        None, help="PCFM residual tolerance (override constraints file)."
+    ),
     correction: Optional[str] = typer.Option(
         None,
         help="Optional correction hook to apply to boundaries (e.g., 'eci_linear').",
@@ -288,10 +298,18 @@ def agent_run(
     runs_dir.mkdir(parents=True, exist_ok=True)
     # Load constraints if provided
     constraints: list[dict[str, Any]] | None = None
+    # Allow constraints JSON to be a dict with overrides {constraints:[...], gn_iters, damping, tol}
     if constraints_file is not None:
         data = json.loads(constraints_file.read_text())
         if isinstance(data, dict) and "constraints" in data:
             raw = data.get("constraints")
+            # pick up optional overrides if not set via CLI
+            if pcfm_gn_iters is None and isinstance(data.get("gn_iters"), int):
+                pcfm_gn_iters = int(data["gn_iters"])  # noqa: PLW2901 (reassign ok)
+            if pcfm_damping is None and isinstance(data.get("damping"), (int, float)):
+                pcfm_damping = float(data["damping"])  # noqa: PLW2901 (reassign ok)
+            if pcfm_tol is None and isinstance(data.get("tol"), (int, float)):
+                pcfm_tol = float(data["tol"])  # noqa: PLW2901 (reassign ok)
         else:
             raw = data
         if not isinstance(raw, list):
@@ -313,6 +331,9 @@ def agent_run(
             correction=correction,
             constraints=constraints,
             use_physics=use_physics,
+            pcfm_gn_iters=pcfm_gn_iters,
+            pcfm_damping=pcfm_damping,
+            pcfm_tol=pcfm_tol,
         )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")

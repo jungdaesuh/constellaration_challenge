@@ -55,6 +55,11 @@ Agent
 - CMA-ES (falls back to random if cma missing):
   `constelx agent run --nfp 3 --budget 20 --algo cmaes --seed 0`
 - Resume a run: `constelx agent run --nfp 3 --budget 10 --resume runs/<ts>`
+ - PCFM correction (norm constraint example):
+   - Create `examples/pcfm_norm.json` like:
+     `[{"type":"norm_eq","radius":0.06,"terms":[{"field":"r_cos","i":1,"j":5},{"field":"z_sin","i":1,"j":5}]}]`
+   - Run with: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_norm.json`
+   - Optional tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8`
 
 Artifacts (written under `runs/<timestamp>/`)
 - `config.yaml`: run config, env info, git SHA, package versions

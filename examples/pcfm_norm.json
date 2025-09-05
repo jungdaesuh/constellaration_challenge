@@ -1,0 +1,10 @@
+[
+  {
+    "type": "norm_eq",
+    "radius": 0.06,
+    "terms": [
+      {"field": "r_cos", "i": 1, "j": 5, "w": 1.0},
+      {"field": "z_sin", "i": 1, "j": 5, "w": 1.0}
+    ]
+  }
+]
