@@ -173,6 +173,26 @@ def opt_baseline(
         raise typer.BadParameter(f"Unknown algo: {algo}")
 
 
+@opt_app.command("cmaes")
+def opt_cmaes(
+    dim: int = typer.Option(2, help="Dimensionality of toy objective (sphere)."),
+    budget: int = typer.Option(50, help="Number of CMA-ES iterations."),
+    seed: int = typer.Option(0, help="Random seed."),
+) -> None:
+    """Run a CMA-ES optimization on a toy sphere objective for a quick smoke test."""
+    try:
+        from .optim.cmaes import optimize
+    except Exception as e:  # pragma: no cover - import-time error
+        raise typer.BadParameter(str(e))
+
+    def sphere(x: list[float]) -> float:
+        return float(sum(v * v for v in x))
+
+    x0 = [0.5 for _ in range(dim)]
+    best_x, hist = optimize(sphere, x0=x0, bounds=(-1.0, 1.0), budget=budget, sigma0=0.3, seed=seed)
+    console.print(f"Best x: {best_x}\nBest score: {min(hist) if hist else float('inf')}")
+
+
 # -------------------- SURROGATE --------------------
 sur_app = typer.Typer(help="Train simple surrogate models")
 app.add_typer(sur_app, name="surrogate")
