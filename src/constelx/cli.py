@@ -75,6 +75,11 @@ def eval_forward(
     nfp: int = typer.Option(3, help="NFP used with --random."),
     seed: int = typer.Option(0, help="Seed used with --random."),
     cache_dir: Optional[Path] = typer.Option(None, help="Optional cache directory for metrics."),
+    use_physics: bool = typer.Option(
+        False,
+        "--use-physics",
+        help="Prefer VMEC validation (uses constellaration if installed); falls back if absent.",
+    ),
 ) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
         raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
@@ -98,7 +103,7 @@ def eval_forward(
 
     from .eval import forward as eval_forward_metrics
 
-    result = eval_forward_metrics(b, cache_dir=cache_dir)
+    result = eval_forward_metrics(b, cache_dir=cache_dir, prefer_vmec=use_physics)
     table = Table(title="Forward metrics")
     table.add_column("metric")
     table.add_column("value")
@@ -260,6 +265,11 @@ def agent_run(
     resume: Optional[Path] = typer.Option(None, help="Resume from an existing run directory."),
     max_workers: int = typer.Option(1, help="Parallel evaluator workers for agent evals."),
     cache_dir: Optional[Path] = typer.Option(None, help="Cache directory for agent evals."),
+    use_physics: bool = typer.Option(
+        False,
+        "--use-physics",
+        help="Prefer VMEC validation if constellaration is installed; fallback otherwise.",
+    ),
     correction: Optional[str] = typer.Option(
         None,
         help="Optional correction hook to apply to boundaries (e.g., 'eci_linear').",
@@ -299,6 +309,7 @@ def agent_run(
             cache_dir=cache_dir,
             correction=correction,
             constraints=constraints,
+            use_physics=use_physics,
         )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")

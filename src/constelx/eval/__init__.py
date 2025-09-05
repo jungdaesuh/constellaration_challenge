@@ -85,7 +85,9 @@ def _cache_path(cache_dir: Path, key: str) -> Path:
     return cache_dir / f"{key}.json"
 
 
-def forward(boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None) -> Dict[str, Any]:
+def forward(
+    boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None, prefer_vmec: bool = False
+) -> Dict[str, Any]:
     """Run the forward evaluator for a single boundary.
 
     Parameters
@@ -101,10 +103,17 @@ def forward(boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None) ->
 
     # Validate inputs to provide clear errors early; convert to pydantic model if needed.
     # Validate with VMEC model if available; otherwise fall back to dict-based evaluation
-    try:
-        _ = boundary_to_vmec(boundary)
-    except Exception:
-        pass
+    if prefer_vmec:
+        try:
+            _ = boundary_to_vmec(boundary)
+        except Exception:
+            # Prefer VMEC validation, but fall back if unavailable
+            pass
+    else:
+        try:
+            _ = boundary_to_vmec(boundary)
+        except Exception:
+            pass
     # Optional cache lookup
     cache_key = None
     cache_file: Optional[Path] = None
