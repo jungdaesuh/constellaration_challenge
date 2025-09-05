@@ -32,6 +32,14 @@ def test_conflict_free_update_cooperative() -> None:
     assert np.allclose(update, expected)
 
 
+def test_conflict_free_update_matrix_gradients() -> None:
+    g_fm = np.array([[1.0], [0.0]])
+    g_r = np.array([[-1.0], [1.0]])
+    update = conflict_free_update(g_fm, g_r)
+    expected = np.array([[1.0], [1.0]]) / np.sqrt(2.0)
+    assert np.allclose(update, expected)
+
+
 def test_conflict_free_update_shape_mismatch() -> None:
     g_fm = np.array([1.0, 0.0])
     g_r = np.array([0.0, 1.0, 2.0])
