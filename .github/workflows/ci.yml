@@ -2,27 +2,44 @@ name: CI
 
 on:
   push:
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
-  test:
+  core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - name: System deps for constellaration forward model
-        run: sudo apt-get update && sudo apt-get install -y libnetcdf-dev
-      - name: Install
-        run: pip install -e ".[dev]"
-      - name: Lint
-        run: ruff check .
-      - name: Format check
-        run: ruff format --check .
-      - name: Type check
+      - name: Install dependencies
         run: |
-          pip install mypy
-          mypy src tests
-      - name: Tests
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Ruff format (check)
+        run: ruff format --check .
+      - name: Ruff lint
+        run: ruff check .
+      - name: Mypy type check
+        run: mypy src/constelx
+      - name: Pytest
+        run: pytest -q
+  physics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install system deps (NetCDF, cmake, ninja)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnetcdf-dev libnetcdf-c++4-dev cmake ninja-build
+      - name: Install dependencies (physics extra)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,physics]"
+      - name: Pytest
         run: pytest -q

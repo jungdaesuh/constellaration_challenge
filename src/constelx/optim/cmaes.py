@@ -24,7 +24,7 @@ def optimize(
     if cma is None:
         raise RuntimeError("CMA-ES not installed. Install extra: pip install cma")
 
-    opts: dict = {"bounds": list(bounds)}
+    opts: dict[str, object] = {"bounds": list(bounds)}
     if seed is not None:
         opts["seed"] = int(seed)
 
