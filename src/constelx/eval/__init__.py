@@ -92,7 +92,11 @@ def _cache_backend(cache_dir: Optional[Path]) -> Optional[CacheBackend]:
 
 
 def forward(
-    boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None, prefer_vmec: bool = False
+    boundary: Mapping[str, Any],
+    *,
+    cache_dir: Optional[Path] = None,
+    prefer_vmec: bool = False,
+    use_real: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Run the forward evaluator for a single boundary.
 
@@ -128,7 +132,12 @@ def forward(
         if cached is not None:
             return cached
     # evaluate_boundary expects a plain dict
-    result = evaluate_boundary(dict(boundary))
+    if use_real is None:
+        # Allow env toggle without changing call sites
+        import os
+
+        use_real = os.getenv("CONSTELX_USE_REAL_EVAL", "0").lower() in {"1", "true", "yes"}
+    result = evaluate_boundary(dict(boundary), use_real=use_real)
     if cache is not None:
         cache.set(cache_key, result)
     return result
@@ -140,6 +149,7 @@ def forward_many(
     max_workers: int = 1,
     cache_dir: Optional[Path] = None,
     prefer_vmec: bool = False,
+    use_real: Optional[bool] = None,
 ) -> List[Dict[str, Any]]:
     items = list(boundaries)
     n = len(items)
@@ -173,18 +183,20 @@ def forward_many(
     if to_compute:
         if max_workers <= 1:
             for i, b in to_compute:
-                out[i] = evaluate_boundary(dict(b))
+                out[i] = evaluate_boundary(dict(b), use_real=use_real)
         else:
             try:
                 with ProcessPoolExecutor(max_workers=max_workers) as ex:
-                    futs = {ex.submit(evaluate_boundary, dict(b)): i for i, b in to_compute}
+                    futs = {
+                        ex.submit(evaluate_boundary, dict(b), use_real): i for i, b in to_compute
+                    }
                     for fut in as_completed(futs):
                         i = futs[fut]
                         out[i] = fut.result()
             except Exception:
                 # Fallback to sequential if process pool is unavailable (e.g., sandboxed env)
                 for i, b in to_compute:
-                    out[i] = evaluate_boundary(dict(b))
+                    out[i] = evaluate_boundary(dict(b), use_real=use_real)
 
     # Persist new caches
     if cache is not None:
