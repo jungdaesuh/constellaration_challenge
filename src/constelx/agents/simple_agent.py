@@ -332,6 +332,7 @@ def run(config: AgentConfig) -> Path:
                     max_workers=config.max_workers,
                     cache_dir=config.cache_dir,
                     prefer_vmec=config.use_physics,
+                    use_real=config.use_physics,
                 )
                 for j, (b, m) in enumerate(zip(batch, results)):
                     try:
@@ -347,6 +348,7 @@ def run(config: AgentConfig) -> Path:
                             b,
                             cache_dir=config.cache_dir,
                             prefer_vmec=config.use_physics,
+                            use_real=config.use_physics,
                         )
                         s = eval_score(m)
                     except Exception:
@@ -386,7 +388,10 @@ def run(config: AgentConfig) -> Path:
                     validate_boundary(b)
                     b = maybe_correct(b)
                     metrics = eval_forward(
-                        b, cache_dir=config.cache_dir, prefer_vmec=config.use_physics
+                        b,
+                        cache_dir=config.cache_dir,
+                        prefer_vmec=config.use_physics,
+                        use_real=config.use_physics,
                     )
                     s = eval_score(metrics)
                 except Exception:
