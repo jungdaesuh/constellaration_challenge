@@ -254,22 +254,17 @@ app.add_typer(agent_app, name="agent")
 @agent_app.command("run")
 def agent_run(
     nfp: int = typer.Option(3, help="Number of field periods for random boundaries."),
-    iterations: int = typer.Option(3, help="Number of proposal rounds."),
-    population: int = typer.Option(8, help="Proposals per iteration."),
+    budget: int = typer.Option(50, help="Total number of evaluations to run."),
+    algo: str = typer.Option("random", help="Optimization algorithm: random or cmaes."),
     seed: int = typer.Option(0, help="Global seed for reproducibility."),
     runs_dir: Path = typer.Option(Path("runs"), help="Directory to store artifacts."),
+    resume: Optional[Path] = typer.Option(None, help="Resume from an existing run directory."),
 ) -> None:
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
     runs_dir.mkdir(parents=True, exist_ok=True)
     out = run_agent(
-        AgentConfig(
-            nfp=nfp,
-            iterations=iterations,
-            population=population,
-            seed=seed,
-            out_dir=runs_dir,
-        )
+        AgentConfig(nfp=nfp, seed=seed, out_dir=runs_dir, algo=algo, budget=budget, resume=resume)
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")
 
