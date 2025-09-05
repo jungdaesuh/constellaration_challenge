@@ -1,0 +1,9 @@
+[
+  {
+    "type": "ratio_eq",
+    "target": -1.25,
+    "num": {"field": "z_sin", "i": 1, "j": 5},
+    "den": {"field": "r_cos", "i": 1, "j": 5},
+    "eps": 1e-6
+  }
+]

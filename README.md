@@ -55,11 +55,17 @@ Agent
 - CMA-ES (falls back to random if cma missing):
   `constelx agent run --nfp 3 --budget 20 --algo cmaes --seed 0`
 - Resume a run: `constelx agent run --nfp 3 --budget 10 --resume runs/<ts>`
- - PCFM correction (norm constraint example):
-   - Create `examples/pcfm_norm.json` like:
-     `[{"type":"norm_eq","radius":0.06,"terms":[{"field":"r_cos","i":1,"j":5},{"field":"z_sin","i":1,"j":5}]}]`
-   - Run with: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_norm.json`
-   - Optional tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8`
+ - PCFM correction (examples):
+   - Norm equality: constrain helical amplitude to a circle of radius 0.06
+     - JSON: `examples/pcfm_norm.json`
+     - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_norm.json`
+   - Ratio equality: enforce `z_sin[1][5] / r_cos[1][5] = -1.25`
+     - JSON: `examples/pcfm_ratio.json`
+     - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_ratio.json`
+   - Product equality: enforce `r_cos[1][5] * z_sin[1][5] = 0.003`
+     - JSON: `examples/pcfm_product.json`
+     - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_product.json`
+   - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8` or via top-level keys in the constraints JSON: `{gn_iters,damping,tol}`
 
 Artifacts (written under `runs/<timestamp>/`)
 - `config.yaml`: run config, env info, git SHA, package versions

@@ -1,0 +1,8 @@
+[
+  {
+    "type": "product_eq",
+    "target": 0.003,
+    "a": {"field": "r_cos", "i": 1, "j": 5},
+    "b": {"field": "z_sin", "i": 1, "j": 5}
+  }
+]
