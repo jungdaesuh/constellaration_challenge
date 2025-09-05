@@ -248,12 +248,15 @@ def run(config: AgentConfig) -> Path:
     proposals_f = proposals_path.open("a")
     metrics_f = metrics_csv_path.open("a", newline="")
     metrics_writer: csv.DictWriter[str] | None = None
-    if metrics_csv_path.stat().st_size == 0:
-        metrics_writer = None
-    else:
-        # We don't know columns; write new rows with full keys but rely on initial header
-        # For simplicity, when appending we re-create writer after first row produced.
-        metrics_writer = None
+    if metrics_csv_path.exists() and metrics_csv_path.stat().st_size > 0:
+        try:
+            with metrics_csv_path.open("r", newline="") as rf:
+                reader = csv.reader(rf)
+                header = next(reader, None)
+            if header:
+                metrics_writer = csv.DictWriter(metrics_f, fieldnames=header, extrasaction="ignore")
+        except Exception:
+            metrics_writer = None
 
     rng_seed = int(config.seed)
     budget = int(config.budget)
@@ -271,9 +274,9 @@ def run(config: AgentConfig) -> Path:
         proposals_f.write(json.dumps(prop) + "\n")
         row = {"iteration": it, "index": idx, **metrics, "score": s}
         if metrics_writer is None:
-            # Initialize writer with current row's keys
+            # Initialize writer with current row's keys and create header
             metrics_writer = csv.DictWriter(metrics_f, fieldnames=list(row.keys()))
-            if metrics_csv_path.stat().st_size == 0:
+            if not metrics_csv_path.exists() or metrics_csv_path.stat().st_size == 0:
                 metrics_writer.writeheader()
         metrics_writer.writerow(row)
         if s < best_score:

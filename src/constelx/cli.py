@@ -51,7 +51,8 @@ def data_fetch(
 
     ds = fetch_dataset()
     if nfp is not None:
-        ds = ds.filter(lambda x: x == nfp, input_columns=["boundary.n_field_periods"], num_proc=4)
+        # Use single-process filter to avoid fork issues in constrained environments/tests
+        ds = ds.filter(lambda x: x == nfp, input_columns=["boundary.n_field_periods"], num_proc=1)
     if limit is not None:
         ds = ds.select(range(min(limit, len(ds))))
     out = save_subset(ds, cache_dir)
@@ -151,7 +152,9 @@ def eval_score(
         # Convert row (Series) to plain dict for aggregator
         from .eval import score as eval_score_agg
 
-        return eval_score_agg({k: row[k] for k in df.columns})
+        # Avoid double-counting an existing 'score' column on re-runs
+        cols = [c for c in df.columns if c != "score"]
+        return eval_score_agg({k: row[k] for k in cols})
 
     df["score"] = df.apply(row_score, axis=1)
     if output is None:
@@ -224,9 +227,11 @@ def opt_cmaes(
         return b
 
     def objective(x: Sequence[float]) -> float:
+        from .eval import score as eval_score_agg
+
         m = eval_forward_metrics(make_boundary(x))
-        # Prefer smaller norms; aggregator sums numeric metrics (placeholder)
-        return float(sum(float(v) for v in m.values() if isinstance(v, (int, float))))
+        # Use shared aggregator for consistency with other commands
+        return float(eval_score_agg(m))
 
     x0 = [0.05, 0.05]
     best_x, hist = optimize(
@@ -243,12 +248,15 @@ app.add_typer(sur_app, name="surrogate")
 @sur_app.command("train")
 def surrogate_train(
     cache_dir: Path = Path("data/cache"),
-    output_dir: Path = Path("outputs/surrogates/mlp"),
+    output_dir: Path = typer.Option(
+        Path("outputs/surrogates/mlp"), "--out-dir", "--output-dir", help="Model output directory"
+    ),
+    use_pbfm: bool = typer.Option(False, help="Use PBFM conflict-free loss combination"),
 ) -> None:
     from .surrogate.train import train_simple_mlp
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    train_simple_mlp(cache_dir=cache_dir, output_dir=output_dir)
+    train_simple_mlp(cache_dir=cache_dir, output_dir=output_dir, use_pbfm=use_pbfm)
     console.print(f"Saved surrogate to {output_dir}")
 
 
