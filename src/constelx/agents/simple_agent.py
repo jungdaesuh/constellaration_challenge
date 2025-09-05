@@ -138,6 +138,18 @@ def _build_eci_linear_hook(constraints: List[Dict[str, Any]]) -> Optional[_Corre
     return make_hook(spec)
 
 
+def _build_pcfm_hook(constraints: List[Dict[str, Any]]) -> Optional[_CorrectionHook]:
+    try:
+        from .corrections.pcfm import PcfmSpec, build_spec_from_json, make_hook
+    except Exception:
+        return None
+    try:
+        spec: PcfmSpec = build_spec_from_json(constraints)
+    except Exception:
+        return None
+    return make_hook(spec)
+
+
 def run(config: AgentConfig) -> Path:
     """Run a tiny random-search agent loop and write artifacts.
 
@@ -234,6 +246,8 @@ def run(config: AgentConfig) -> Path:
     hook: Optional[_CorrectionHook] = None
     if config.correction == "eci_linear" and config.constraints:
         hook = _build_eci_linear_hook(config.constraints)
+    elif config.correction == "pcfm" and config.constraints:
+        hook = _build_pcfm_hook(config.constraints)
 
     def maybe_correct(bnd: Dict[str, Any]) -> Dict[str, Any]:
         if hook is None:
