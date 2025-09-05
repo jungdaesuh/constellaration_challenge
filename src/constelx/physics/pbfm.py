@@ -44,9 +44,14 @@ def conflict_free_update(g_fm: ArrayLike, g_r: ArrayLike) -> NDArray[np.floating
     if g_fm_arr.shape != g_r_arr.shape:
         raise ValueError("g_fm and g_r must have the same shape")
 
-    dot = float(np.dot(g_fm_arr, g_r_arr))
+    # Use vdot to handle multi-dimensional inputs (Frobenius inner product)
+    dot = float(np.vdot(g_fm_arr, g_r_arr))
     if dot < 0.0:
-        proj = (dot / np.dot(g_fm_arr, g_fm_arr)) * g_fm_arr
+        denom = float(np.vdot(g_fm_arr, g_fm_arr))
+        if denom > 0.0:
+            proj = (dot / denom) * g_fm_arr
+        else:
+            proj = 0.0 * g_fm_arr
         g_r_arr = g_r_arr - proj
 
     def _unit(x: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
