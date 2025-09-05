@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, cast
 
 from constellaration.geometry import surface_rz_fourier
 
 
-def example_boundary() -> dict:
+def example_boundary() -> dict[str, Any]:
     """Return a tiny example stellarator-symmetric boundary in SurfaceRZFourier JSON form."""
     # 5x9 truncation for R_cos and Z_sin coefficients with NFP=3
     r_cos = [[0.0] * 9 for _ in range(5)]
@@ -22,10 +22,10 @@ def example_boundary() -> dict:
         n_field_periods=3,
         is_stellarator_symmetric=True,
     )
-    return boundary.model_dump()
+    return cast(dict[str, Any], boundary.model_dump())
 
 
-def evaluate_boundary(boundary_json: dict) -> Dict[str, Any]:
+def evaluate_boundary(boundary_json: dict[str, Any]) -> dict[str, Any]:
     """Compute placeholder metrics derived from boundary coefficients.
 
     This starter returns simple norms and a combined placeholder metric to keep

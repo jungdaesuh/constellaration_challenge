@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import random
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 from rich.console import Console
@@ -74,6 +74,7 @@ def eval_forward(
     ),
     nfp: int = typer.Option(3, help="NFP used with --random."),
     seed: int = typer.Option(0, help="Seed used with --random."),
+    cache_dir: Optional[Path] = typer.Option(None, help="Optional cache directory for metrics."),
 ) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
         raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
@@ -97,7 +98,7 @@ def eval_forward(
 
     from .eval import forward as eval_forward_metrics
 
-    result = eval_forward_metrics(b)
+    result = eval_forward_metrics(b, cache_dir=cache_dir)
     table = Table(title="Forward metrics")
     table.add_column("metric")
     table.add_column("value")
@@ -138,8 +139,6 @@ def eval_score(
     import pandas as pd
 
     df = pd.read_csv(metrics_file)
-
-    from typing import Any
 
     def row_score(row: Any) -> float:
         # Convert row (Series) to plain dict for aggregator
@@ -209,7 +208,7 @@ def opt_cmaes(
 
     from typing import Sequence
 
-    def make_boundary(x: Sequence[float]) -> dict:
+    def make_boundary(x: Sequence[float]) -> dict[str, Any]:
         b = example_boundary()
         b["n_field_periods"] = int(nfp)
         b["r_cos"][1][5] = float(-abs(x[0]))
@@ -259,12 +258,23 @@ def agent_run(
     seed: int = typer.Option(0, help="Global seed for reproducibility."),
     runs_dir: Path = typer.Option(Path("runs"), help="Directory to store artifacts."),
     resume: Optional[Path] = typer.Option(None, help="Resume from an existing run directory."),
+    max_workers: int = typer.Option(1, help="Parallel evaluator workers for agent evals."),
+    cache_dir: Optional[Path] = typer.Option(None, help="Cache directory for agent evals."),
 ) -> None:
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
     runs_dir.mkdir(parents=True, exist_ok=True)
     out = run_agent(
-        AgentConfig(nfp=nfp, seed=seed, out_dir=runs_dir, algo=algo, budget=budget, resume=resume)
+        AgentConfig(
+            nfp=nfp,
+            seed=seed,
+            out_dir=runs_dir,
+            algo=algo,
+            budget=budget,
+            resume=resume,
+            max_workers=max_workers,
+            cache_dir=cache_dir,
+        )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")
 
