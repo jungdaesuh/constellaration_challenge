@@ -9,7 +9,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 def optimize(
-    f: Callable[[Sequence[float]], float],
+    f: Callable[[list[float]], float],
     x0: Sequence[float],
     bounds: Tuple[float, float],
     budget: int,
