@@ -91,6 +91,9 @@ def eval_forward(
     else:
         assert boundary_json is not None
         b = json.loads(boundary_json.read_text())
+        from .eval.boundary_param import validate as validate_boundary
+
+        validate_boundary(b)
 
     from .eval import forward as eval_forward_metrics
 
@@ -173,6 +176,59 @@ def opt_baseline(
         raise typer.BadParameter(f"Unknown algo: {algo}")
 
 
+@opt_app.command("cmaes")
+def opt_cmaes(
+    nfp: int = typer.Option(3, help="Boundary NFP for boundary-mode optimization."),
+    budget: int = typer.Option(50, help="Number of CMA-ES iterations."),
+    seed: int = typer.Option(0, help="Random seed."),
+    toy: bool = typer.Option(False, help="Use toy sphere objective instead of boundary."),
+) -> None:
+    """Run a CMA-ES optimization on a toy sphere objective for a quick smoke test."""
+    try:
+        from .optim.cmaes import optimize
+    except Exception as e:  # pragma: no cover - import-time error
+        raise typer.BadParameter(str(e))
+
+    if toy:
+        from typing import Sequence
+
+        def sphere(x: Sequence[float]) -> float:
+            return float(sum(v * v for v in x))
+
+        x0 = [0.5, 0.5]
+        best_x, hist = optimize(
+            sphere, x0=x0, bounds=(-1.0, 1.0), budget=budget, sigma0=0.3, seed=seed
+        )
+        console.print(f"Best x: {best_x}\nBest score: {min(hist) if hist else float('inf')}")
+        return
+
+    # Boundary-mode objective using placeholder evaluator
+    from .physics.constel_api import example_boundary  # noqa: I001
+    from .eval import forward as eval_forward_metrics  # noqa: I001
+    from .eval.boundary_param import validate as validate_boundary  # noqa: I001
+
+    from typing import Sequence
+
+    def make_boundary(x: Sequence[float]) -> dict:
+        b = example_boundary()
+        b["n_field_periods"] = int(nfp)
+        b["r_cos"][1][5] = float(-abs(x[0]))
+        b["z_sin"][1][5] = float(abs(x[1]))
+        validate_boundary(b)
+        return b
+
+    def objective(x: Sequence[float]) -> float:
+        m = eval_forward_metrics(make_boundary(x))
+        # Prefer smaller norms; aggregator sums numeric metrics (placeholder)
+        return float(sum(float(v) for v in m.values() if isinstance(v, (int, float))))
+
+    x0 = [0.05, 0.05]
+    best_x, hist = optimize(
+        objective, x0=x0, bounds=(-0.2, 0.2), budget=budget, sigma0=0.05, seed=seed
+    )
+    console.print(f"Best x: {best_x}\nBest score: {min(hist) if hist else float('inf')}")
+
+
 # -------------------- SURROGATE --------------------
 sur_app = typer.Typer(help="Train simple surrogate models")
 app.add_typer(sur_app, name="surrogate")
@@ -197,14 +253,20 @@ app.add_typer(agent_app, name="agent")
 
 @agent_app.command("run")
 def agent_run(
-    iterations: int = 3,
-    population: int = 8,
+    nfp: int = typer.Option(3, help="Number of field periods for random boundaries."),
+    budget: int = typer.Option(50, help="Total number of evaluations to run."),
+    algo: str = typer.Option("random", help="Optimization algorithm: random or cmaes."),
+    seed: int = typer.Option(0, help="Global seed for reproducibility."),
+    runs_dir: Path = typer.Option(Path("runs"), help="Directory to store artifacts."),
+    resume: Optional[Path] = typer.Option(None, help="Resume from an existing run directory."),
 ) -> None:
-    """Minimal loop stub to be extended by the coding agent."""
-    console.print(f"[bold]Agent[/bold] starting: iterations={iterations}, population={population}")
-    console.print(
-        "TODO: implement propose/simulate/select/refine using constellaration forward model."
+    from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
+
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    out = run_agent(
+        AgentConfig(nfp=nfp, seed=seed, out_dir=runs_dir, algo=algo, budget=budget, resume=resume)
     )
+    console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")
 
 
 if __name__ == "__main__":
