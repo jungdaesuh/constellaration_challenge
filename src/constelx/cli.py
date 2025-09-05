@@ -76,10 +76,9 @@ def eval_forward(
     seed: int = typer.Option(0, help="Seed used with --random."),
     cache_dir: Optional[Path] = typer.Option(None, help="Optional cache directory for metrics."),
     use_physics: bool = typer.Option(
-        False,
-        "--use-physics",
-        help="Prefer VMEC validation (uses constellaration if installed); falls back if absent.",
+        False, "--use-physics", help="Use real evaluator if available."
     ),
+    json_out: bool = typer.Option(False, "--json", help="Emit raw JSON metrics."),
 ) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
         raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
@@ -103,7 +102,10 @@ def eval_forward(
 
     from .eval import forward as eval_forward_metrics
 
-    result = eval_forward_metrics(b, cache_dir=cache_dir, prefer_vmec=use_physics)
+    result = eval_forward_metrics(b, cache_dir=cache_dir, use_real=use_physics)
+    if json_out:
+        console.print_json(data=result)
+        return
     table = Table(title="Forward metrics")
     table.add_column("metric")
     table.add_column("value")

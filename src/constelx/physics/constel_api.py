@@ -43,13 +43,38 @@ def example_boundary() -> dict[str, Any]:
     }
 
 
-def evaluate_boundary(boundary_json: dict[str, Any]) -> dict[str, Any]:
-    """Compute placeholder metrics derived from boundary coefficients.
+def evaluate_boundary(
+    boundary_json: dict[str, Any], use_real: Optional[bool] = None
+) -> dict[str, Any]:
+    """Compute metrics for a boundary.
 
-    This starter returns simple norms and a combined placeholder metric to keep
-    tests fast and avoid heavy dependencies during CI. Replace with real physics
-    evaluation when integrating with VMEC++ and full constellaration metrics.
+    Feature flag behavior:
+    - If use_real is True (or env var CONSTELX_USE_REAL_EVAL is truthy), try
+      to compute metrics using real evaluator paths; if unavailable, fall back
+      to placeholder metrics.
+    - Otherwise return lightweight placeholder metrics.
     """
+    import os
+
+    if use_real is None:
+        use_real = os.getenv("CONSTELX_USE_REAL_EVAL", "0").lower() in {"1", "true", "yes"}
+
+    srf = _try_import_surface_rz_fourier()
+    if use_real:
+        try:
+            # Local imports to avoid hard dependency at module import time
+            from constellaration.metrics import scoring
+            from constellaration.mhd import vmec_utils
+
+            if srf is not None:
+                boundary = srf.SurfaceRZFourier.model_validate(boundary_json)
+                vmecpp_wout = vmec_utils.minimal_wout_from_boundary(boundary)
+                return cast(dict[str, Any], scoring.geom_metrics(boundary, vmecpp_wout))
+        except Exception:
+            # fall back to placeholder below
+            pass
+
+    # Placeholder path
     srf = _try_import_surface_rz_fourier()
     if srf is not None:
         boundary = srf.SurfaceRZFourier.model_validate(boundary_json)
