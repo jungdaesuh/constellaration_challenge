@@ -32,6 +32,10 @@ class AgentConfig:
     # simple list of constraints when using eci_linear
     constraints: list[dict[str, Any]] | None = None
     use_physics: bool = False
+    # Optional PCFM tuning (overrides file-provided values if set)
+    pcfm_gn_iters: int | None = None
+    pcfm_damping: float | None = None
+    pcfm_tol: float | None = None
 
 
 def _timestamp() -> str:
@@ -138,7 +142,13 @@ def _build_eci_linear_hook(constraints: List[Dict[str, Any]]) -> Optional[_Corre
     return make_hook(spec)
 
 
-def _build_pcfm_hook(constraints: List[Dict[str, Any]]) -> Optional[_CorrectionHook]:
+def _build_pcfm_hook(
+    constraints: List[Dict[str, Any]],
+    *,
+    gn_iters: int | None = None,
+    damping: float | None = None,
+    tol: float | None = None,
+) -> Optional[_CorrectionHook]:
     try:
         from .corrections.pcfm import PcfmSpec, build_spec_from_json, make_hook
     except Exception:
@@ -147,6 +157,34 @@ def _build_pcfm_hook(constraints: List[Dict[str, Any]]) -> Optional[_CorrectionH
         spec: PcfmSpec = build_spec_from_json(constraints)
     except Exception:
         return None
+    # Apply overrides if provided
+    if gn_iters is not None:
+        spec = PcfmSpec(
+            variables=spec.variables,
+            constraints=spec.constraints,
+            coeff_abs_max=spec.coeff_abs_max,
+            gn_iters=int(gn_iters),
+            damping=spec.damping,
+            tol=spec.tol,
+        )
+    if damping is not None:
+        spec = PcfmSpec(
+            variables=spec.variables,
+            constraints=spec.constraints,
+            coeff_abs_max=spec.coeff_abs_max,
+            gn_iters=spec.gn_iters,
+            damping=float(damping),
+            tol=spec.tol,
+        )
+    if tol is not None:
+        spec = PcfmSpec(
+            variables=spec.variables,
+            constraints=spec.constraints,
+            coeff_abs_max=spec.coeff_abs_max,
+            gn_iters=spec.gn_iters,
+            damping=spec.damping,
+            tol=float(tol),
+        )
     return make_hook(spec)
 
 
@@ -247,7 +285,12 @@ def run(config: AgentConfig) -> Path:
     if config.correction == "eci_linear" and config.constraints:
         hook = _build_eci_linear_hook(config.constraints)
     elif config.correction == "pcfm" and config.constraints:
-        hook = _build_pcfm_hook(config.constraints)
+        hook = _build_pcfm_hook(
+            config.constraints,
+            gn_iters=config.pcfm_gn_iters,
+            damping=config.pcfm_damping,
+            tol=config.pcfm_tol,
+        )
 
     def maybe_correct(bnd: Dict[str, Any]) -> Dict[str, Any]:
         if hook is None:
@@ -282,7 +325,10 @@ def run(config: AgentConfig) -> Path:
                 from ..eval import forward_many
 
                 results = forward_many(
-                    batch, max_workers=config.max_workers, cache_dir=config.cache_dir
+                    batch,
+                    max_workers=config.max_workers,
+                    cache_dir=config.cache_dir,
+                    prefer_vmec=config.use_physics,
                 )
                 for j, (b, m) in enumerate(zip(batch, results)):
                     try:

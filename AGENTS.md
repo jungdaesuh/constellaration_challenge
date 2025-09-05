@@ -18,7 +18,11 @@ These guidelines help contributors build, test, and extend the ConStelX starter 
 - Tests: `pytest -q` (fast unit + minimal integration)
 - CLI help: `constelx --help`
   - Quick smoke: `constelx data fetch --nfp 3 --limit 8`
-  - E2E (small): `constelx agent run --nfp 3 --budget 5 --seed 0`
+- E2E (small): `constelx agent run --nfp 3 --budget 5 --seed 0`
+ - With PCFM correction (norm equality):
+   - JSON: `[{"type":"norm_eq","radius":0.06,"terms":[{"field":"r_cos","i":1,"j":5},{"field":"z_sin","i":1,"j":5}]}]`
+   - Command: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_norm.json`
+   - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8`
 
 ## Pre-commit Hooks
 

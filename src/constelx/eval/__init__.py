@@ -139,6 +139,7 @@ def forward_many(
     *,
     max_workers: int = 1,
     cache_dir: Optional[Path] = None,
+    prefer_vmec: bool = False,
 ) -> List[Dict[str, Any]]:
     items = list(boundaries)
     n = len(items)
@@ -151,6 +152,12 @@ def forward_many(
 
     # Try cache
     for i, b in enumerate(items):
+        # Optional VMEC validation (best-effort)
+        if prefer_vmec:
+            try:
+                _ = boundary_to_vmec(b)
+            except Exception:
+                pass
         if cache is None:
             to_compute.append((i, b))
             continue
