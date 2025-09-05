@@ -190,7 +190,9 @@ def opt_cmaes(
         raise typer.BadParameter(str(e))
 
     if toy:
-        def sphere(x: list[float]) -> float:
+        from typing import Sequence
+
+        def sphere(x: Sequence[float]) -> float:
             return float(sum(v * v for v in x))
 
         x0 = [0.5, 0.5]
@@ -205,7 +207,9 @@ def opt_cmaes(
     from .eval import forward as eval_forward_metrics  # noqa: I001
     from .eval.boundary_param import validate as validate_boundary  # noqa: I001
 
-    def make_boundary(x: list[float]) -> dict:
+    from typing import Sequence
+
+    def make_boundary(x: Sequence[float]) -> dict:
         b = example_boundary()
         b["n_field_periods"] = int(nfp)
         b["r_cos"][1][5] = float(-abs(x[0]))
@@ -213,7 +217,7 @@ def opt_cmaes(
         validate_boundary(b)
         return b
 
-    def objective(x: list[float]) -> float:
+    def objective(x: Sequence[float]) -> float:
         m = eval_forward_metrics(make_boundary(x))
         # Prefer smaller norms; aggregator sums numeric metrics (placeholder)
         return float(sum(float(v) for v in m.values() if isinstance(v, (int, float))))

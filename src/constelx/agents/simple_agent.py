@@ -9,12 +9,10 @@ import json
 import os
 import sys
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping
-
-import yaml
 
 from ..eval import forward as eval_forward, score as eval_score
 from ..eval.boundary_param import sample_random, validate as validate_boundary
@@ -30,7 +28,7 @@ class AgentConfig:
 
 
 def _timestamp() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
 
 def _ensure_dir(p: Path) -> None:
@@ -113,7 +111,8 @@ def run(config: AgentConfig) -> Path:
         "git": {"sha": _git_sha()},
         "versions": _pkg_versions(["constelx", "numpy", "pandas", "constellaration"]),
     }
-    (out_dir / "config.yaml").write_text(yaml.safe_dump(conf, sort_keys=False))
+    # YAML supports JSON subset; write JSON content for portability
+    (out_dir / "config.yaml").write_text(json.dumps(conf, indent=2))
 
     proposals_path = out_dir / "proposals.jsonl"
     metrics_csv_path = out_dir / "metrics.csv"
@@ -164,7 +163,7 @@ def run(config: AgentConfig) -> Path:
             f"--population {config.population} "
             f"--seed {config.seed}"
         ),
-        f"Created: {datetime.now(UTC).isoformat()}",
+        f"Created: {datetime.now(timezone.utc).isoformat()}",
         "",
         "## Environment",
         json.dumps(_gather_env_info(), indent=2),

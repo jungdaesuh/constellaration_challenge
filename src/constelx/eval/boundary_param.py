@@ -42,8 +42,8 @@ def sample_random(nfp: int, seed: int, shape: Tuple[int, int] = (5, 9)) -> Dict[
     r_cos = _zeros(shape)
     z_sin = _zeros(shape)
     # For stellarator-symmetric case, r_sin and z_cos should be None
-    r_sin = None
-    z_cos = None
+    r_sin: Coeff2D | None = None
+    z_cos: Coeff2D | None = None
 
     # Set a base major radius on the (m=0, n=nfp+1) term (index nfp+2 considering zero-index)
     # Using index 4 like the example (works for n >= 5)
@@ -134,13 +134,16 @@ def validate(boundary: Mapping[str, Any], *, coeff_abs_max: float = 2.0) -> None
             for x in row:
                 if abs(x) > coeff_abs_max:
                     raise ValueError(f"{name} has coefficient out of bounds: {x}")
-    for name, arr in ("r_sin", r_sin), ("z_cos", z_cos):
-        if arr is None:
-            continue
-        for row in arr:
+    if r_sin is not None:
+        for row in r_sin:
             for x in row:
                 if abs(x) > coeff_abs_max:
-                    raise ValueError(f"{name} has coefficient out of bounds: {x}")
+                    raise ValueError("r_sin has coefficient out of bounds: {x}")
+    if z_cos is not None:
+        for row in z_cos:
+            for x in row:
+                if abs(x) > coeff_abs_max:
+                    raise ValueError("z_cos has coefficient out of bounds: {x}")
 
     # Heuristic: base radius positive
     if r_cos[0][min(4, len(r_cos[0]) - 1)] <= 0.0:
