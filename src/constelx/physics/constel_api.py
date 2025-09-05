@@ -64,9 +64,11 @@ def evaluate_boundary(boundary_json: dict[str, Any]) -> dict[str, Any]:
         }
     # Fallback: compute norms from plain lists
     try:
-        import numpy as np
+        import numpy as _np_mod
+
+        np = cast(Any, _np_mod)
     except Exception:
-        np = None  # type: ignore[assignment]
+        np = None
 
     r_cos = boundary_json.get("r_cos")
     z_sin = boundary_json.get("z_sin")
