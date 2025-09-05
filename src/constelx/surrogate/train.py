@@ -8,6 +8,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from ..physics.pbfm import conflict_free_update
+
 
 def _boundary_cols(df: pd.DataFrame) -> list[str]:
     return [
@@ -30,7 +32,7 @@ class MLP(nn.Module):
         return cast(torch.Tensor, self.net(x))
 
 
-def train_simple_mlp(cache_dir: Path, output_dir: Path) -> None:
+def train_simple_mlp(cache_dir: Path, output_dir: Path, *, use_pbfm: bool = False) -> None:
     df = pd.read_parquet(Path(cache_dir) / "subset.parquet")
     X = df[_boundary_cols(df)].fillna(0.0).to_numpy()
     # Toy target: pick one available scalar metric if present, else zeros
@@ -48,10 +50,44 @@ def train_simple_mlp(cache_dir: Path, output_dir: Path) -> None:
     opt = optim.Adam(model.parameters(), lr=3e-4)
 
     for _ in range(200):
+        if not use_pbfm:
+            opt.zero_grad()
+            pred = model(X)
+            loss = ((pred - y) ** 2).mean()
+            loss.backward()
+            opt.step()
+            continue
+
+        # PBFM path: combine FM loss and a toy residual loss via conflict-free update
+        # FM loss: match target
         opt.zero_grad()
         pred = model(X)
-        loss = ((pred - y) ** 2).mean()
-        loss.backward()
+        fm_loss = ((pred - y) ** 2).mean()
+        fm_loss.backward()
+        g_fm = [
+            p.grad.detach().clone() if p.grad is not None else torch.zeros_like(p)
+            for p in model.parameters()
+        ]
+
+        # Residual loss: encourage small outputs (acts as a physics-like residual placeholder)
+        opt.zero_grad()
+        pred2 = model(X)
+        resid_loss = (pred2**2).mean()
+        resid_loss.backward()
+        g_r = [
+            p.grad.detach().clone() if p.grad is not None else torch.zeros_like(p)
+            for p in model.parameters()
+        ]
+
+        # Replace gradients with conflict-free combination and step
+        opt.zero_grad()
+        for p, gf, gr in zip(model.parameters(), g_fm, g_r):
+            # Compute normalized combination on CPU using numpy
+            gf_np = gf.detach().cpu().numpy()
+            gr_np = gr.detach().cpu().numpy()
+            upd_np = conflict_free_update(gf_np, gr_np)
+            upd = torch.from_numpy(upd_np).to(p)
+            p.grad = upd
         opt.step()
     output_dir.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), Path(output_dir) / "mlp.pt")
