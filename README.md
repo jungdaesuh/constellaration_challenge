@@ -35,7 +35,7 @@ Notes:
 - **Physics wrappers**: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects.
 - **Optimization**: CMA-ES and (optional) BoTorch Bayesian optimization stubs.
 - **Models**: simple MLP baseline + placeholders for FNO/transformers.
-- **Hard-constraint tooling**: placeholders for PCFM and PBFM so you can enforce physical constraints during generation/training.
+- **Hard-constraint tooling**: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
 
 See `docs/ROADMAP.md` for the suggested implementation path.
 
