@@ -57,4 +57,3 @@ def test_agent_with_pcfm_norm_constraint_runs_and_applies(tmp_path: Path) -> Non
     x = float(b["r_cos"][1][5])
     y = float(b["z_sin"][1][5])
     assert abs((x * x + y * y) - 0.06 * 0.06) < 1e-4
-

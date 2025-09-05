@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -39,7 +39,10 @@ class PcfmSpec:
     tol: float = 1e-8
 
 
-def _flatten(boundary: Mapping[str, Any], variables: Sequence[LinVariable]) -> NDArray[np.floating[Any]]:
+def _flatten(
+    boundary: Mapping[str, Any],
+    variables: Sequence[LinVariable],
+) -> NDArray[np.floating[Any]]:
     xs: List[float] = []
     for v in variables:
         arr = np.asarray(boundary[v.field])
@@ -159,4 +162,3 @@ __all__ = [
     "make_hook",
     "build_spec_from_json",
 ]
-
