@@ -197,14 +197,19 @@ app.add_typer(agent_app, name="agent")
 
 @agent_app.command("run")
 def agent_run(
-    iterations: int = 3,
-    population: int = 8,
+    nfp: int = typer.Option(3, help="Number of field periods for random boundaries."),
+    iterations: int = typer.Option(3, help="Number of proposal rounds."),
+    population: int = typer.Option(8, help="Proposals per iteration."),
+    seed: int = typer.Option(0, help="Global seed for reproducibility."),
+    runs_dir: Path = typer.Option(Path("runs"), help="Directory to store artifacts."),
 ) -> None:
-    """Minimal loop stub to be extended by the coding agent."""
-    console.print(f"[bold]Agent[/bold] starting: iterations={iterations}, population={population}")
-    console.print(
-        "TODO: implement propose/simulate/select/refine using constellaration forward model."
+    from .agents.simple_agent import AgentConfig, run as run_agent
+
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    out = run_agent(
+        AgentConfig(nfp=nfp, iterations=iterations, population=population, seed=seed, out_dir=runs_dir)
     )
+    console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")
 
 
 if __name__ == "__main__":
