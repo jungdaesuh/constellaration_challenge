@@ -276,8 +276,11 @@ def agent_run(
     ),
     constraints_file: Optional[Path] = typer.Option(
         None,
-        help="JSON file with linear constraints for --correction eci_linear.\n"
-        "Format: [{rhs: float, coeffs: [{field,i,j,c}]}]",
+        help=(
+            "JSON file with constraints for correction hooks.\n"
+            "- eci_linear: [{rhs: float, coeffs: [{field,i,j,c}]}]\n"
+            "- pcfm: [{type:'norm_eq', radius:float, terms:[{field,i,j,w}]}]"
+        ),
     ),
 ) -> None:
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
