@@ -20,6 +20,17 @@ These guidelines help contributors build, test, and extend the ConStelX starter 
   - Quick smoke: `constelx data fetch --nfp 3 --limit 8`
   - E2E (small): `constelx agent run --nfp 3 --budget 5 --seed 0`
 
+## Pre-commit Hooks
+
+[![pre-commit enabled](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
+
+- Tools: `ruff` (lint + format), `mypy --strict`, whitespace fixers.
+- One-time setup: `pip install -e ".[dev]" && pre-commit install`
+- Run on all files: `pre-commit run -a`
+- Update hook versions: `pre-commit autoupdate`
+- Commit loop: hooks may modify files; re-run `git add -A` and commit again.
+- Local equivalents: `ruff format . && ruff check . --fix && mypy --strict src/constelx && pytest -q`
+
 ## Coding Style & Naming Conventions
 
 - Python: 4‑space indent, max line length 100 (ruff), f‑strings, dataclasses when helpful.
