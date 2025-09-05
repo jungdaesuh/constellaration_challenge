@@ -29,7 +29,8 @@ class AgentConfig:
     max_workers: int = 1
     cache_dir: Path | None = None
     correction: str | None = None  # e.g., "eci_linear"
-    constraints: list[dict] | None = None  # simple list of constraints when using eci_linear
+    # simple list of constraints when using eci_linear
+    constraints: list[dict[str, Any]] | None = None
 
 
 def _timestamp() -> str:

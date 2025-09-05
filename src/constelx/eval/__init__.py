@@ -19,9 +19,7 @@ import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from math import inf, isnan
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias
-
-from constellaration.geometry import surface_rz_fourier
+from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
 
 from ..physics.constel_api import evaluate_boundary
 
@@ -39,24 +37,38 @@ def boundary_to_vmec(boundary: Mapping[str, Any]) -> VmecBoundary:
     - A validated `SurfaceRZFourier` instance, usable as VMEC boundary input.
     """
 
-    return surface_rz_fourier.SurfaceRZFourier.model_validate(boundary)
+    try:
+        from constellaration.geometry import surface_rz_fourier
+
+        return surface_rz_fourier.SurfaceRZFourier.model_validate(boundary)
+    except Exception as e:
+        msg = (
+            "constellaration is not installed; install '.[physics]' and system NetCDF "
+            "to enable VMEC boundary validation"
+        )
+        raise RuntimeError(msg) from e
 
 
 def _normalize(obj: Any) -> Any:
+    # Optional numpy support for normalizing arrays; keep typing mypy-clean.
+    _np: Any | None
     try:
-        import numpy as np
+        import numpy as _np_mod
+
+        _np = cast(Any, _np_mod)
     except Exception:  # pragma: no cover - numpy always available in deps
-        np = None  # type: ignore[assignment]
+        _np = None
 
     if isinstance(obj, dict):
         return {k: _normalize(v) for k, v in sorted(obj.items(), key=lambda kv: kv[0])}
     if isinstance(obj, (list, tuple)):
         return [_normalize(x) for x in obj]
-    if np is not None:
+    if _np is not None:
         try:
-            if isinstance(obj, np.ndarray):
+            np_mod = _np
+            if isinstance(obj, np_mod.ndarray):
                 return obj.tolist()
-            if isinstance(obj, np.generic):
+            if isinstance(obj, np_mod.generic):
                 return obj.item()
         except Exception:
             pass
@@ -88,7 +100,11 @@ def forward(boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None) ->
     """
 
     # Validate inputs to provide clear errors early; convert to pydantic model if needed.
-    _ = boundary_to_vmec(boundary)
+    # Validate with VMEC model if available; otherwise fall back to dict-based evaluation
+    try:
+        _ = boundary_to_vmec(boundary)
+    except Exception:
+        pass
     # Optional cache lookup
     cache_key = None
     cache_file: Optional[Path] = None
@@ -98,7 +114,7 @@ def forward(boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None) ->
         cache_file = _cache_path(cache_dir, cache_key)
         if cache_file.exists():
             try:
-                return json.loads(cache_file.read_text())
+                return cast(Dict[str, Any], json.loads(cache_file.read_text()))
             except Exception:
                 pass
     # evaluate_boundary expects a plain dict
