@@ -111,18 +111,13 @@ def forward(
     to compute physical figures of merit once available.
     """
 
-    # Validate inputs to provide clear errors early; convert to pydantic model if needed.
-    # Validate with VMEC model if available; otherwise fall back to dict-based evaluation
+    # Optional VMEC validation (best-effort) when requested.
+    # When prefer_vmec=False, skip validation to avoid unnecessary import/time.
     if prefer_vmec:
         try:
             _ = boundary_to_vmec(boundary)
         except Exception:
             # Prefer VMEC validation, but fall back if unavailable
-            pass
-    else:
-        try:
-            _ = boundary_to_vmec(boundary)
-        except Exception:
             pass
     # Optional cache lookup
     cache = _cache_backend(cache_dir)
@@ -220,6 +215,11 @@ def score(metrics: Mapping[str, Any]) -> float:
     This is a placeholder aggregation compatible with the starter's toy metrics.
     Swap in evaluator-default aggregation when integrating the real metrics.
     """
+
+    # Prefer a single combined placeholder metric if available to avoid double-counting
+    if "placeholder_metric" in metrics and isinstance(metrics["placeholder_metric"], (int, float)):
+        v = float(metrics["placeholder_metric"])  # may be NaN
+        return inf if isnan(v) else v
 
     total = 0.0
     for v in metrics.values():
