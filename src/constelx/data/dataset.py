@@ -1,14 +1,14 @@
-from __future__ import annotations
-
 """Lightweight dataset utilities for constelx.data.
 
 This module intentionally provides a deterministic synthetic fallback so tests
 and local development do not depend on remote datasets or network access.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, List, Mapping, MutableMapping, Sequence
+from typing import Any, List, Mapping, MutableMapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -26,9 +26,7 @@ def _synthetic_examples(count: int = 64, *, nfp: int = 3, seed: int = 0) -> List
     rng = np.random.default_rng(seed)
     xs = rng.normal(loc=-0.05, scale=0.03, size=count)
     ys = rng.normal(loc=0.05, scale=0.03, size=count)
-    return [
-        Example(nfp=nfp, r_cos_15=float(xs[i]), z_sin_15=float(ys[i])) for i in range(count)
-    ]
+    return [Example(nfp=nfp, r_cos_15=float(xs[i]), z_sin_15=float(ys[i])) for i in range(count)]
 
 
 def _to_hf_records(examples: Sequence[Example]) -> List[Mapping[str, Any]]:
@@ -42,7 +40,9 @@ def _to_hf_records(examples: Sequence[Example]) -> List[Mapping[str, Any]]:
                 "boundary.r_cos.1.5": float(e.r_cos_15),
                 "boundary.z_sin.1.5": float(e.z_sin_15),
                 # Provide a placeholder metric compatible with downstream examples
-                "metrics.placeholder_metric": float(e.r_cos_15 * e.r_cos_15 + e.z_sin_15 * e.z_sin_15),
+                "metrics.placeholder_metric": float(
+                    e.r_cos_15 * e.r_cos_15 + e.z_sin_15 * e.z_sin_15
+                ),
             }
         )
     return out
@@ -89,4 +89,3 @@ def save_subset(ds: Dataset, cache_dir: Path) -> Path:
 
 
 __all__ = ["fetch_dataset", "save_subset"]
-
