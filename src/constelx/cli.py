@@ -9,14 +9,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .data.dataset import fetch_dataset, save_subset
-from .eval import forward as eval_forward_metrics
-from .eval import score as eval_score_agg
-from .eval.boundary_param import sample_random
-from .eval.boundary_param import validate as validate_boundary
-from .optim.evolution import run_cma_es_baseline
-from .physics.constel_api import example_boundary
-from .surrogate.train import train_simple_mlp
+"""CLI entrypoints for constelx.
+
+Imports of internal subpackages are deferred to command bodies to avoid
+import-time coupling and keep simple commands lightweight.
+"""
 
 app = typer.Typer(help="ConstelX CLI — ConStellaration starter tools")
 console = Console()
@@ -49,6 +46,9 @@ def data_fetch(
     ),
     limit: Optional[int] = typer.Option(1000, help="Take first N examples for quick experiments."),
 ) -> None:
+    # Local import to avoid import-time dependency for unrelated commands
+    from .data.dataset import fetch_dataset, save_subset
+
     ds = fetch_dataset()
     if nfp is not None:
         ds = ds.filter(lambda x: x == nfp, input_columns=["boundary.n_field_periods"], num_proc=4)
@@ -79,13 +79,20 @@ def eval_forward(
         raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
 
     if example:
+        from .physics.constel_api import example_boundary
+
         b = example_boundary()
     elif random_boundary:
+        from .eval.boundary_param import sample_random
+        from .eval.boundary_param import validate as validate_boundary
+
         b = sample_random(nfp=nfp, seed=seed)
         validate_boundary(b)
     else:
         assert boundary_json is not None
         b = json.loads(boundary_json.read_text())
+
+    from .eval import forward as eval_forward_metrics
 
     result = eval_forward_metrics(b)
     table = Table(title="Forward metrics")
@@ -117,6 +124,8 @@ def eval_score(
         raise typer.BadParameter("Provide exactly one of --metrics-json or --metrics-file")
 
     if metrics_json is not None:
+        from .eval import score as eval_score_agg
+
         metrics = json.loads(Path(metrics_json).read_text())
         value = eval_score_agg(metrics)
         console.print(f"score = {value}")
@@ -131,6 +140,8 @@ def eval_score(
 
     def row_score(row: Any) -> float:
         # Convert row (Series) to plain dict for aggregator
+        from .eval import score as eval_score_agg
+
         return eval_score_agg({k: row[k] for k in df.columns})
 
     df["score"] = df.apply(row_score, axis=1)
@@ -154,6 +165,8 @@ def opt_baseline(
 ) -> None:
     random.seed(seed)
     if algo == "cma-es":
+        from .optim.evolution import run_cma_es_baseline
+
         best = run_cma_es_baseline(steps=steps)
         console.print(f"Best score: {best}")
     else:
@@ -170,6 +183,8 @@ def surrogate_train(
     cache_dir: Path = Path("data/cache"),
     output_dir: Path = Path("outputs/surrogates/mlp"),
 ) -> None:
+    from .surrogate.train import train_simple_mlp
+
     output_dir.mkdir(parents=True, exist_ok=True)
     train_simple_mlp(cache_dir=cache_dir, output_dir=output_dir)
     console.print(f"Saved surrogate to {output_dir}")
