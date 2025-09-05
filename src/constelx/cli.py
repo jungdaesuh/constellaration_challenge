@@ -19,7 +19,7 @@ app = typer.Typer(help="ConstelX CLI — ConStellaration starter tools")
 console = Console()
 
 
-@app.command()
+@app.command()  # type: ignore[misc]
 def version() -> None:
     """Print version."""
     from . import __version__
@@ -27,7 +27,7 @@ def version() -> None:
     console.print(f"constelx {__version__}")
 
 
-@app.command()
+@app.command()  # type: ignore[misc]
 def hello(name: str = "world") -> None:
     """Sanity check."""
     console.print(f"Hello, {name} 👋")
@@ -38,7 +38,7 @@ data_app = typer.Typer(help="Data access and preprocessing")
 app.add_typer(data_app, name="data")
 
 
-@data_app.command("fetch")
+@data_app.command("fetch")  # type: ignore[misc]
 def data_fetch(
     cache_dir: Path = typer.Option(Path("data/cache"), help="Where to store HF cache/parquets."),
     nfp: Optional[int] = typer.Option(
@@ -63,7 +63,7 @@ eval_app = typer.Typer(help="Run physics/evaluator metrics via constellaration")
 app.add_typer(eval_app, name="eval")
 
 
-@eval_app.command("forward")
+@eval_app.command("forward")  # type: ignore[misc]
 def eval_forward(
     boundary_json: Optional[Path] = typer.Option(
         None, help="Path to a JSON boundary (SurfaceRZFourier)."
@@ -107,7 +107,7 @@ def eval_forward(
     console.print(table)
 
 
-@eval_app.command("score")
+@eval_app.command("score")  # type: ignore[misc]
 def eval_score(
     metrics_json: Optional[Path] = typer.Option(
         None, "--metrics-json", help="Path to a JSON file containing a metrics dict."
@@ -159,7 +159,7 @@ opt_app = typer.Typer(help="Optimization baselines")
 app.add_typer(opt_app, name="opt")
 
 
-@opt_app.command("baseline")
+@opt_app.command("baseline")  # type: ignore[misc]
 def opt_baseline(
     steps: int = 50,
     seed: int = 0,
@@ -175,7 +175,7 @@ def opt_baseline(
         raise typer.BadParameter(f"Unknown algo: {algo}")
 
 
-@opt_app.command("cmaes")
+@opt_app.command("cmaes")  # type: ignore[misc]
 def opt_cmaes(
     nfp: int = typer.Option(3, help="Boundary NFP for boundary-mode optimization."),
     budget: int = typer.Option(50, help="Number of CMA-ES iterations."),
@@ -233,7 +233,7 @@ sur_app = typer.Typer(help="Train simple surrogate models")
 app.add_typer(sur_app, name="surrogate")
 
 
-@sur_app.command("train")
+@sur_app.command("train")  # type: ignore[misc]
 def surrogate_train(
     cache_dir: Path = Path("data/cache"),
     output_dir: Path = Path("outputs/surrogates/mlp"),
@@ -250,7 +250,7 @@ agent_app = typer.Typer(help="Multi-step agent loop (propose → simulate → se
 app.add_typer(agent_app, name="agent")
 
 
-@agent_app.command("run")
+@agent_app.command("run")  # type: ignore[misc]
 def agent_run(
     nfp: int = typer.Option(3, help="Number of field periods for random boundaries."),
     budget: int = typer.Option(50, help="Total number of evaluations to run."),

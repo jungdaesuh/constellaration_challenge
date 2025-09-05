@@ -19,7 +19,7 @@ import json
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from math import inf, isnan
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias
+from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
 
 from constellaration.geometry import surface_rz_fourier
 
@@ -44,19 +44,19 @@ def boundary_to_vmec(boundary: Mapping[str, Any]) -> VmecBoundary:
 
 def _normalize(obj: Any) -> Any:
     try:
-        import numpy as np
+        import numpy as _np
     except Exception:  # pragma: no cover - numpy always available in deps
-        np = None  # type: ignore[assignment]
+        _np = None
 
     if isinstance(obj, dict):
         return {k: _normalize(v) for k, v in sorted(obj.items(), key=lambda kv: kv[0])}
     if isinstance(obj, (list, tuple)):
         return [_normalize(x) for x in obj]
-    if np is not None:
+    if _np is not None:
         try:
-            if isinstance(obj, np.ndarray):
+            if isinstance(obj, _np.ndarray):
                 return obj.tolist()
-            if isinstance(obj, np.generic):
+            if isinstance(obj, _np.generic):
                 return obj.item()
         except Exception:
             pass
@@ -98,7 +98,7 @@ def forward(boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None) ->
         cache_file = _cache_path(cache_dir, cache_key)
         if cache_file.exists():
             try:
-                return json.loads(cache_file.read_text())
+                return cast(Dict[str, Any], json.loads(cache_file.read_text()))
             except Exception:
                 pass
     # evaluate_boundary expects a plain dict
