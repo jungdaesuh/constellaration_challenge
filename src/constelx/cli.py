@@ -77,8 +77,12 @@ def eval_forward(
     seed: int = typer.Option(0, help="Seed used with --random."),
     cache_dir: Optional[Path] = typer.Option(None, help="Optional cache directory for metrics."),
     use_physics: bool = typer.Option(
-        False, "--use-physics", help="Use real evaluator if available."
+        False,
+        "--use-physics",
+        "--use-real",
+        help="Use real evaluator if available.",
     ),
+    problem: str = typer.Option("p1", help="Problem id for scoring/metrics (e.g., p1/p2/p3)."),
     json_out: bool = typer.Option(False, "--json", help="Emit raw JSON metrics."),
 ) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
@@ -103,7 +107,7 @@ def eval_forward(
 
     from .eval import forward as eval_forward_metrics
 
-    result = eval_forward_metrics(b, cache_dir=cache_dir, use_real=use_physics)
+    result = eval_forward_metrics(b, cache_dir=cache_dir, use_real=use_physics, problem=problem)
     if json_out:
         console.print_json(data=result)
         return
@@ -126,6 +130,7 @@ def eval_score(
     output: Optional[Path] = typer.Option(
         None, "--output", help="Optional output CSV path when using --metrics-file."
     ),
+    problem: str = typer.Option("p1", help="Problem id for scoring (e.g., p1/p2/p3)."),
 ) -> None:
     """Aggregate a scalar score from a metrics JSON file.
 
@@ -139,7 +144,7 @@ def eval_score(
         from .eval import score as eval_score_agg
 
         metrics = json.loads(Path(metrics_json).read_text())
-        value = eval_score_agg(metrics)
+        value = eval_score_agg(metrics, problem=problem)
         console.print(f"score = {value}")
         return
 
@@ -154,7 +159,7 @@ def eval_score(
 
         # Avoid double-counting an existing 'score' column on re-runs
         cols = [c for c in df.columns if c != "score"]
-        return eval_score_agg({k: row[k] for k in cols})
+        return eval_score_agg({k: row[k] for k in cols}, problem=problem)
 
     df["score"] = df.apply(row_score, axis=1)
     if output is None:
