@@ -4,5 +4,6 @@ __pycache__/
 dist/
 build/
 data/
+!src/constelx/data/
 outputs/
 *.egg-info/

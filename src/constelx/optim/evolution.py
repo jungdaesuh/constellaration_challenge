@@ -12,10 +12,15 @@ from ..physics.constel_api import evaluate_boundary, example_boundary
 
 
 def score_from_boundary(b: Dict[str, Any]) -> float:
-    """Toy score: minimize a weighted sum of geom metrics (placeholder)."""
+    """Toy score based on available placeholder metrics.
+
+    Prefer the combined placeholder metric; fall back to the sum of norms.
+    Lower is better.
+    """
     m = evaluate_boundary(b)
-    # Example: smaller is better (this metric dict is placeholder-friendly)
-    return float(m.get("compactness", 0.0)) + 0.1 * float(m.get("smoothness", 0.0))
+    rc = float(m.get("r_cos_norm", 0.0))
+    zs = float(m.get("z_sin_norm", 0.0))
+    return float(m.get("placeholder_metric", rc + zs))
 
 
 def run_cma_es_baseline(steps: int = 50) -> float:
