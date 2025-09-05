@@ -44,3 +44,14 @@ def test_conflict_free_update_zero_gradients() -> None:
     g_r = np.zeros(2)
     update = conflict_free_update(g_fm, g_r)
     assert np.allclose(update, np.zeros(2))
+
+
+def test_conflict_free_update_multidim_gradients() -> None:
+    # Matrix-shaped gradients; ensure scalar dot and no crash
+    g_fm = np.array([[1.0, 0.0], [0.5, -0.5]])
+    g_r = np.array([[-1.0, 1.0], [0.5, 0.5]])
+    upd = conflict_free_update(g_fm, g_r)
+    assert upd.shape == g_fm.shape
+    # Orthogonalization should ensure non-negative alignment with g_fm when combined and normalized
+    # The function returns a unit vector; check length ~1
+    assert np.isclose(np.linalg.norm(upd), 1.0, rtol=1e-6, atol=1e-6)
