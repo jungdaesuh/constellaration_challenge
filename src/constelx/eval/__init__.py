@@ -97,6 +97,7 @@ def forward(
     cache_dir: Optional[Path] = None,
     prefer_vmec: bool = False,
     use_real: Optional[bool] = None,
+    problem: str = "p1",
 ) -> Dict[str, Any]:
     """Run the forward evaluator for a single boundary.
 
@@ -126,13 +127,21 @@ def forward(
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
-    # evaluate_boundary expects a plain dict
+    # evaluate using real physics (if requested) or placeholder path
     if use_real is None:
         # Allow env toggle without changing call sites
         import os
 
         use_real = os.getenv("CONSTELX_USE_REAL_EVAL", "0").lower() in {"1", "true", "yes"}
-    result = evaluate_boundary(dict(boundary), use_real=use_real)
+    if use_real:
+        try:
+            from ..physics.proxima_eval import forward_metrics as px_forward
+
+            result, _info = px_forward(dict(boundary), problem=problem)
+        except Exception:
+            result = evaluate_boundary(dict(boundary), use_real=False)
+    else:
+        result = evaluate_boundary(dict(boundary), use_real=False)
     if cache is not None:
         cache.set(cache_key, result)
     return result
@@ -145,6 +154,7 @@ def forward_many(
     cache_dir: Optional[Path] = None,
     prefer_vmec: bool = False,
     use_real: Optional[bool] = None,
+    problem: str = "p1",
 ) -> List[Dict[str, Any]]:
     items = list(boundaries)
     n = len(items)
@@ -176,22 +186,29 @@ def forward_many(
 
     # Compute missing
     if to_compute:
-        if max_workers <= 1:
+        if use_real:
+            try:
+                from ..physics.proxima_eval import forward_metrics as px_forward
+
+                for i, b in to_compute:
+                    out[i] = px_forward(dict(b), problem=problem)[0]
+            except Exception:
+                for i, b in to_compute:
+                    out[i] = evaluate_boundary(dict(b), use_real=False)
+        elif max_workers <= 1:
             for i, b in to_compute:
-                out[i] = evaluate_boundary(dict(b), use_real=use_real)
+                out[i] = evaluate_boundary(dict(b), use_real=False)
         else:
             try:
                 with ProcessPoolExecutor(max_workers=max_workers) as ex:
-                    futs = {
-                        ex.submit(evaluate_boundary, dict(b), use_real): i for i, b in to_compute
-                    }
+                    futs = {ex.submit(evaluate_boundary, dict(b), False): i for i, b in to_compute}
                     for fut in as_completed(futs):
                         i = futs[fut]
                         out[i] = fut.result()
             except Exception:
                 # Fallback to sequential if process pool is unavailable (e.g., sandboxed env)
                 for i, b in to_compute:
-                    out[i] = evaluate_boundary(dict(b), use_real=use_real)
+                    out[i] = evaluate_boundary(dict(b), use_real=False)
 
     # Persist new caches
     if cache is not None:
@@ -204,7 +221,7 @@ def forward_many(
     return [v for v in out if v is not None]
 
 
-def score(metrics: Mapping[str, Any]) -> float:
+def score(metrics: Mapping[str, Any], problem: Optional[str] = None) -> float:
     """Aggregate a scalar score from a metrics dict.
 
     Rules (deterministic and simple by design):
@@ -215,6 +232,15 @@ def score(metrics: Mapping[str, Any]) -> float:
     This is a placeholder aggregation compatible with the starter's toy metrics.
     Swap in evaluator-default aggregation when integrating the real metrics.
     """
+
+    # Use official scorer when available and a problem is provided
+    if problem is not None:
+        try:
+            from ..physics.proxima_eval import score as px_score
+
+            return float(px_score(problem, metrics))
+        except Exception:
+            pass
 
     # Prefer a single combined placeholder metric if available to avoid double-counting
     if "placeholder_metric" in metrics and isinstance(metrics["placeholder_metric"], (int, float)):
