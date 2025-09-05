@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
 
 from ..physics.constel_api import evaluate_boundary
+from .cache import CacheBackend, get_cache_backend
 
 # A simple local type alias; keep as Any to avoid leaking third-party types.
 VmecBoundary: TypeAlias = Any
@@ -81,11 +82,18 @@ def _hash_boundary(boundary: Mapping[str, Any]) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
 
-def _cache_path(cache_dir: Path, key: str) -> Path:
-    return cache_dir / f"{key}.json"
+def _cache_backend(cache_dir: Optional[Path]) -> Optional[CacheBackend]:
+    if cache_dir is None:
+        return None
+    try:
+        return get_cache_backend(cache_dir)
+    except Exception:
+        return None
 
 
-def forward(boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None) -> Dict[str, Any]:
+def forward(
+    boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None, prefer_vmec: bool = False
+) -> Dict[str, Any]:
     """Run the forward evaluator for a single boundary.
 
     Parameters
@@ -101,29 +109,28 @@ def forward(boundary: Mapping[str, Any], *, cache_dir: Optional[Path] = None) ->
 
     # Validate inputs to provide clear errors early; convert to pydantic model if needed.
     # Validate with VMEC model if available; otherwise fall back to dict-based evaluation
-    try:
-        _ = boundary_to_vmec(boundary)
-    except Exception:
-        pass
-    # Optional cache lookup
-    cache_key = None
-    cache_file: Optional[Path] = None
-    if cache_dir is not None:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_key = _hash_boundary(boundary)
-        cache_file = _cache_path(cache_dir, cache_key)
-        if cache_file.exists():
-            try:
-                return cast(Dict[str, Any], json.loads(cache_file.read_text()))
-            except Exception:
-                pass
-    # evaluate_boundary expects a plain dict
-    result = evaluate_boundary(dict(boundary))
-    if cache_file is not None:
+    if prefer_vmec:
         try:
-            cache_file.write_text(json.dumps(result))
+            _ = boundary_to_vmec(boundary)
+        except Exception:
+            # Prefer VMEC validation, but fall back if unavailable
+            pass
+    else:
+        try:
+            _ = boundary_to_vmec(boundary)
         except Exception:
             pass
+    # Optional cache lookup
+    cache = _cache_backend(cache_dir)
+    cache_key = _hash_boundary(boundary)
+    if cache is not None:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+    # evaluate_boundary expects a plain dict
+    result = evaluate_boundary(dict(boundary))
+    if cache is not None:
+        cache.set(cache_key, result)
     return result
 
 
@@ -138,27 +145,21 @@ def forward_many(
     out: List[Optional[Dict[str, Any]]] = [None] * n
 
     keys: List[Optional[str]] = [None] * n
-    paths: List[Optional[Path]] = [None] * n
     to_compute: list[tuple[int, Mapping[str, Any]]] = []
 
-    if cache_dir is not None:
-        cache_dir.mkdir(parents=True, exist_ok=True)
+    cache = _cache_backend(cache_dir)
 
     # Try cache
     for i, b in enumerate(items):
-        if cache_dir is None:
+        if cache is None:
             to_compute.append((i, b))
             continue
         k = _hash_boundary(b)
-        p = _cache_path(cache_dir, k)
         keys[i] = k
-        paths[i] = p
-        if p.exists():
-            try:
-                out[i] = json.loads(p.read_text())
-                continue
-            except Exception:
-                pass
+        got = cache.get(k)
+        if got is not None:
+            out[i] = got
+            continue
         to_compute.append((i, b))
 
     # Compute missing
@@ -179,20 +180,11 @@ def forward_many(
                     out[i] = evaluate_boundary(dict(b))
 
     # Persist new caches
-    if cache_dir is not None:
+    if cache is not None:
         for i, r in enumerate(out):
             assert r is not None
-            p_existing = paths[i]
-            if p_existing is not None:
-                p_final = p_existing
-            else:
-                k = _hash_boundary(items[i])
-                p_final = _cache_path(cache_dir, k)
-            if not p_final.exists():
-                try:
-                    p_final.write_text(json.dumps(r))
-                except Exception:
-                    pass
+            k = keys[i] or _hash_boundary(items[i])
+            cache.set(k, r)
 
     # type narrowing
     return [v for v in out if v is not None]
