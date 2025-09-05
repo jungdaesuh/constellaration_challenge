@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple
 
 import numpy as np
+from numpy.typing import NDArray
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,7 @@ class EciLinearSpec:
     constraints: List[LinearConstraint]
 
 
-def _flatten(boundary: Mapping[str, Any], variables: Sequence[Variable]) -> np.ndarray:
+def _flatten(boundary: Mapping[str, Any], variables: Sequence[Variable]) -> NDArray[np.float64]:
     x = []
     for v in variables:
         arr = boundary[v.field]
@@ -38,7 +39,7 @@ def _flatten(boundary: Mapping[str, Any], variables: Sequence[Variable]) -> np.n
 
 
 def _unflatten(
-    boundary: Mapping[str, Any], variables: Sequence[Variable], x: np.ndarray
+    boundary: Mapping[str, Any], variables: Sequence[Variable], x: NDArray[np.float64]
 ) -> Dict[str, Any]:
     b = dict(boundary)
     # deep copy only touched fields minimally
@@ -51,7 +52,7 @@ def _unflatten(
 
 def _build_A_b(
     variables: Sequence[Variable], constraints: Sequence[LinearConstraint]
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
     m = len(constraints)
     n = len(variables)
     A = np.zeros((m, n), dtype=float)
@@ -67,7 +68,9 @@ def _build_A_b(
     return A, b
 
 
-def project_linear(x0: np.ndarray, A: np.ndarray, b: np.ndarray) -> np.ndarray:
+def project_linear(
+    x0: NDArray[np.float64], A: NDArray[np.float64], b: NDArray[np.float64]
+) -> NDArray[np.float64]:
     """Project x0 onto the affine subspace {x | A x = b} minimizing ||x - x0||_2.
 
     Uses x* = x0 - A^T (A A^T)^-1 (A x0 - b). Handles rank deficiency with pinv.
@@ -77,7 +80,7 @@ def project_linear(x0: np.ndarray, A: np.ndarray, b: np.ndarray) -> np.ndarray:
         return x0
     M = A @ A.T
     try:
-        Minv = np.linalg.inv(M)
+        Minv: NDArray[np.float64] = np.linalg.inv(M)
     except np.linalg.LinAlgError:
         Minv = np.linalg.pinv(M)
     return x0 - A.T @ (Minv @ r)

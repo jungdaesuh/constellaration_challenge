@@ -75,6 +75,11 @@ def eval_forward(
     nfp: int = typer.Option(3, help="NFP used with --random."),
     seed: int = typer.Option(0, help="Seed used with --random."),
     cache_dir: Optional[Path] = typer.Option(None, help="Optional cache directory for metrics."),
+    use_physics: bool = typer.Option(
+        False,
+        "--use-physics",
+        help="Prefer VMEC validation (uses constellaration if installed); falls back if absent.",
+    ),
 ) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
         raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
@@ -98,7 +103,7 @@ def eval_forward(
 
     from .eval import forward as eval_forward_metrics
 
-    result = eval_forward_metrics(b, cache_dir=cache_dir)
+    result = eval_forward_metrics(b, cache_dir=cache_dir, prefer_vmec=use_physics)
     table = Table(title="Forward metrics")
     table.add_column("metric")
     table.add_column("value")
@@ -260,10 +265,38 @@ def agent_run(
     resume: Optional[Path] = typer.Option(None, help="Resume from an existing run directory."),
     max_workers: int = typer.Option(1, help="Parallel evaluator workers for agent evals."),
     cache_dir: Optional[Path] = typer.Option(None, help="Cache directory for agent evals."),
+    use_physics: bool = typer.Option(
+        False,
+        "--use-physics",
+        help="Prefer VMEC validation if constellaration is installed; fallback otherwise.",
+    ),
+    correction: Optional[str] = typer.Option(
+        None,
+        help="Optional correction hook to apply to boundaries (e.g., 'eci_linear').",
+    ),
+    constraints_file: Optional[Path] = typer.Option(
+        None,
+        help="JSON file with linear constraints for --correction eci_linear.\n"
+        "Format: [{rhs: float, coeffs: [{field,i,j,c}]}]",
+    ),
 ) -> None:
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
     runs_dir.mkdir(parents=True, exist_ok=True)
+    # Load constraints if provided
+    constraints: list[dict[str, Any]] | None = None
+    if constraints_file is not None:
+        data = json.loads(constraints_file.read_text())
+        if isinstance(data, dict) and "constraints" in data:
+            raw = data.get("constraints")
+        else:
+            raw = data
+        if not isinstance(raw, list):
+            raise typer.BadParameter(
+                "constraints file must contain a list under 'constraints' or be a list"
+            )
+        constraints = [dict(x) for x in raw]
+
     out = run_agent(
         AgentConfig(
             nfp=nfp,
@@ -274,6 +307,9 @@ def agent_run(
             resume=resume,
             max_workers=max_workers,
             cache_dir=cache_dir,
+            correction=correction,
+            constraints=constraints,
+            use_physics=use_physics,
         )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")
