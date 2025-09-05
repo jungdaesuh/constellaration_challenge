@@ -79,7 +79,25 @@ Pre-commit
 - Local equivalent of hooks: `ruff format . && ruff check . --fix && mypy --strict src/constelx && pytest -q`
 
 CI
-- GitHub Actions runs ruff (format+lint), mypy, and pytest on pushes and PRs to `main`.
+- Core job: ruff (format+lint), mypy, pytest — fast, Python-only path.
+- Physics job: installs NetCDF system libs and `.[physics]`, then runs full tests.
+
+## Physics stack installation
+
+To run with the real evaluator dependencies:
+
+- Ubuntu (CI/local):
+  - `sudo apt-get update`
+  - `sudo apt-get install -y libnetcdf-dev libnetcdf-cxx-legacy-dev cmake ninja-build`
+  - `pip install -e ".[dev,physics]"`
+- macOS (Homebrew):
+  - `brew install netcdf`
+  - `pip install -e ".[dev,physics]"`
+- Windows: recommended via conda-forge:
+  - `conda install -c conda-forge netcdf-c netcdf-cxx4 cmake ninja`
+  - `pip install -e ".[dev,physics]"`
+
+When physics extras are unavailable, the CLI and tests use lightweight placeholder evaluators that avoid native builds.
 
 ## Citing
 

@@ -22,7 +22,6 @@ dependencies = [
   "matplotlib>=3.8",
   "tqdm>=4.66",
   "packaging>=24.0",
-  "constellaration>=0.1.6",   # evaluator + VMEC++ interfaces
   "pyyaml>=6.0.1",
 ]
 
@@ -31,6 +30,7 @@ dev = ["pytest>=8.0", "ruff>=0.4", "pre-commit>=3.6", "mypy>=1.10"]
 bo = ["botorch>=0.12", "gpytorch>=1.13"]
 evolution = ["cma>=3.3"]
 serve = ["fastapi>=0.110", "uvicorn>=0.29"]
+physics = ["constellaration>=0.1.6"]
 
 [project.scripts]
 constelx = "constelx.cli:app"
