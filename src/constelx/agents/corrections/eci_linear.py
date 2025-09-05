@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -26,7 +26,9 @@ class EciLinearSpec:
     constraints: List[LinearConstraint]
 
 
-def _flatten(boundary: Mapping[str, Any], variables: Sequence[Variable]) -> NDArray[np.float64]:
+def _flatten(
+    boundary: Mapping[str, Any], variables: Sequence[Variable]
+) -> NDArray[np.floating[Any]]:
     x = []
     for v in variables:
         arr = boundary[v.field]
@@ -39,7 +41,7 @@ def _flatten(boundary: Mapping[str, Any], variables: Sequence[Variable]) -> NDAr
 
 
 def _unflatten(
-    boundary: Mapping[str, Any], variables: Sequence[Variable], x: NDArray[np.float64]
+    boundary: Mapping[str, Any], variables: Sequence[Variable], x: NDArray[np.floating[Any]]
 ) -> Dict[str, Any]:
     b = dict(boundary)
     # deep copy only touched fields minimally
@@ -52,7 +54,7 @@ def _unflatten(
 
 def _build_A_b(
     variables: Sequence[Variable], constraints: Sequence[LinearConstraint]
-) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+) -> Tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]]:
     m = len(constraints)
     n = len(variables)
     A = np.zeros((m, n), dtype=float)
@@ -69,8 +71,10 @@ def _build_A_b(
 
 
 def project_linear(
-    x0: NDArray[np.float64], A: NDArray[np.float64], b: NDArray[np.float64]
-) -> NDArray[np.float64]:
+    x0: NDArray[np.floating[Any]],
+    A: NDArray[np.floating[Any]],
+    b: NDArray[np.floating[Any]],
+) -> NDArray[np.floating[Any]]:
     """Project x0 onto the affine subspace {x | A x = b} minimizing ||x - x0||_2.
 
     Uses x* = x0 - A^T (A A^T)^-1 (A x0 - b). Handles rank deficiency with pinv.
@@ -80,10 +84,10 @@ def project_linear(
         return x0
     M = A @ A.T
     try:
-        Minv: NDArray[np.float64] = np.linalg.inv(M)
+        Minv: NDArray[np.floating[Any]] = np.linalg.inv(M)
     except np.linalg.LinAlgError:
         Minv = np.linalg.pinv(M)
-    return x0 - A.T @ (Minv @ r)
+    return cast(NDArray[np.floating[Any]], x0 - A.T @ (Minv @ r))
 
 
 def make_hook(spec: EciLinearSpec) -> Callable[[Mapping[str, Any]], Dict[str, Any]]:
