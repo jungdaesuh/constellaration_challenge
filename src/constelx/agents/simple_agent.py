@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Callable
 
 from ..eval import forward as eval_forward, score as eval_score
 from ..eval.boundary_param import sample_random, validate as validate_boundary
@@ -93,6 +93,48 @@ def _pkg_versions(pkgs: Iterable[str]) -> Dict[str, str]:
         except Exception:
             out[p] = "unknown"
     return out
+
+
+_CorrectionHook = Callable[[Mapping[str, Any]], Dict[str, Any]]
+
+
+def _build_eci_linear_hook(constraints: List[Dict[str, Any]]) -> Optional[_CorrectionHook]:
+    try:
+        from .corrections.eci_linear import (
+            EciLinearSpec,
+            LinearConstraint,
+            Variable,
+            make_hook,
+        )
+    except Exception:
+        return None
+
+    # Collect variables encountered in constraints in order of first appearance
+    var_index: Dict[Tuple[str, int, int], int] = {}
+    variables: List[Variable] = []
+
+    def _get_var(field: str, i: int, j: int) -> Variable:
+        key = (field, int(i), int(j))
+        if key not in var_index:
+            var_index[key] = len(variables)
+            variables.append(Variable(field=field, i=int(i), j=int(j)))
+        return variables[var_index[key]]
+
+    lin_cons: List[LinearConstraint] = []
+    for con in constraints:
+        rhs = float(con.get("rhs", 0.0))
+        coeffs_in = con.get("coeffs", [])
+        coeffs: List[Tuple[Variable, float]] = []
+        for c in coeffs_in:
+            field = str(c["field"])  # required
+            i = int(c["i"])  # required
+            j = int(c["j"])  # required
+            val = float(c.get("c", c.get("coeff", 0.0)))
+            coeffs.append((_get_var(field, i, j), val))
+        lin_cons.append(LinearConstraint(coeffs=coeffs, rhs=rhs))
+
+    spec = EciLinearSpec(variables=variables, constraints=lin_cons)
+    return make_hook(spec)
 
 
 def run(config: AgentConfig) -> Path:
@@ -187,10 +229,18 @@ def run(config: AgentConfig) -> Path:
             best_score = s
             best_payload = {"score": s, "metrics": metrics, "boundary": boundary}
 
-    # Optional correction hook (currently supports eci_linear via in-memory spec)
+    # Optional correction hook (eci_linear)
+    hook: Optional[_CorrectionHook] = None
+    if config.correction == "eci_linear" and config.constraints:
+        hook = _build_eci_linear_hook(config.constraints)
+
     def maybe_correct(bnd: Dict[str, Any]) -> Dict[str, Any]:
-        # Placeholder: correction hooks can be wired here via config if needed.
-        return bnd
+        if hook is None:
+            return bnd
+        try:
+            return hook(bnd)
+        except Exception:
+            return bnd
 
     # Random search
     def run_random() -> None:

@@ -260,10 +260,33 @@ def agent_run(
     resume: Optional[Path] = typer.Option(None, help="Resume from an existing run directory."),
     max_workers: int = typer.Option(1, help="Parallel evaluator workers for agent evals."),
     cache_dir: Optional[Path] = typer.Option(None, help="Cache directory for agent evals."),
+    correction: Optional[str] = typer.Option(
+        None,
+        help="Optional correction hook to apply to boundaries (e.g., 'eci_linear').",
+    ),
+    constraints_file: Optional[Path] = typer.Option(
+        None,
+        help="JSON file with linear constraints for --correction eci_linear.\n"
+        "Format: [{rhs: float, coeffs: [{field,i,j,c}]}]",
+    ),
 ) -> None:
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
     runs_dir.mkdir(parents=True, exist_ok=True)
+    # Load constraints if provided
+    constraints: list[dict[str, Any]] | None = None
+    if constraints_file is not None:
+        data = json.loads(constraints_file.read_text())
+        if isinstance(data, dict) and "constraints" in data:
+            raw = data.get("constraints")
+        else:
+            raw = data
+        if not isinstance(raw, list):
+            raise typer.BadParameter(
+                "constraints file must contain a list under 'constraints' or be a list"
+            )
+        constraints = [dict(x) for x in raw]
+
     out = run_agent(
         AgentConfig(
             nfp=nfp,
@@ -274,6 +297,8 @@ def agent_run(
             resume=resume,
             max_workers=max_workers,
             cache_dir=cache_dir,
+            correction=correction,
+            constraints=constraints,
         )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")
