@@ -1,0 +1,53 @@
+{
+  "run": {
+    "nfp": 3,
+    "seed": 0,
+    "out_dir": "runs/p1_pcfm_micro",
+    "algo": "random",
+    "budget": 1,
+    "resume": null,
+    "max_workers": 1,
+    "cache_dir": null,
+    "correction": "pcfm",
+    "constraints": [
+      {
+        "type": "norm_eq",
+        "radius": 0.06,
+        "terms": [
+          {
+            "field": "r_cos",
+            "i": 1,
+            "j": 5,
+            "w": 1.0
+          },
+          {
+            "field": "z_sin",
+            "i": 1,
+            "j": 5,
+            "w": 1.0
+          }
+        ]
+      }
+    ],
+    "use_physics": true,
+    "pcfm_gn_iters": null,
+    "pcfm_damping": null,
+    "pcfm_tol": null,
+    "problem": "p1",
+    "init_seeds": null
+  },
+  "env": {
+    "python": "3.12.3",
+    "platform": "darwin",
+    "cwd": "/Users/suhjungdae/code/software/proxima_fusion/constelx_starter"
+  },
+  "git": {
+    "sha": "a0765c113f30c7482ff022f8949f23dbec982195"
+  },
+  "versions": {
+    "constelx": "0.0.1",
+    "numpy": "2.1.3",
+    "pandas": "2.2.3",
+    "constellaration": "0.2.3"
+  }
+}

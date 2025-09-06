@@ -352,6 +352,9 @@ def agent_run(
     init_seeds: Optional[Path] = typer.Option(
         None, help="JSONL of initial boundary seeds to evaluate first."
     ),
+    guard_simple: bool = typer.Option(
+        False, help="Apply simple pre-screen guard (clamp R0, cap helical amps)."
+    ),
     # PCFM tuning (applies when --correction pcfm)
     pcfm_gn_iters: Optional[int] = typer.Option(
         None, help="PCFM Gauss–Newton iterations (override constraints file)."
@@ -417,6 +420,7 @@ def agent_run(
             use_physics=use_physics,
             problem=problem,
             init_seeds=init_seeds,
+            guard_simple=guard_simple,
             pcfm_gn_iters=pcfm_gn_iters,
             pcfm_damping=pcfm_damping,
             pcfm_tol=pcfm_tol,

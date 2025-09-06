@@ -40,6 +40,8 @@ class AgentConfig:
     problem: str | None = None
     # Optional initial seeds JSONL path containing boundaries
     init_seeds: Path | None = None
+    # Optional simple guard to clamp base radius and helical amplitudes
+    guard_simple: bool = False
 
 
 def _timestamp() -> str:
@@ -310,6 +312,39 @@ def run(config: AgentConfig) -> Path:
         except Exception:
             return bnd
 
+    def maybe_guard(bnd: Dict[str, Any]) -> Dict[str, Any]:
+        if not config.guard_simple:
+            return bnd
+        try:
+            b = dict(bnd)
+            # Ensure required fields exist
+            if not isinstance(b.get("r_cos"), list) or not isinstance(b.get("z_sin"), list):
+                return bnd
+            r_cos = [[float(x) for x in row] for row in b["r_cos"]]
+            z_sin = [[float(x) for x in row] for row in b["z_sin"]]
+            # Clamp base radius term (r_cos[0][4]) if available
+            i0, j0 = 0, 4
+            if len(r_cos) > i0 and len(r_cos[i0]) > j0:
+                base = r_cos[i0][j0]
+                base = max(0.3, min(2.5, base))
+                r_cos[i0][j0] = base
+            # Clamp helical amplitudes around (1,5) if present
+            ih, jh = 1, 5
+            cap = 0.08
+            if len(r_cos) > ih and len(r_cos[ih]) > jh:
+                r_cos[ih][jh] = max(-cap, min(cap, r_cos[ih][jh]))
+            if len(z_sin) > ih and len(z_sin[ih]) > jh:
+                z_sin[ih][jh] = max(-cap, min(cap, z_sin[ih][jh]))
+            # Write back
+            b["r_cos"] = r_cos
+            b["z_sin"] = z_sin
+            b["r_sin"] = None
+            b["z_cos"] = None
+            b["is_stellarator_symmetric"] = True
+            return b
+        except Exception:
+            return bnd
+
     # Load initial seed boundaries if provided
     seed_boundaries: List[Dict[str, Any]] = []
     if config.init_seeds is not None and Path(config.init_seeds).exists():
@@ -346,6 +381,7 @@ def run(config: AgentConfig) -> Path:
                     b = seed_boundaries.pop(0)
                     seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
                     try:
+                        b = maybe_guard(b)
                         validate_boundary(b)
                         b = maybe_correct(b)
                     except Exception:
@@ -353,6 +389,7 @@ def run(config: AgentConfig) -> Path:
                 else:
                     seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
                     b = sample_random(nfp=config.nfp, seed=seed_val)
+                    b = maybe_guard(b)
                     validate_boundary(b)
                     b = maybe_correct(b)
                 seeds.append(seed_val)
@@ -433,6 +470,7 @@ def run(config: AgentConfig) -> Path:
                 try:
                     b["r_cos"][1][5] = float(-abs(x[0]))
                     b["z_sin"][1][5] = float(abs(x[1]))
+                    b = maybe_guard(b)
                     validate_boundary(b)
                     b = maybe_correct(b)
                     metrics = eval_forward(

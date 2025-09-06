@@ -46,17 +46,67 @@ def to_parquet(ds: Dataset, out: Path) -> Path:
 def make_seeds_jsonl(ds: Dataset, out: Path, k: int = 64) -> Path:
     """Write up to k boundary dicts to JSONL as {"boundary": {...}}.
 
-    Requires the dataset to expose a nested 'boundary' object per record.
+    Tries nested 'boundary' first; otherwise reconstructs from flattened keys
+    like 'boundary.r_cos.1.5' and 'boundary.z_sin.1.5'.
     """
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w") as f:
         count = 0
         for rec in ds:
+            b: dict | None = None
             if "boundary" in rec and isinstance(rec["boundary"], dict):
                 import json
 
-                f.write(json.dumps({"boundary": rec["boundary"]}) + "\n")
+                b = dict(rec["boundary"])  # copy
+            else:
+                # reconstruct from flattened keys
+                rcos_entries: list[tuple[int, int, float]] = []
+                zsin_entries: list[tuple[int, int, float]] = []
+                nfp_val = rec.get("boundary.n_field_periods")
+                try:
+                    nfp_int = int(nfp_val) if nfp_val is not None else 3
+                except Exception:
+                    nfp_int = 3
+                for key, val in rec.items():
+                    if not key.startswith("boundary."):
+                        continue
+                    parts = key.split(".")
+                    if len(parts) == 4 and parts[1] in {"r_cos", "z_sin"}:
+                        try:
+                            m = int(parts[2])
+                            n = int(parts[3])
+                            v = float(val) if val is not None else 0.0
+                        except Exception:
+                            continue
+                        if parts[1] == "r_cos":
+                            rcos_entries.append((m, n, v))
+                        else:
+                            zsin_entries.append((m, n, v))
+                if rcos_entries or zsin_entries:
+                    max_m = max([m for m, _, _ in (rcos_entries + zsin_entries)], default=0)
+                    max_n = max([n for _, n, _ in (rcos_entries + zsin_entries)], default=0)
+                    # Build arrays of size (max_m+1) x (max_n+1)
+                    r_cos = [[0.0 for _ in range(max_n + 1)] for _ in range(max_m + 1)]
+                    z_sin = [[0.0 for _ in range(max_n + 1)] for _ in range(max_m + 1)]
+                    for m, n, v in rcos_entries:
+                        if m <= max_m and n <= max_n:
+                            r_cos[m][n] = v
+                    for m, n, v in zsin_entries:
+                        if m <= max_m and n <= max_n:
+                            z_sin[m][n] = v
+                    b = {
+                        "r_cos": r_cos,
+                        "r_sin": None,
+                        "z_cos": None,
+                        "z_sin": z_sin,
+                        "n_field_periods": int(nfp_int),
+                        "is_stellarator_symmetric": True,
+                    }
+            if b:
+                import json
+
+                f.write(json.dumps({"boundary": b}) + "\n")
                 count += 1
                 if count >= int(k):
                     break
