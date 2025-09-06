@@ -144,7 +144,16 @@ def eval_score(
         from .eval import score as eval_score_agg
 
         metrics = json.loads(Path(metrics_json).read_text())
-        value = eval_score_agg(metrics, problem=problem)
+        # Prefer official score passthrough if present
+        has_score = (
+            isinstance(metrics, dict)
+            and "score" in metrics
+            and isinstance(metrics["score"], (int, float))
+        )
+        if has_score:
+            value = float(metrics["score"])
+        else:
+            value = eval_score_agg(metrics, problem=problem)
         console.print(f"score = {value}")
         return
 
