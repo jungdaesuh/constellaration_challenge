@@ -30,7 +30,7 @@ def _fallback_metrics(boundary: Mapping[str, Any]) -> dict[str, Any]:
 
 def forward_metrics(
     boundary: Mapping[str, Any], *, problem: str, vmec_opts: dict[str, Any] | None = None
-) -> Tuple[dict[str, Any], dict[str, Any]]:
+) -> Tuple[dict[str, float], dict[str, Any]]:
     """Compute metrics via the official constellaration evaluator.
 
     Returns (metrics, info). Falls back to starter placeholder metrics if the
@@ -55,7 +55,7 @@ def forward_metrics(
             ev = MHDStableQIStellarator().evaluate(b)
 
         # Convert evaluation to metrics dict
-        metrics: dict[str, Any] = {}
+        metrics: dict[str, float] = {}
         try:
             d = ev.model_dump()  # pydantic model
         except Exception:
@@ -70,13 +70,9 @@ def forward_metrics(
         # Multi-objective: capture objectives if present
         objs = d.get("objectives")
         if isinstance(objs, (list, tuple)):
-            metrics["objectives"] = [float(v) for v in objs if isinstance(v, (int, float))]
             for k, val in enumerate(objs):
                 if isinstance(val, (int, float)):
                     metrics[f"objective_{k}"] = float(val)
-        feas_list = d.get("feasibilities")
-        if isinstance(feas_list, (list, tuple)):
-            metrics["feasibilities"] = [float(v) for v in feas_list if isinstance(v, (int, float))]
         return metrics, {"problem": problem, "feasible": True, "source": "constellaration"}
     except Exception:
         m = _fallback_metrics(boundary)
