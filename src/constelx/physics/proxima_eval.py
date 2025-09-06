@@ -37,17 +37,42 @@ def forward_metrics(
     physics stack is unavailable so that callers can degrade gracefully.
     """
     try:
+        # Prefer problem-driven evaluation path compatible with constellaration>=0.2.x
         from constellaration.geometry import surface_rz_fourier as srf
-        from constellaration.metrics import scoring as px_scoring
-        from constellaration.mhd import vmec_utils
+        from constellaration.problems import (
+            GeometricalProblem,
+            MHDStableQIStellarator,
+            SimpleToBuildQIStellarator,
+        )
 
         b = srf.SurfaceRZFourier.model_validate(dict(boundary))
-        vmec_kwargs = dict(vmec_opts or {})
-        wout = vmec_utils.minimal_wout_from_boundary(b, **vmec_kwargs)
-        # Use a general geometric metrics call; problem-specific scorers can
-        # select subsets/aggregations later.
-        m_raw = px_scoring.geom_metrics(b, wout)
-        metrics = {k: float(v) for k, v in dict(m_raw).items() if isinstance(v, (int, float))}
+        prob_key = problem.lower().strip()
+        if prob_key in {"p1", "geom", "geometric", "geometrical"}:
+            ev = GeometricalProblem().evaluate(b)
+        elif prob_key in {"p2", "simple", "qi_simple", "simple_qi"}:
+            ev = SimpleToBuildQIStellarator().evaluate(b)
+        else:
+            ev = MHDStableQIStellarator().evaluate(b)
+
+        # Convert evaluation to metrics dict
+        metrics: dict[str, float] = {}
+        try:
+            d = ev.model_dump()  # pydantic model
+        except Exception:
+            d = getattr(ev, "__dict__", {})
+        # Common fields: objective (float) for single-objective; score; feasibility
+        if isinstance(d.get("objective"), (int, float)):
+            metrics["objective"] = float(d["objective"])
+        if isinstance(d.get("score"), (int, float)):
+            metrics["score"] = float(d["score"])
+        if isinstance(d.get("feasibility"), (int, float)):
+            metrics["feasibility"] = float(d["feasibility"])
+        # Multi-objective: capture objectives if present
+        objs = d.get("objectives")
+        if isinstance(objs, (list, tuple)):
+            for k, val in enumerate(objs):
+                if isinstance(val, (int, float)):
+                    metrics[f"objective_{k}"] = float(val)
         return metrics, {"problem": problem, "feasible": True, "source": "constellaration"}
     except Exception:
         m = _fallback_metrics(boundary)
