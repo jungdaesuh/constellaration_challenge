@@ -337,7 +337,12 @@ def run(config: AgentConfig) -> Path:
                 )
                 for j, (b, m) in enumerate(zip(batch, results)):
                     try:
-                        s = eval_score(m, problem="p1" if config.use_physics else None)
+                        # Prefer score from metrics when present (official evaluator)
+                        s = (
+                            float(m["score"])
+                            if "score" in m
+                            else eval_score(m, problem="p1" if config.use_physics else None)
+                        )
                     except Exception:
                         continue
                     log_entry(it, j, seeds[j], b, m, s)
@@ -352,7 +357,11 @@ def run(config: AgentConfig) -> Path:
                             use_real=config.use_physics,
                             problem="p1" if config.use_physics else "p1",
                         )
-                        s = eval_score(m, problem="p1" if config.use_physics else None)
+                        s = (
+                            float(m["score"])
+                            if "score" in m
+                            else eval_score(m, problem="p1" if config.use_physics else None)
+                        )
                     except Exception:
                         continue
                     log_entry(it, j, seeds[j], b, m, s)
@@ -396,7 +405,11 @@ def run(config: AgentConfig) -> Path:
                         use_real=config.use_physics,
                         problem="p1" if config.use_physics else "p1",
                     )
-                    s = eval_score(metrics, problem="p1" if config.use_physics else None)
+                    s = (
+                        float(metrics["score"])
+                        if "score" in metrics
+                        else eval_score(metrics, problem="p1" if config.use_physics else None)
+                    )
                 except Exception:
                     # Skip invalid points; penalize in CMA-ES
                     s = float("inf")
