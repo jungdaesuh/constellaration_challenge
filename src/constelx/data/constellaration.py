@@ -16,8 +16,23 @@ def select_columns(ds: Dataset) -> Dataset:
     return ds.remove_columns([c for c in ds.column_names if c not in cols])
 
 
+def _safe_nfp(rec: dict) -> int:
+    """Extract NFP from a dataset record, handling both nested and flat layouts.
+
+    Returns -1 if unavailable or invalid.
+    """
+    try:
+        v = rec.get("boundary.n_field_periods", None)
+        if v is None and isinstance(rec.get("boundary"), dict):
+            v = rec["boundary"].get("n_field_periods", None)
+        return int(v) if v is not None else -1
+    except Exception:
+        return -1
+
+
 def filter_nfp(ds: Dataset, nfp: int) -> Dataset:
-    return ds.filter(lambda x: int(x.get("boundary.n_field_periods", 0)) == int(nfp))
+    target = int(nfp)
+    return ds.filter(lambda x: _safe_nfp(x) == target)
 
 
 def to_parquet(ds: Dataset, out: Path) -> Path:

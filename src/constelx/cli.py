@@ -84,7 +84,12 @@ def data_fetch(
 
 @data_app.command("seeds")
 def data_seeds(
-    out_path: Path = typer.Option(Path("data/seeds.jsonl"), help="Output seeds JSONL path"),
+    out_path: Path = typer.Option(
+        Path("data/seeds.jsonl"),
+        "--out",
+        "--out-path",
+        help="Output seeds JSONL path",
+    ),
     nfp: int = typer.Option(3, help="Filter boundaries by NFP"),
     k: int = typer.Option(64, help="Number of seeds to write"),
 ) -> None:
