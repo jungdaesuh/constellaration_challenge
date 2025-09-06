@@ -36,6 +36,10 @@ class AgentConfig:
     pcfm_gn_iters: int | None = None
     pcfm_damping: float | None = None
     pcfm_tol: float | None = None
+    # Optional problem id for real physics ('p1'|'p2'|'p3')
+    problem: str | None = None
+    # Optional initial seeds JSONL path containing boundaries
+    init_seeds: Path | None = None
 
 
 def _timestamp() -> str:
@@ -214,6 +218,8 @@ def run(config: AgentConfig) -> Path:
         # Ensure JSON-serializable
         if cfg.get("resume") is not None:
             cfg["resume"] = str(cfg["resume"])
+        if cfg.get("init_seeds") is not None:
+            cfg["init_seeds"] = str(cfg["init_seeds"])  # Path -> str
         conf = {
             "run": cfg,
             "env": _gather_env_info(),
@@ -260,6 +266,7 @@ def run(config: AgentConfig) -> Path:
 
     rng_seed = int(config.seed)
     budget = int(config.budget)
+    problem = (config.problem or "p1") if config.use_physics else "p1"
 
     def log_entry(
         it: int,
@@ -303,6 +310,27 @@ def run(config: AgentConfig) -> Path:
         except Exception:
             return bnd
 
+    # Load initial seed boundaries if provided
+    seed_boundaries: List[Dict[str, Any]] = []
+    if config.init_seeds is not None and Path(config.init_seeds).exists():
+        try:
+            with Path(config.init_seeds).open() as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    obj = json.loads(line)
+                    if (
+                        isinstance(obj, dict)
+                        and "boundary" in obj
+                        and isinstance(obj["boundary"], dict)
+                    ):
+                        seed_boundaries.append(dict(obj["boundary"]))
+                    elif isinstance(obj, dict):
+                        seed_boundaries.append(dict(obj))
+        except Exception:
+            seed_boundaries = []
+
     # Random search
     def run_random() -> None:
         nonlocal completed
@@ -314,10 +342,19 @@ def run(config: AgentConfig) -> Path:
             seeds: List[int] = []
             batch: List[Dict[str, Any]] = []
             for _ in range(min(batch_size, budget - completed)):
-                seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
-                b = sample_random(nfp=config.nfp, seed=seed_val)
-                validate_boundary(b)
-                b = maybe_correct(b)
+                if seed_boundaries:
+                    b = seed_boundaries.pop(0)
+                    seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
+                    try:
+                        validate_boundary(b)
+                        b = maybe_correct(b)
+                    except Exception:
+                        pass
+                else:
+                    seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
+                    b = sample_random(nfp=config.nfp, seed=seed_val)
+                    validate_boundary(b)
+                    b = maybe_correct(b)
                 seeds.append(seed_val)
                 batch.append(b)
                 idx += 1
@@ -333,7 +370,7 @@ def run(config: AgentConfig) -> Path:
                     cache_dir=config.cache_dir,
                     prefer_vmec=config.use_physics,
                     use_real=config.use_physics,
-                    problem="p1" if config.use_physics else "p1",
+                    problem=problem,
                 )
                 for j, (b, m) in enumerate(zip(batch, results)):
                     try:
@@ -341,7 +378,7 @@ def run(config: AgentConfig) -> Path:
                         s = (
                             float(m["score"])
                             if "score" in m
-                            else eval_score(m, problem="p1" if config.use_physics else None)
+                            else eval_score(m, problem=problem if config.use_physics else None)
                         )
                     except Exception:
                         continue
@@ -355,12 +392,12 @@ def run(config: AgentConfig) -> Path:
                             cache_dir=config.cache_dir,
                             prefer_vmec=config.use_physics,
                             use_real=config.use_physics,
-                            problem="p1" if config.use_physics else "p1",
+                            problem=problem,
                         )
                         s = (
                             float(m["score"])
                             if "score" in m
-                            else eval_score(m, problem="p1" if config.use_physics else None)
+                            else eval_score(m, problem=problem if config.use_physics else None)
                         )
                     except Exception:
                         continue
@@ -403,12 +440,12 @@ def run(config: AgentConfig) -> Path:
                         cache_dir=config.cache_dir,
                         prefer_vmec=config.use_physics,
                         use_real=config.use_physics,
-                        problem="p1" if config.use_physics else "p1",
+                        problem=problem,
                     )
                     s = (
                         float(metrics["score"])
                         if "score" in metrics
-                        else eval_score(metrics, problem="p1" if config.use_physics else None)
+                        else eval_score(metrics, problem=problem if config.use_physics else None)
                     )
                 except Exception:
                     # Skip invalid points; penalize in CMA-ES
@@ -443,6 +480,7 @@ def run(config: AgentConfig) -> Path:
             f"--algo {config.algo} "
             f"--seed {config.seed}"
         ),
+        (f"Problem: {problem}" if config.use_physics else "Placeholder evaluator"),
         f"Created: {datetime.now(timezone.utc).isoformat()}",
         "",
         "## Environment",
