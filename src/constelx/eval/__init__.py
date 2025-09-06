@@ -460,6 +460,12 @@ def score(metrics: Mapping[str, Any], problem: Optional[str] = None) -> float:
     Swap in evaluator-default aggregation when integrating the real metrics.
     """
 
+    # If the metrics already contain an authoritative 'score' (e.g., from the
+    # official evaluator), return it directly to avoid recomputation/mismatch.
+    if "score" in metrics and isinstance(metrics["score"], (int, float)):
+        sv = float(metrics["score"])  # may be NaN or inf depending on evaluator
+        return inf if isnan(sv) else sv
+
     # Use official scorer when available and a problem is provided
     if problem is not None:
         try:
