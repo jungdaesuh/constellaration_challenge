@@ -45,8 +45,31 @@ def data_fetch(
         None, help="Filter by number of field periods (boundary.n_field_periods)."
     ),
     limit: Optional[int] = typer.Option(1000, help="Take first N examples for quick experiments."),
+    source: str = typer.Option("synthetic", help="Data source: synthetic|hf"),
 ) -> None:
-    # Local import to avoid import-time dependency for unrelated commands
+    if source == "hf":
+        try:
+            from .data.constellaration import (
+                filter_nfp as hf_filter,
+            )
+            from .data.constellaration import (
+                load as hf_load,
+            )
+            from .data.constellaration import (
+                to_parquet as hf_to_parquet,
+            )
+        except Exception as e:
+            raise typer.BadParameter(f"HF dataset path unavailable: {e}")
+        ds = hf_load()
+        if nfp is not None:
+            ds = hf_filter(ds, int(nfp))
+        if limit is not None:
+            ds = ds.select(range(min(int(limit), len(ds))))
+        out = hf_to_parquet(ds, cache_dir / "subset.parquet")
+        console.print(f"Saved HF subset to: [bold]{out}[/bold]")
+        return
+
+    # synthetic path
     from .data.dataset import fetch_dataset, save_subset
 
     ds = fetch_dataset()
@@ -57,6 +80,35 @@ def data_fetch(
         ds = ds.select(range(min(limit, len(ds))))
     out = save_subset(ds, cache_dir)
     console.print(f"Saved subset to: [bold]{out}[/bold]")
+
+
+@data_app.command("seeds")
+def data_seeds(
+    out_path: Path = typer.Option(
+        Path("data/seeds.jsonl"),
+        "--out",
+        "--out-path",
+        help="Output seeds JSONL path",
+    ),
+    nfp: int = typer.Option(3, help="Filter boundaries by NFP"),
+    k: int = typer.Option(64, help="Number of seeds to write"),
+) -> None:
+    """Create a seeds.jsonl from the HF dataset with {boundary: {...}} records."""
+    try:
+        from .data.constellaration import (
+            filter_nfp as hf_filter,
+        )
+        from .data.constellaration import (
+            load as hf_load,
+        )
+        from .data.constellaration import (
+            make_seeds_jsonl,
+        )
+    except Exception as e:
+        raise typer.BadParameter(f"HF dataset unavailable: {e}")
+    ds = hf_filter(hf_load(), int(nfp))
+    out = make_seeds_jsonl(ds, out_path, k=int(k))
+    console.print(f"Wrote seeds to: [bold]{out}[/bold]")
 
 
 # -------------------- EVAL --------------------
@@ -77,8 +129,12 @@ def eval_forward(
     seed: int = typer.Option(0, help="Seed used with --random."),
     cache_dir: Optional[Path] = typer.Option(None, help="Optional cache directory for metrics."),
     use_physics: bool = typer.Option(
-        False, "--use-physics", help="Use real evaluator if available."
+        False,
+        "--use-physics",
+        "--use-real",
+        help="Use real evaluator if available.",
     ),
+    problem: str = typer.Option("p1", help="Problem id for scoring/metrics (e.g., p1/p2/p3)."),
     json_out: bool = typer.Option(False, "--json", help="Emit raw JSON metrics."),
 ) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
@@ -103,7 +159,7 @@ def eval_forward(
 
     from .eval import forward as eval_forward_metrics
 
-    result = eval_forward_metrics(b, cache_dir=cache_dir, use_real=use_physics)
+    result = eval_forward_metrics(b, cache_dir=cache_dir, use_real=use_physics, problem=problem)
     if json_out:
         console.print_json(data=result)
         return
@@ -126,6 +182,7 @@ def eval_score(
     output: Optional[Path] = typer.Option(
         None, "--output", help="Optional output CSV path when using --metrics-file."
     ),
+    problem: str = typer.Option("p1", help="Problem id for scoring (e.g., p1/p2/p3)."),
 ) -> None:
     """Aggregate a scalar score from a metrics JSON file.
 
@@ -139,7 +196,16 @@ def eval_score(
         from .eval import score as eval_score_agg
 
         metrics = json.loads(Path(metrics_json).read_text())
-        value = eval_score_agg(metrics)
+        # Prefer official score passthrough if present
+        has_score = (
+            isinstance(metrics, dict)
+            and "score" in metrics
+            and isinstance(metrics["score"], (int, float))
+        )
+        if has_score:
+            value = float(metrics["score"])
+        else:
+            value = eval_score_agg(metrics, problem=problem)
         console.print(f"score = {value}")
         return
 
@@ -154,7 +220,7 @@ def eval_score(
 
         # Avoid double-counting an existing 'score' column on re-runs
         cols = [c for c in df.columns if c != "score"]
-        return eval_score_agg({k: row[k] for k in cols})
+        return eval_score_agg({k: row[k] for k in cols}, problem=problem)
 
     df["score"] = df.apply(row_score, axis=1)
     if output is None:
@@ -280,6 +346,15 @@ def agent_run(
         "--use-physics",
         help="Prefer VMEC validation if constellaration is installed; fallback otherwise.",
     ),
+    problem: Optional[str] = typer.Option(
+        None, help="Problem id when using --use-physics (p1|p2|p3)."
+    ),
+    init_seeds: Optional[Path] = typer.Option(
+        None, help="JSONL of initial boundary seeds to evaluate first."
+    ),
+    guard_simple: bool = typer.Option(
+        False, help="Apply simple pre-screen guard (clamp R0, cap helical amps)."
+    ),
     # PCFM tuning (applies when --correction pcfm)
     pcfm_gn_iters: Optional[int] = typer.Option(
         None, help="PCFM Gauss–Newton iterations (override constraints file)."
@@ -306,6 +381,8 @@ def agent_run(
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
     runs_dir.mkdir(parents=True, exist_ok=True)
+    if use_physics and not problem:
+        raise typer.BadParameter("--problem is required when --use-physics is set (p1|p2|p3)")
     # Load constraints if provided
     constraints: list[dict[str, Any]] | None = None
     # Allow constraints JSON to be a dict with overrides {constraints:[...], gn_iters, damping, tol}
@@ -341,6 +418,9 @@ def agent_run(
             correction=correction,
             constraints=constraints,
             use_physics=use_physics,
+            problem=problem,
+            init_seeds=init_seeds,
+            guard_simple=guard_simple,
             pcfm_gn_iters=pcfm_gn_iters,
             pcfm_damping=pcfm_damping,
             pcfm_tol=pcfm_tol,
