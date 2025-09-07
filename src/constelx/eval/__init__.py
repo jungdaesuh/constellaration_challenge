@@ -366,20 +366,21 @@ def forward_many(
 
                     for i, b in to_compute:
                         _t0 = time.perf_counter()
-                        metrics, info = px_forward(dict(b), problem=problem)
+                        metrics_dict, info = px_forward(dict(b), problem=problem)
+                        m_real = dict(metrics_dict)  # type: Dict[str, Any]
                         _t1 = time.perf_counter()
-                        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                        m_real.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
                         if isinstance(info, dict):
                             feasible = bool(info.get("feasible", True))
-                            metrics.setdefault("feasible", feasible)
-                            if not feasible and "fail_reason" not in metrics:
+                            m_real.setdefault("feasible", feasible)
+                            if not feasible and "fail_reason" not in m_real:
                                 fr = (
                                     info.get("reason")
                                     if isinstance(info.get("reason"), str)
                                     else ""
                                 )
-                                metrics["fail_reason"] = fr
-                        out[i] = metrics
+                                m_real["fail_reason"] = fr
+                        out[i] = m_real
                 except Exception:
                     for i, b in to_compute:
                         out[i] = evaluate_boundary(dict(b), use_real=False)
@@ -389,31 +390,32 @@ def forward_many(
 
                 for i, b in to_compute:
                     _t0 = time.perf_counter()
-                    metrics, info = px_forward(dict(b), problem=problem)
+                    metrics_dict, info = px_forward(dict(b), problem=problem)
+                    m_real = dict(metrics_dict)
                     _t1 = time.perf_counter()
-                    metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                    m_real.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
                     if isinstance(info, dict):
                         feasible = bool(info.get("feasible", True))
-                        metrics.setdefault("feasible", feasible)
-                        if not feasible and "fail_reason" not in metrics:
+                        m_real.setdefault("feasible", feasible)
+                        if not feasible and "fail_reason" not in m_real:
                             fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
-                            metrics["fail_reason"] = fr
-                    out[i] = metrics
+                            m_real["fail_reason"] = fr
+                    out[i] = m_real
             except Exception:
                 for i, b in to_compute:
                     out[i] = evaluate_boundary(dict(b), use_real=False)
         elif max_workers <= 1:
             for i, b in to_compute:
                 _t0 = time.perf_counter()
-                metrics = evaluate_boundary(dict(b), use_real=False)
+                m_ph = dict(evaluate_boundary(dict(b), use_real=False))  # type: Dict[str, Any]
                 _t1 = time.perf_counter()
                 try:
-                    metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
-                    metrics.setdefault("feasible", True)
-                    metrics.setdefault("fail_reason", "")
+                    m_ph.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                    m_ph.setdefault("feasible", True)
+                    m_ph.setdefault("fail_reason", "")
                 except Exception:
                     pass
-                out[i] = metrics
+                out[i] = m_ph
         else:
             try:
                 with ProcessPoolExecutor(max_workers=max_workers) as ex:
@@ -425,15 +427,15 @@ def forward_many(
                 # Fallback to sequential if process pool is unavailable (e.g., sandboxed env)
                 for i, b in to_compute:
                     _t0 = time.perf_counter()
-                    metrics = evaluate_boundary(dict(b), use_real=False)
+                    m_ph2 = dict(evaluate_boundary(dict(b), use_real=False))  # type: Dict[str, Any]
                     _t1 = time.perf_counter()
                     try:
-                        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
-                        metrics.setdefault("feasible", True)
-                        metrics.setdefault("fail_reason", "")
+                        m_ph2.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                        m_ph2.setdefault("feasible", True)
+                        m_ph2.setdefault("fail_reason", "")
                     except Exception:
                         pass
-                    out[i] = metrics
+                    out[i] = m_ph2
 
     # Strip non-deterministic timing before caching/returning to keep cache equality stable
     if cache is not None:
@@ -499,28 +501,29 @@ def _real_eval_task(args: tuple[dict[str, Any], str]) -> dict[str, Any]:
         from ..physics.proxima_eval import forward_metrics as px_forward
 
         _t0 = time.perf_counter()
-        metrics, info = px_forward(b, problem=prob)
+        metrics_dict, info = px_forward(b, problem=prob)
+        m_real = dict(metrics_dict)  # type: Dict[str, Any]
         _t1 = time.perf_counter()
-        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+        m_real.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
         if isinstance(info, dict):
             feasible = bool(info.get("feasible", True))
-            metrics.setdefault("feasible", feasible)
-            if not feasible and "fail_reason" not in metrics:
+            m_real.setdefault("feasible", feasible)
+            if not feasible and "fail_reason" not in m_real:
                 fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
-                metrics["fail_reason"] = fr
-        return metrics
+                m_real["fail_reason"] = fr
+        return m_real
     except Exception:
         # Fallback to placeholder if real path unavailable in worker
         _t0 = time.perf_counter()
-        metrics = evaluate_boundary(b, use_real=False)
+        m_ph = dict(evaluate_boundary(b, use_real=False))  # type: Dict[str, Any]
         _t1 = time.perf_counter()
         try:
-            metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
-            metrics.setdefault("feasible", True)
-            metrics.setdefault("fail_reason", "")
+            m_ph.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+            m_ph.setdefault("feasible", True)
+            m_ph.setdefault("fail_reason", "")
         except Exception:
             pass
-        return metrics
+        return m_ph
 
 
 def _placeholder_eval_task(b: dict[str, Any]) -> dict[str, Any]:
