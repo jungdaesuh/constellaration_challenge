@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from typer.testing import CliRunner
 
 from constelx.cli import app
