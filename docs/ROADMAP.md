@@ -1,4 +1,9 @@
-# Implementation roadmap
+# Implementation roadmap (Engineering)
+
+This is the engineering roadmap for this repo: concrete milestones, CLI
+behaviors, modules, tests, and CI gates. For a higher‑level research/agent
+strategy (model portfolio, agent loop, physics heuristics), see
+`docs/STRATEGY.md`.
 
 This repository ships with stubs and guardrails so you can iterate quickly. A recommended path:
 
@@ -46,6 +51,29 @@ This repository ships with stubs and guardrails so you can iterate quickly. A re
   - Add `surrogate eval` and optional agent integration for model‑guided proposal scoring/screening.
 
 —
+
+## Phased Delivery
+
+This repo’s work is organized into phases with tracked issues. Use these to plan PRs and CI sequencing.
+
+- Phase 0 — Foundation (robustness + parity)
+  - #31 (Problems P1–P3 specs/CLI), #32 (Baselines + `opt run`), #33 (Scoring parity tests), #34 (Evaluator robustness)
+
+- Phase 1 — Feasibility + Throughput
+  - #38 (PCFM repair pack), #39 (Multi‑fidelity gating), #48 (Geometry validity guards), #50 (Resolution ladder / hot‑restart)
+
+- Phase 2 — Optimizers
+  - #40 (Constrained BoTorch qNEI), #43 (Nevergrad NGOpt), #44 (P3 scalarization + Pareto sweep)
+
+- Phase 3 — Proxies + Seeds
+  - #46 (Boozer/QS–QI proxy library), #41 (Integrate QS proxies – depends on #46), #51 (Metrics/constraints consolidation), #45 (Data‑driven seeds prior), #47 (Near‑axis seeding)
+
+- Phase 4 — Advanced + Ops
+  - #42 (DESC gradient TR baseline), #52 (Multi‑start NFP), #53 (Ablation harness), #54 (Results DB + novelty), #49 (Submission packer)
+
+Testing anchors (additions beyond the existing suite)
+- Phase 0: CLI gating for `--use-physics/--problem`; `opt run` smoke; cache invariants and timeout fallback; metrics.csv schema columns present.
+- Phase 1: PCFM repair micro (once implemented); multi‑fidelity gating provenance; geometry guards skip invalid shapes; resolution/hot‑restart provenance.
 
 ## Usage pointers
 

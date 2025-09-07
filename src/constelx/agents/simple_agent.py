@@ -288,9 +288,10 @@ def run(config: AgentConfig) -> Path:
         proposals_f.write(json.dumps(prop) + "\n")
         # Separate evaluator-provided score from aggregated score to avoid confusion
         evaluator_score: float | None = None
-        if isinstance(metrics.get("score"), (int, float)):
+        val_score = metrics.get("score")
+        if isinstance(val_score, (int, float)):
             try:
-                evaluator_score = float(metrics.get("score"))
+                evaluator_score = float(val_score)
             except Exception:
                 evaluator_score = None
         # Build CSV row with distinct columns
@@ -321,6 +322,7 @@ def run(config: AgentConfig) -> Path:
             best_score = agg_s
             best_payload = {
                 "agg_score": agg_s,
+                "score": agg_s,
                 "evaluator_score": evaluator_score,
                 "metrics": metrics_no_collision,
                 "boundary": boundary,
@@ -480,15 +482,18 @@ def run(config: AgentConfig) -> Path:
                     try:
                         # Prefer score from metrics when present (official evaluator)
                         agg_s = (
-                            float(m["score"]) if "score" in m else eval_score(m, problem=problem if config.use_physics else None)
+                            float(m["score"])
+                            if "score" in m
+                            else eval_score(m, problem=problem if config.use_physics else None)
                         )
                     except Exception:
                         continue
                     # Use elapsed_ms from metrics if provided by eval.forward_many
                     ems = None
                     try:
-                        if isinstance(m.get("elapsed_ms"), (int, float)):
-                            ems = float(m.get("elapsed_ms"))
+                        val_ms = m.get("elapsed_ms")
+                        if isinstance(val_ms, (int, float)):
+                            ems = float(val_ms)
                     except Exception:
                         ems = None
                     log_entry(it, j, seeds[j], b, m, agg_s, elapsed_ms=ems)
@@ -506,7 +511,9 @@ def run(config: AgentConfig) -> Path:
                         )
                         _t1 = time.perf_counter()
                         agg_s = (
-                            float(m["score"]) if "score" in m else eval_score(m, problem=problem if config.use_physics else None)
+                            float(m["score"])
+                            if "score" in m
+                            else eval_score(m, problem=problem if config.use_physics else None)
                         )
                     except Exception:
                         continue
@@ -555,13 +562,23 @@ def run(config: AgentConfig) -> Path:
                     )
                     _t1 = time.perf_counter()
                     s = (
-                        float(metrics["score"]) if "score" in metrics else eval_score(metrics, problem=problem if config.use_physics else None)
+                        float(metrics["score"])
+                        if "score" in metrics
+                        else eval_score(metrics, problem=problem if config.use_physics else None)
                     )
                 except Exception:
                     # Skip invalid points; penalize in CMA-ES
                     s = float("inf")
                     metrics = {}
-                log_entry(it, j, seed_val, b, metrics, s, elapsed_ms=(_t1 - _t0) * 1000.0 if "_t1" in locals() else None)
+                log_entry(
+                    it,
+                    j,
+                    seed_val,
+                    b,
+                    metrics,
+                    s,
+                    elapsed_ms=(_t1 - _t0) * 1000.0 if "_t1" in locals() else None,
+                )
                 xs_eval.append(list(x))
                 scores.append(s)
                 completed += 1
