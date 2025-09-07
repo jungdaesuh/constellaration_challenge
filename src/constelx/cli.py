@@ -329,7 +329,9 @@ def opt_run(
 ) -> None:
     """Run an optimization baseline in boundary mode (2D helical coefficients)."""
     if use_physics and not problem:
-        raise typer.BadParameter("--problem is required when --use-physics is set (p1|p2|p3)")
+        # Emit a simple, testable message and exit with error code.
+        typer.echo("--problem is required", err=True)
+        raise typer.Exit(code=2)
 
     if baseline.lower() == "cmaes":
         # Delegate to existing CMA-ES command with boundary mode settings
@@ -433,7 +435,8 @@ def agent_run(
 
     runs_dir.mkdir(parents=True, exist_ok=True)
     if use_physics and not problem:
-        raise typer.BadParameter("--problem is required when --use-physics is set (p1|p2|p3)")
+        typer.echo("--problem is required", err=True)
+        raise typer.Exit(code=2)
     # Load constraints if provided
     constraints: list[dict[str, Any]] | None = None
     # Allow constraints JSON to be a dict with overrides {constraints:[...], gn_iters, damping, tol}
