@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import csv
 import json
+import time
 import os
 import sys
 from dataclasses import asdict, dataclass
@@ -36,6 +37,14 @@ class AgentConfig:
     pcfm_gn_iters: int | None = None
     pcfm_damping: float | None = None
     pcfm_tol: float | None = None
+    # Optional problem id for real physics ('p1'|'p2'|'p3')
+    problem: str | None = None
+    # Optional initial seeds JSONL path containing boundaries
+    init_seeds: Path | None = None
+    # Optional simple guard to clamp base radius and helical amplitudes
+    guard_simple: bool = False
+    # Optional geometric nudge: tighten helical amps and align ratio toward 1
+    guard_geo: bool = False
 
 
 def _timestamp() -> str:
@@ -214,6 +223,8 @@ def run(config: AgentConfig) -> Path:
         # Ensure JSON-serializable
         if cfg.get("resume") is not None:
             cfg["resume"] = str(cfg["resume"])
+        if cfg.get("init_seeds") is not None:
+            cfg["init_seeds"] = str(cfg["init_seeds"])  # Path -> str
         conf = {
             "run": cfg,
             "env": _gather_env_info(),
@@ -260,6 +271,7 @@ def run(config: AgentConfig) -> Path:
 
     rng_seed = int(config.seed)
     budget = int(config.budget)
+    problem = (config.problem or "p1") if config.use_physics else "p1"
 
     def log_entry(
         it: int,
@@ -267,21 +279,52 @@ def run(config: AgentConfig) -> Path:
         seed_val: int,
         boundary: Dict[str, Any],
         metrics: Dict[str, Any],
-        s: float,
+        agg_s: float,
+        *,
+        elapsed_ms: float | None = None,
     ) -> None:
         nonlocal best_score, best_payload, metrics_writer
         prop = {"iteration": it, "index": idx, "seed": seed_val, "boundary": boundary}
         proposals_f.write(json.dumps(prop) + "\n")
-        row = {"iteration": it, "index": idx, **metrics, "score": s}
+        # Separate evaluator-provided score from aggregated score to avoid confusion
+        evaluator_score: float | None = None
+        if isinstance(metrics.get("score"), (int, float)):
+            try:
+                evaluator_score = float(metrics.get("score"))
+            except Exception:
+                evaluator_score = None
+        # Build CSV row with distinct columns
+        metrics_no_collision = dict(metrics)
+        if "score" in metrics_no_collision:
+            # Remove original "score" to prevent ambiguity in CSV header
+            metrics_no_collision.pop("score", None)
+        row = {
+            "iteration": it,
+            "index": idx,
+            **metrics_no_collision,
+            "evaluator_score": evaluator_score,
+            "agg_score": agg_s,
+            "elapsed_ms": elapsed_ms,
+        }
         if metrics_writer is None:
             # Initialize writer with current row's keys and create header
-            metrics_writer = csv.DictWriter(metrics_f, fieldnames=list(row.keys()))
+            metrics_writer = csv.DictWriter(
+                metrics_f, fieldnames=list(row.keys()), extrasaction="ignore"
+            )
             if not metrics_csv_path.exists() or metrics_csv_path.stat().st_size == 0:
                 metrics_writer.writeheader()
+        else:
+            # Avoid ValueError if row contains fields not in writer.fieldnames
+            row = {k: row.get(k) for k in metrics_writer.fieldnames}
         metrics_writer.writerow(row)
-        if s < best_score:
-            best_score = s
-            best_payload = {"score": s, "metrics": metrics, "boundary": boundary}
+        if agg_s < best_score:
+            best_score = agg_s
+            best_payload = {
+                "agg_score": agg_s,
+                "evaluator_score": evaluator_score,
+                "metrics": metrics_no_collision,
+                "boundary": boundary,
+            }
 
     # Optional correction hook (eci_linear)
     hook: Optional[_CorrectionHook] = None
@@ -303,6 +346,90 @@ def run(config: AgentConfig) -> Path:
         except Exception:
             return bnd
 
+    def maybe_guard(bnd: Dict[str, Any]) -> Dict[str, Any]:
+        if not config.guard_simple:
+            return bnd
+        try:
+            b = dict(bnd)
+            # Ensure required fields exist
+            if not isinstance(b.get("r_cos"), list) or not isinstance(b.get("z_sin"), list):
+                return bnd
+            r_cos = [[float(x) for x in row] for row in b["r_cos"]]
+            z_sin = [[float(x) for x in row] for row in b["z_sin"]]
+            # Clamp base radius term (r_cos[0][4]) if available
+            i0, j0 = 0, 4
+            if len(r_cos) > i0 and len(r_cos[i0]) > j0:
+                base = r_cos[i0][j0]
+                base = max(0.3, min(2.5, base))
+                r_cos[i0][j0] = base
+            # Clamp helical amplitudes around (1,5) if present
+            ih, jh = 1, 5
+            cap = 0.08
+            if len(r_cos) > ih and len(r_cos[ih]) > jh:
+                r_cos[ih][jh] = max(-cap, min(cap, r_cos[ih][jh]))
+            if len(z_sin) > ih and len(z_sin[ih]) > jh:
+                z_sin[ih][jh] = max(-cap, min(cap, z_sin[ih][jh]))
+            # Write back
+            b["r_cos"] = r_cos
+            b["z_sin"] = z_sin
+            b["r_sin"] = None
+            b["z_cos"] = None
+            b["is_stellarator_symmetric"] = True
+            return b
+        except Exception:
+            return bnd
+
+    def maybe_guard_geo(bnd: Dict[str, Any]) -> Dict[str, Any]:
+        if not config.guard_geo:
+            return bnd
+        try:
+            b = dict(bnd)
+            r_cos = [[float(x) for x in row] for row in b.get("r_cos", [])]
+            z_sin = [[float(x) for x in row] for row in b.get("z_sin", [])]
+            if not r_cos or not z_sin:
+                return bnd
+            ih, jh = 1, 5
+            # Target: modest helical amps with ratio ~1 (magnitude)
+            cap = 0.03
+            if len(r_cos) > ih and len(r_cos[ih]) > jh and len(z_sin) > ih and len(z_sin[ih]) > jh:
+                xr = r_cos[ih][jh]
+                yz = z_sin[ih][jh]
+                # Bring magnitudes closer and within cap
+                mag = 0.5 * (abs(xr) + abs(yz))
+                mag = min(mag, cap)
+                # Preserve signs but align magnitudes
+                r_cos[ih][jh] = -mag if xr <= 0 else mag
+                z_sin[ih][jh] = mag if yz >= 0 else -mag
+            b["r_cos"] = r_cos
+            b["z_sin"] = z_sin
+            b["r_sin"] = None
+            b["z_cos"] = None
+            b["is_stellarator_symmetric"] = True
+            return b
+        except Exception:
+            return bnd
+
+    # Load initial seed boundaries if provided
+    seed_boundaries: List[Dict[str, Any]] = []
+    if config.init_seeds is not None and Path(config.init_seeds).exists():
+        try:
+            with Path(config.init_seeds).open() as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    obj = json.loads(line)
+                    if (
+                        isinstance(obj, dict)
+                        and "boundary" in obj
+                        and isinstance(obj["boundary"], dict)
+                    ):
+                        seed_boundaries.append(dict(obj["boundary"]))
+                    elif isinstance(obj, dict):
+                        seed_boundaries.append(dict(obj))
+        except Exception:
+            seed_boundaries = []
+
     # Random search
     def run_random() -> None:
         nonlocal completed
@@ -314,10 +441,24 @@ def run(config: AgentConfig) -> Path:
             seeds: List[int] = []
             batch: List[Dict[str, Any]] = []
             for _ in range(min(batch_size, budget - completed)):
-                seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
-                b = sample_random(nfp=config.nfp, seed=seed_val)
-                validate_boundary(b)
-                b = maybe_correct(b)
+                if seed_boundaries:
+                    b = seed_boundaries.pop(0)
+                    seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
+                    try:
+                        b = maybe_guard_geo(b)
+                        b = maybe_guard(b)
+                        validate_boundary(b)
+                        b = maybe_correct(b)
+                    except Exception:
+                        pass
+                else:
+                    seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
+                    b = sample_random(nfp=config.nfp, seed=seed_val)
+                    b = maybe_guard_geo(b)
+                    b = maybe_guard_geo(b)
+                    b = maybe_guard(b)
+                    validate_boundary(b)
+                    b = maybe_correct(b)
                 seeds.append(seed_val)
                 batch.append(b)
                 idx += 1
@@ -333,38 +474,43 @@ def run(config: AgentConfig) -> Path:
                     cache_dir=config.cache_dir,
                     prefer_vmec=config.use_physics,
                     use_real=config.use_physics,
-                    problem="p1" if config.use_physics else "p1",
+                    problem=problem,
                 )
                 for j, (b, m) in enumerate(zip(batch, results)):
                     try:
                         # Prefer score from metrics when present (official evaluator)
-                        s = (
-                            float(m["score"])
-                            if "score" in m
-                            else eval_score(m, problem="p1" if config.use_physics else None)
+                        agg_s = (
+                            float(m["score"]) if "score" in m else eval_score(m, problem=problem if config.use_physics else None)
                         )
                     except Exception:
                         continue
-                    log_entry(it, j, seeds[j], b, m, s)
+                    # Use elapsed_ms from metrics if provided by eval.forward_many
+                    ems = None
+                    try:
+                        if isinstance(m.get("elapsed_ms"), (int, float)):
+                            ems = float(m.get("elapsed_ms"))
+                    except Exception:
+                        ems = None
+                    log_entry(it, j, seeds[j], b, m, agg_s, elapsed_ms=ems)
                     completed += 1
             else:
                 for j, b in enumerate(batch):
                     try:
+                        _t0 = time.perf_counter()
                         m = eval_forward(
                             b,
                             cache_dir=config.cache_dir,
                             prefer_vmec=config.use_physics,
                             use_real=config.use_physics,
-                            problem="p1" if config.use_physics else "p1",
+                            problem=problem,
                         )
-                        s = (
-                            float(m["score"])
-                            if "score" in m
-                            else eval_score(m, problem="p1" if config.use_physics else None)
+                        _t1 = time.perf_counter()
+                        agg_s = (
+                            float(m["score"]) if "score" in m else eval_score(m, problem=problem if config.use_physics else None)
                         )
                     except Exception:
                         continue
-                    log_entry(it, j, seeds[j], b, m, s)
+                    log_entry(it, j, seeds[j], b, m, agg_s, elapsed_ms=(_t1 - _t0) * 1000.0)
                     completed += 1
             if idx % 100 == 0:
                 it += 1
@@ -396,25 +542,26 @@ def run(config: AgentConfig) -> Path:
                 try:
                     b["r_cos"][1][5] = float(-abs(x[0]))
                     b["z_sin"][1][5] = float(abs(x[1]))
+                    b = maybe_guard(b)
                     validate_boundary(b)
                     b = maybe_correct(b)
+                    _t0 = time.perf_counter()
                     metrics = eval_forward(
                         b,
                         cache_dir=config.cache_dir,
                         prefer_vmec=config.use_physics,
                         use_real=config.use_physics,
-                        problem="p1" if config.use_physics else "p1",
+                        problem=problem,
                     )
+                    _t1 = time.perf_counter()
                     s = (
-                        float(metrics["score"])
-                        if "score" in metrics
-                        else eval_score(metrics, problem="p1" if config.use_physics else None)
+                        float(metrics["score"]) if "score" in metrics else eval_score(metrics, problem=problem if config.use_physics else None)
                     )
                 except Exception:
                     # Skip invalid points; penalize in CMA-ES
                     s = float("inf")
                     metrics = {}
-                log_entry(it, j, seed_val, b, metrics, s)
+                log_entry(it, j, seed_val, b, metrics, s, elapsed_ms=(_t1 - _t0) * 1000.0 if "_t1" in locals() else None)
                 xs_eval.append(list(x))
                 scores.append(s)
                 completed += 1
@@ -443,6 +590,7 @@ def run(config: AgentConfig) -> Path:
             f"--algo {config.algo} "
             f"--seed {config.seed}"
         ),
+        (f"Problem: {problem}" if config.use_physics else "Placeholder evaluator"),
         f"Created: {datetime.now(timezone.utc).isoformat()}",
         "",
         "## Environment",

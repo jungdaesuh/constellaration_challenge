@@ -17,7 +17,7 @@ from __future__ import annotations
 # Load environment variables early if python-dotenv is available so that
 # evaluator settings (e.g., timeouts) can be configured via a local .env.
 try:  # optional dependency; safe no-op if missing
-    from dotenv import find_dotenv, load_dotenv
+    from dotenv import find_dotenv, load_dotenv  # type: ignore
 
     load_dotenv(find_dotenv(usecwd=True), override=False)
 except Exception:
@@ -27,8 +27,8 @@ import hashlib
 import json
 import multiprocessing
 import os
+from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
 import time
-from concurrent.futures import ProcessPoolExecutor, TimeoutError, as_completed
 from math import inf, isnan
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
@@ -130,7 +130,7 @@ def _scoring_version() -> str:
     try:
         import importlib.metadata as _im
 
-        return _im.version("constellaration")
+        return cast(str, _im.version("constellaration"))
     except Exception:
         return ""
 
@@ -323,9 +323,7 @@ def forward_many(
                             out[i] = {
                                 "feasible": False,
                                 "fail_reason": "worker_error",
-                                "elapsed_ms": (
-                                    time.perf_counter() - start_times.get(i, time.perf_counter())
-                                )
+                                "elapsed_ms": (time.perf_counter() - start_times.get(i, time.perf_counter()))
                                 * 1000.0,
                                 "source": "real",
                                 "scoring_version": _scoring_version() or "",
@@ -351,10 +349,7 @@ def forward_many(
                                 out[i] = {
                                     "feasible": False,
                                     "fail_reason": f"timeout_after_{int(timeout_s*1000)}ms",
-                                    "elapsed_ms": (
-                                        time.perf_counter()
-                                        - start_times.get(i, time.perf_counter())
-                                    )
+                                    "elapsed_ms": (time.perf_counter() - start_times.get(i, time.perf_counter()))
                                     * 1000.0,
                                     "source": "real",
                                     "scoring_version": _scoring_version() or "",
@@ -373,11 +368,7 @@ def forward_many(
                             feasible = bool(info.get("feasible", True))
                             metrics.setdefault("feasible", feasible)
                             if not feasible and "fail_reason" not in metrics:
-                                fr = (
-                                    info.get("reason")
-                                    if isinstance(info.get("reason"), str)
-                                    else ""
-                                )
+                                fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
                                 metrics["fail_reason"] = fr
                         out[i] = metrics
                 except Exception:
@@ -435,17 +426,15 @@ def forward_many(
                         pass
                     out[i] = metrics
 
-    # Strip non-deterministic timing before caching/returning to keep cache equality stable
+    # Persist new caches
     if cache is not None:
         for i, r in enumerate(out):
             assert r is not None
-            r.pop("elapsed_ms", None)
             k = keys[i] or _hash_boundary(items[i])
             cache.set(k, r)
 
     # type narrowing
-    # Remove elapsed_ms to make results deterministic for equality checks
-    return [{k: v.get(k) for k in v.keys() if k != "elapsed_ms"} for v in out if v is not None]
+    return [v for v in out if v is not None]
 
 
 def score(metrics: Mapping[str, Any], problem: Optional[str] = None) -> float:
