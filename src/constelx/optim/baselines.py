@@ -110,4 +110,3 @@ def run_alm(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
 
 
 __all__ = ["BaselineConfig", "run_trust_constr", "run_alm"]
-
