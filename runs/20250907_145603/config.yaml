@@ -2,9 +2,9 @@
   "run": {
     "nfp": 3,
     "seed": 0,
-    "out_dir": "runs/p1_guard_geo",
+    "out_dir": "runs",
     "algo": "random",
-    "budget": 3,
+    "budget": 10,
     "resume": null,
     "max_workers": 1,
     "cache_dir": null,
@@ -15,9 +15,9 @@
     "pcfm_damping": null,
     "pcfm_tol": null,
     "problem": "p1",
-    "init_seeds": "data/seeds.jsonl",
-    "guard_simple": true,
-    "guard_geo": true
+    "init_seeds": null,
+    "guard_simple": false,
+    "guard_geo": false
   },
   "env": {
     "python": "3.12.3",
@@ -25,7 +25,7 @@
     "cwd": "/Users/suhjungdae/code/software/proxima_fusion/constelx_starter"
   },
   "git": {
-    "sha": "488dc8ae6ff3e3c1b5574185e1daa72b46bb6dc4"
+    "sha": "cede87925b646a8057132b761a6356db7188e61e"
   },
   "versions": {
     "constelx": "0.0.1",

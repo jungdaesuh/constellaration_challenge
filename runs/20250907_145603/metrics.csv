@@ -1,0 +1,6 @@
+iteration,index,feasible,fail_reason,elapsed_ms,source,scoring_version,evaluator_score,agg_score
+0,0,False,timeout_after_120000ms,749414.1672910191,real,0.2.3,,747651.7767500482
+0,0,False,timeout_after_120000ms,415620.27012498584,real,0.2.3,,415618.4727079817
+0,0,True,,20612.762375036255,real,0.2.3,0.0,0.0
+0,0,False,timeout_after_120000ms,748906.8524999893,real,0.2.3,,748904.3630419765
+0,0,False,timeout_after_120000ms,921766.8810830219,real,0.2.3,,921764.7900419543
