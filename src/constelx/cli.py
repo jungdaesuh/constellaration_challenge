@@ -20,7 +20,7 @@ console = Console()
 
 # Load environment variables from a .env file if python-dotenv is available.
 try:  # optional dependency; safe no-op if missing
-    from dotenv import find_dotenv, load_dotenv
+    from dotenv import find_dotenv, load_dotenv  # type: ignore
 
     load_dotenv(find_dotenv(usecwd=True), override=False)
 except Exception:
@@ -312,46 +312,6 @@ def opt_cmaes(
         objective, x0=x0, bounds=(-0.2, 0.2), budget=budget, sigma0=0.05, seed=seed
     )
     console.print(f"Best x: {best_x}\nBest score: {min(hist) if hist else float('inf')}")
-
-
-@opt_app.command("run")
-def opt_run(
-    baseline: str = typer.Option("trust-constr", help="Baseline: trust-constr|alm|cmaes"),
-    nfp: int = typer.Option(3, help="Boundary NFP for boundary-mode optimization."),
-    budget: int = typer.Option(50, help="Iteration budget (outer*inner for ALM)."),
-    seed: int = typer.Option(0, help="Random seed (reserved for future use)."),
-    use_physics: bool = typer.Option(
-        False, "--use-physics", help="Use official evaluator when available."
-    ),
-    problem: Optional[str] = typer.Option(
-        None, help="Problem id when using --use-physics (p1|p2|p3)."
-    ),
-) -> None:
-    """Run an optimization baseline in boundary mode (2D helical coefficients)."""
-    if use_physics and not problem:
-        raise typer.BadParameter("--problem is required when --use-physics is set (p1|p2|p3)")
-
-    if baseline.lower() == "cmaes":
-        # Delegate to existing CMA-ES command with boundary mode settings
-        opt_cmaes(nfp=nfp, budget=budget, seed=seed, toy=False)
-        return None
-
-    from .optim.baselines import BaselineConfig, run_alm, run_trust_constr
-
-    cfg = BaselineConfig(
-        nfp=nfp,
-        budget=budget,
-        seed=seed,
-        use_physics=use_physics,
-        problem=(problem or "p1"),
-    )
-    if baseline.lower() in {"trust", "trust-constr", "trust_constr"}:
-        x, val = run_trust_constr(cfg)
-    elif baseline.lower() in {"alm", "augmented-lagrangian"}:
-        x, val = run_alm(cfg)
-    else:
-        raise typer.BadParameter(f"Unknown baseline: {baseline}")
-    console.print(f"Best x: {list(map(float, x))}\nBest score: {val}")
 
 
 # -------------------- SURROGATE --------------------
