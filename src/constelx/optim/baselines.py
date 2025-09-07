@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Sequence, Tuple
 
 import numpy as np
+from numpy.typing import NDArray
 from scipy.optimize import Bounds, minimize
 
 from ..eval import forward as eval_forward
@@ -21,7 +22,7 @@ class BaselineConfig:
     problem: str = "p1"
 
 
-def _make_boundary(x: Sequence[float], nfp: int) -> dict[str, Any]:
+def _make_boundary(x: Sequence[float] | NDArray[np.floating[Any]], nfp: int) -> dict[str, Any]:
     b = example_boundary()
     b["n_field_periods"] = int(nfp)
     # Map 2D params to two helical coefficients; clamp softly
