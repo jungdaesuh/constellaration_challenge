@@ -18,6 +18,14 @@ import-time coupling and keep simple commands lightweight.
 app = typer.Typer(help="ConstelX CLI — ConStellaration starter tools")
 console = Console()
 
+# Load environment variables from a .env file if python-dotenv is available.
+try:  # optional dependency; safe no-op if missing
+    from dotenv import find_dotenv, load_dotenv  # type: ignore
+
+    load_dotenv(find_dotenv(usecwd=True), override=False)
+except Exception:
+    pass
+
 
 @app.command()
 def version() -> None:
@@ -355,6 +363,9 @@ def agent_run(
     guard_simple: bool = typer.Option(
         False, help="Apply simple pre-screen guard (clamp R0, cap helical amps)."
     ),
+    guard_geo: bool = typer.Option(
+        False, help="Apply geometric nudge (tighten helical amps and align ratio)."
+    ),
     # PCFM tuning (applies when --correction pcfm)
     pcfm_gn_iters: Optional[int] = typer.Option(
         None, help="PCFM Gauss–Newton iterations (override constraints file)."
@@ -421,6 +432,7 @@ def agent_run(
             problem=problem,
             init_seeds=init_seeds,
             guard_simple=guard_simple,
+            guard_geo=guard_geo,
             pcfm_gn_iters=pcfm_gn_iters,
             pcfm_damping=pcfm_damping,
             pcfm_tol=pcfm_tol,
