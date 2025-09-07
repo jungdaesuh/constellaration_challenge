@@ -1,0 +1,36 @@
+{
+  "run": {
+    "nfp": 3,
+    "seed": 0,
+    "out_dir": "runs",
+    "algo": "random",
+    "budget": 10,
+    "resume": null,
+    "max_workers": 1,
+    "cache_dir": null,
+    "correction": null,
+    "constraints": null,
+    "use_physics": false,
+    "pcfm_gn_iters": null,
+    "pcfm_damping": null,
+    "pcfm_tol": null,
+    "problem": null,
+    "init_seeds": null,
+    "guard_simple": true,
+    "guard_geo": false
+  },
+  "env": {
+    "python": "3.12.3",
+    "platform": "darwin",
+    "cwd": "/Users/suhjungdae/code/software/proxima_fusion/constelx_starter"
+  },
+  "git": {
+    "sha": "488dc8ae6ff3e3c1b5574185e1daa72b46bb6dc4"
+  },
+  "versions": {
+    "constelx": "0.0.1",
+    "numpy": "2.1.3",
+    "pandas": "2.2.3",
+    "constellaration": "0.2.3"
+  }
+}

@@ -14,9 +14,21 @@ Notes:
 
 from __future__ import annotations
 
+# Load environment variables early if python-dotenv is available so that
+# evaluator settings (e.g., timeouts) can be configured via a local .env.
+try:  # optional dependency; safe no-op if missing
+    from dotenv import find_dotenv, load_dotenv  # type: ignore
+
+    load_dotenv(find_dotenv(usecwd=True), override=False)
+except Exception:
+    pass
+
 import hashlib
 import json
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
+import time
 from math import inf, isnan
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
@@ -91,6 +103,79 @@ def _cache_backend(cache_dir: Optional[Path]) -> Optional[CacheBackend]:
         return None
 
 
+def _timeout_config() -> tuple[float, int, float]:
+    """Return (timeout_seconds, retries, backoff) from env with defaults.
+
+    Env vars:
+    - CONSTELX_REAL_TIMEOUT_MS: per-call timeout in ms (default: 20000)
+    - CONSTELX_REAL_RETRIES: number of retries on failure/timeout (default: 1)
+    - CONSTELX_REAL_BACKOFF: multiplicative backoff factor (default: 1.5)
+    """
+    try:
+        t_ms = float(os.getenv("CONSTELX_REAL_TIMEOUT_MS", "20000"))
+    except Exception:
+        t_ms = 20000.0
+    try:
+        retries = int(os.getenv("CONSTELX_REAL_RETRIES", "1"))
+    except Exception:
+        retries = 1
+    try:
+        backoff = float(os.getenv("CONSTELX_REAL_BACKOFF", "1.5"))
+    except Exception:
+        backoff = 1.5
+    return max(0.0, t_ms / 1000.0), max(0, retries), max(1.0, backoff)
+
+
+def _scoring_version() -> str:
+    try:
+        import importlib.metadata as _im
+
+        return cast(str, _im.version("constellaration"))
+    except Exception:
+        return ""
+
+
+def _real_eval_with_timeout(boundary: Mapping[str, Any], problem: str) -> Dict[str, Any]:
+    """Call the real evaluator in a separate process with timeout/retries.
+
+    Returns a metrics dict annotated with elapsed_ms/feasible/fail_reason and provenance.
+    """
+    timeout_s, retries, backoff = _timeout_config()
+    attempt = 0
+    last_err: str = ""
+    t0_all = time.perf_counter()
+    while attempt <= retries:
+        attempt += 1
+        deadline = timeout_s * (backoff ** (attempt - 1))
+        try:
+            with ProcessPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(_real_eval_task, (dict(boundary), problem))
+                metrics = fut.result(timeout=deadline)
+                # Provenance and versioning
+                try:
+                    metrics.setdefault("source", "real")
+                    sv = _scoring_version()
+                    if sv:
+                        metrics.setdefault("scoring_version", sv)
+                except Exception:
+                    pass
+                return metrics
+        except TimeoutError:
+            last_err = f"timeout_after_{int(deadline*1000)}ms"
+        except Exception as e:  # pragma: no cover - depends on external evaluator
+            last_err = f"error:{type(e).__name__}"
+        # retry loop continues
+    # Failure payload
+    t1_all = time.perf_counter()
+    return {
+        "feasible": False,
+        "fail_reason": last_err or "timeout",
+        "elapsed_ms": (t1_all - t0_all) * 1000.0,
+        "source": "real",
+        "scoring_version": _scoring_version() or "",
+    }
+
+
 def forward(
     boundary: Mapping[str, Any],
     *,
@@ -128,6 +213,7 @@ def forward(
         if cached is not None:
             return cached
     # evaluate using real physics (if requested) or placeholder path
+    t0 = time.perf_counter()
     if use_real is None:
         # Allow env toggle without changing call sites
         import os
@@ -135,13 +221,24 @@ def forward(
         use_real = os.getenv("CONSTELX_USE_REAL_EVAL", "0").lower() in {"1", "true", "yes"}
     if use_real:
         try:
-            from ..physics.proxima_eval import forward_metrics as px_forward
-
-            result, _info = px_forward(dict(boundary), problem=problem)
+            result = _real_eval_with_timeout(boundary, problem)
         except Exception:
             result = evaluate_boundary(dict(boundary), use_real=False)
     else:
         result = evaluate_boundary(dict(boundary), use_real=False)
+    t1 = time.perf_counter()
+    # annotate timing and defaults
+    try:
+        result.setdefault("elapsed_ms", (t1 - t0) * 1000.0)
+        result.setdefault("feasible", True)
+        result.setdefault("fail_reason", "")
+        result.setdefault("source", "real" if use_real else "placeholder")
+        if use_real:
+            sv = _scoring_version()
+            if sv:
+                result.setdefault("scoring_version", sv)
+    except Exception:
+        pass
     if cache is not None:
         cache.set(cache_key, result)
     return result
@@ -186,29 +283,148 @@ def forward_many(
 
     # Compute missing
     if to_compute:
-        if use_real:
+        allow_parallel = os.getenv("CONSTELX_ALLOW_PARALLEL_REAL", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        if use_real and max_workers > 1 and allow_parallel:
+            # Opt-in parallel execution for real evaluator. Configure BLAS/OpenMP threads
+            # per worker to avoid oversubscription on many-core Macs.
+            try:
+                from ..physics.proxima_eval import forward_metrics as px_forward
+
+                # Compute a conservative OMP thread count per worker
+                try:
+                    cpu_total = multiprocessing.cpu_count()
+                except Exception:
+                    cpu_total = 8
+                threads_per = max(1, min(5, cpu_total // max(1, max_workers)))
+                for var in (
+                    "OMP_NUM_THREADS",
+                    "VECLIB_MAXIMUM_THREADS",
+                    "OPENBLAS_NUM_THREADS",
+                    "NUMEXPR_NUM_THREADS",
+                ):
+                    os.environ[var] = str(threads_per)
+                with ProcessPoolExecutor(max_workers=max_workers) as ex:
+                    start_times: dict[int, float] = {}
+                    futs = {}
+                    timeout_s, _retries, _backoff = _timeout_config()
+                    for i, b in to_compute:
+                        fut = ex.submit(_real_eval_task, (dict(b), problem))
+                        futs[fut] = i
+                        start_times[i] = time.perf_counter()
+                    for fut in as_completed(futs, timeout=None):
+                        i = futs[fut]
+                        try:
+                            out[i] = fut.result(timeout=0)
+                        except Exception:
+                            out[i] = {
+                                "feasible": False,
+                                "fail_reason": "worker_error",
+                                "elapsed_ms": (time.perf_counter() - start_times.get(i, time.perf_counter()))
+                                * 1000.0,
+                                "source": "real",
+                                "scoring_version": _scoring_version() or "",
+                            }
+                    # Mark timed-out futures
+                    for fut, i in futs.items():
+                        if out[i] is None:
+                            elapsed = time.perf_counter() - start_times.get(i, time.perf_counter())
+                            if elapsed > timeout_s:
+                                out[i] = {
+                                    "feasible": False,
+                                    "fail_reason": f"timeout_after_{int(timeout_s*1000)}ms",
+                                    "elapsed_ms": elapsed * 1000.0,
+                                    "source": "real",
+                                    "scoring_version": _scoring_version() or "",
+                                }
+                    # Fill any remaining by best-effort result() with small timeout to avoid hanging
+                    for fut, i in futs.items():
+                        if out[i] is None:
+                            try:
+                                out[i] = fut.result(timeout=0.01)
+                            except Exception:
+                                out[i] = {
+                                    "feasible": False,
+                                    "fail_reason": f"timeout_after_{int(timeout_s*1000)}ms",
+                                    "elapsed_ms": (time.perf_counter() - start_times.get(i, time.perf_counter()))
+                                    * 1000.0,
+                                    "source": "real",
+                                    "scoring_version": _scoring_version() or "",
+                                }
+            except Exception:
+                # Fallback to sequential real-eval
+                try:
+                    from ..physics.proxima_eval import forward_metrics as px_forward
+
+                    for i, b in to_compute:
+                        _t0 = time.perf_counter()
+                        metrics, info = px_forward(dict(b), problem=problem)
+                        _t1 = time.perf_counter()
+                        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                        if isinstance(info, dict):
+                            feasible = bool(info.get("feasible", True))
+                            metrics.setdefault("feasible", feasible)
+                            if not feasible and "fail_reason" not in metrics:
+                                fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
+                                metrics["fail_reason"] = fr
+                        out[i] = metrics
+                except Exception:
+                    for i, b in to_compute:
+                        out[i] = evaluate_boundary(dict(b), use_real=False)
+        elif use_real:
             try:
                 from ..physics.proxima_eval import forward_metrics as px_forward
 
                 for i, b in to_compute:
-                    out[i] = px_forward(dict(b), problem=problem)[0]
+                    _t0 = time.perf_counter()
+                    metrics, info = px_forward(dict(b), problem=problem)
+                    _t1 = time.perf_counter()
+                    metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                    if isinstance(info, dict):
+                        feasible = bool(info.get("feasible", True))
+                        metrics.setdefault("feasible", feasible)
+                        if not feasible and "fail_reason" not in metrics:
+                            fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
+                            metrics["fail_reason"] = fr
+                    out[i] = metrics
             except Exception:
                 for i, b in to_compute:
                     out[i] = evaluate_boundary(dict(b), use_real=False)
         elif max_workers <= 1:
             for i, b in to_compute:
-                out[i] = evaluate_boundary(dict(b), use_real=False)
+                _t0 = time.perf_counter()
+                metrics = evaluate_boundary(dict(b), use_real=False)
+                _t1 = time.perf_counter()
+                try:
+                    metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                    metrics.setdefault("feasible", True)
+                    metrics.setdefault("fail_reason", "")
+                except Exception:
+                    pass
+                out[i] = metrics
         else:
             try:
                 with ProcessPoolExecutor(max_workers=max_workers) as ex:
-                    futs = {ex.submit(evaluate_boundary, dict(b), False): i for i, b in to_compute}
+                    futs = {ex.submit(_placeholder_eval_task, dict(b)): i for i, b in to_compute}
                     for fut in as_completed(futs):
                         i = futs[fut]
                         out[i] = fut.result()
             except Exception:
                 # Fallback to sequential if process pool is unavailable (e.g., sandboxed env)
                 for i, b in to_compute:
-                    out[i] = evaluate_boundary(dict(b), use_real=False)
+                    _t0 = time.perf_counter()
+                    metrics = evaluate_boundary(dict(b), use_real=False)
+                    _t1 = time.perf_counter()
+                    try:
+                        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                        metrics.setdefault("feasible", True)
+                        metrics.setdefault("fail_reason", "")
+                    except Exception:
+                        pass
+                    out[i] = metrics
 
     # Persist new caches
     if cache is not None:
@@ -262,3 +478,51 @@ def score(metrics: Mapping[str, Any], problem: Optional[str] = None) -> float:
                 return inf
             total += fv
     return float(total)
+
+
+def _real_eval_task(args: tuple[dict[str, Any], str]) -> dict[str, Any]:
+    """Helper for parallel real-evaluator calls.
+
+    Accepts (boundary, problem) and returns metrics dict.
+    """
+    b, prob = args
+    try:
+        from ..physics.proxima_eval import forward_metrics as px_forward
+
+        _t0 = time.perf_counter()
+        metrics, info = px_forward(b, problem=prob)
+        _t1 = time.perf_counter()
+        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+        if isinstance(info, dict):
+            feasible = bool(info.get("feasible", True))
+            metrics.setdefault("feasible", feasible)
+            if not feasible and "fail_reason" not in metrics:
+                fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
+                metrics["fail_reason"] = fr
+        return metrics
+    except Exception:
+        # Fallback to placeholder if real path unavailable in worker
+        _t0 = time.perf_counter()
+        metrics = evaluate_boundary(b, use_real=False)
+        _t1 = time.perf_counter()
+        try:
+            metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+            metrics.setdefault("feasible", True)
+            metrics.setdefault("fail_reason", "")
+        except Exception:
+            pass
+        return metrics
+
+
+def _placeholder_eval_task(b: dict[str, Any]) -> dict[str, Any]:
+    """Helper for parallel placeholder evaluator calls with timing."""
+    _t0 = time.perf_counter()
+    metrics = evaluate_boundary(b, use_real=False)
+    _t1 = time.perf_counter()
+    try:
+        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+        metrics.setdefault("feasible", True)
+        metrics.setdefault("fail_reason", "")
+    except Exception:
+        pass
+    return metrics
