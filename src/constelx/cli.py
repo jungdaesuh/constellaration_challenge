@@ -135,7 +135,9 @@ def eval_forward(
     ),
     nfp: int = typer.Option(3, help="NFP used with --random."),
     seed: int = typer.Option(0, help="Seed used with --random."),
-    cache_dir: Optional[Path] = typer.Option(None, help="Optional cache directory for metrics."),
+    cache_dir: Path = typer.Option(
+        Path(".cache/eval"), help="Cache directory for metrics (diskcache/json)."
+    ),
     use_physics: bool = typer.Option(
         False,
         "--use-physics",
