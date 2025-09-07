@@ -204,6 +204,7 @@ def eval_score(
 
     if metrics_json is not None:
         from .eval import score as eval_score_agg
+        from .problems import get_spec
 
         metrics = json.loads(Path(metrics_json).read_text())
         # Prefer official score passthrough if present
@@ -212,6 +213,15 @@ def eval_score(
             and "score" in metrics
             and isinstance(metrics["score"], (int, float))
         )
+        spec = get_spec(problem)
+        if isinstance(metrics, dict) and spec is not None:
+            missing = spec.missing_keys(metrics)
+            if missing:
+                msg = (
+                    f"[yellow]Warning:[/yellow] metrics missing expected keys for {spec.pid}: "
+                    f"{missing}"
+                )
+                console.print(msg)
         if has_score:
             value = float(metrics["score"])
         else:
@@ -238,6 +248,26 @@ def eval_score(
     else:
         df.to_csv(output, index=False)
         console.print(f"Wrote: {output}")
+
+
+@eval_app.command("problems")
+def eval_problems() -> None:
+    """List known problem specs and expected metrics."""
+    from .problems import list_specs
+
+    table = Table(title="ConStelX Problems")
+    table.add_column("id")
+    table.add_column("name")
+    table.add_column("required")
+    table.add_column("optional")
+    for spec in list_specs():
+        table.add_row(
+            spec.pid,
+            spec.name,
+            ", ".join(spec.required_metrics) or "-",
+            ", ".join(spec.optional_metrics) or "-",
+        )
+    console.print(table)
 
 
 # -------------------- OPTIMIZATION --------------------
