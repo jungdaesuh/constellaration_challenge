@@ -18,6 +18,14 @@ import-time coupling and keep simple commands lightweight.
 app = typer.Typer(help="ConstelX CLI — ConStellaration starter tools")
 console = Console()
 
+# Load environment variables from a .env file if python-dotenv is available.
+try:  # optional dependency; safe no-op if missing
+    from dotenv import find_dotenv, load_dotenv
+
+    load_dotenv(find_dotenv(usecwd=True), override=False)
+except Exception:
+    pass
+
 
 @app.command()
 def version() -> None:
@@ -45,8 +53,31 @@ def data_fetch(
         None, help="Filter by number of field periods (boundary.n_field_periods)."
     ),
     limit: Optional[int] = typer.Option(1000, help="Take first N examples for quick experiments."),
+    source: str = typer.Option("synthetic", help="Data source: synthetic|hf"),
 ) -> None:
-    # Local import to avoid import-time dependency for unrelated commands
+    if source == "hf":
+        try:
+            from .data.constellaration import (
+                filter_nfp as hf_filter,
+            )
+            from .data.constellaration import (
+                load as hf_load,
+            )
+            from .data.constellaration import (
+                to_parquet as hf_to_parquet,
+            )
+        except Exception as e:
+            raise typer.BadParameter(f"HF dataset path unavailable: {e}")
+        ds = hf_load()
+        if nfp is not None:
+            ds = hf_filter(ds, int(nfp))
+        if limit is not None:
+            ds = ds.select(range(min(int(limit), len(ds))))
+        out = hf_to_parquet(ds, cache_dir / "subset.parquet")
+        console.print(f"Saved HF subset to: [bold]{out}[/bold]")
+        return
+
+    # synthetic path
     from .data.dataset import fetch_dataset, save_subset
 
     ds = fetch_dataset()
@@ -57,6 +88,35 @@ def data_fetch(
         ds = ds.select(range(min(limit, len(ds))))
     out = save_subset(ds, cache_dir)
     console.print(f"Saved subset to: [bold]{out}[/bold]")
+
+
+@data_app.command("seeds")
+def data_seeds(
+    out_path: Path = typer.Option(
+        Path("data/seeds.jsonl"),
+        "--out",
+        "--out-path",
+        help="Output seeds JSONL path",
+    ),
+    nfp: int = typer.Option(3, help="Filter boundaries by NFP"),
+    k: int = typer.Option(64, help="Number of seeds to write"),
+) -> None:
+    """Create a seeds.jsonl from the HF dataset with {boundary: {...}} records."""
+    try:
+        from .data.constellaration import (
+            filter_nfp as hf_filter,
+        )
+        from .data.constellaration import (
+            load as hf_load,
+        )
+        from .data.constellaration import (
+            make_seeds_jsonl,
+        )
+    except Exception as e:
+        raise typer.BadParameter(f"HF dataset unavailable: {e}")
+    ds = hf_filter(hf_load(), int(nfp))
+    out = make_seeds_jsonl(ds, out_path, k=int(k))
+    console.print(f"Wrote seeds to: [bold]{out}[/bold]")
 
 
 # -------------------- EVAL --------------------
@@ -254,6 +314,46 @@ def opt_cmaes(
     console.print(f"Best x: {best_x}\nBest score: {min(hist) if hist else float('inf')}")
 
 
+@opt_app.command("run")
+def opt_run(
+    baseline: str = typer.Option("trust-constr", help="Baseline: trust-constr|alm|cmaes"),
+    nfp: int = typer.Option(3, help="Boundary NFP for boundary-mode optimization."),
+    budget: int = typer.Option(50, help="Iteration budget (outer*inner for ALM)."),
+    seed: int = typer.Option(0, help="Random seed (reserved for future use)."),
+    use_physics: bool = typer.Option(
+        False, "--use-physics", help="Use official evaluator when available."
+    ),
+    problem: Optional[str] = typer.Option(
+        None, help="Problem id when using --use-physics (p1|p2|p3)."
+    ),
+) -> None:
+    """Run an optimization baseline in boundary mode (2D helical coefficients)."""
+    if use_physics and not problem:
+        raise typer.BadParameter("--problem is required when --use-physics is set (p1|p2|p3)")
+
+    if baseline.lower() == "cmaes":
+        # Delegate to existing CMA-ES command with boundary mode settings
+        opt_cmaes(nfp=nfp, budget=budget, seed=seed, toy=False)
+        return None
+
+    from .optim.baselines import BaselineConfig, run_alm, run_trust_constr
+
+    cfg = BaselineConfig(
+        nfp=nfp,
+        budget=budget,
+        seed=seed,
+        use_physics=use_physics,
+        problem=(problem or "p1"),
+    )
+    if baseline.lower() in {"trust", "trust-constr", "trust_constr"}:
+        x, val = run_trust_constr(cfg)
+    elif baseline.lower() in {"alm", "augmented-lagrangian"}:
+        x, val = run_alm(cfg)
+    else:
+        raise typer.BadParameter(f"Unknown baseline: {baseline}")
+    console.print(f"Best x: {list(map(float, x))}\nBest score: {val}")
+
+
 # -------------------- SURROGATE --------------------
 sur_app = typer.Typer(help="Train simple surrogate models")
 app.add_typer(sur_app, name="surrogate")
@@ -294,6 +394,18 @@ def agent_run(
         "--use-physics",
         help="Prefer VMEC validation if constellaration is installed; fallback otherwise.",
     ),
+    problem: Optional[str] = typer.Option(
+        None, help="Problem id when using --use-physics (p1|p2|p3)."
+    ),
+    init_seeds: Optional[Path] = typer.Option(
+        None, help="JSONL of initial boundary seeds to evaluate first."
+    ),
+    guard_simple: bool = typer.Option(
+        False, help="Apply simple pre-screen guard (clamp R0, cap helical amps)."
+    ),
+    guard_geo: bool = typer.Option(
+        False, help="Apply geometric nudge (tighten helical amps and align ratio)."
+    ),
     # PCFM tuning (applies when --correction pcfm)
     pcfm_gn_iters: Optional[int] = typer.Option(
         None, help="PCFM Gauss–Newton iterations (override constraints file)."
@@ -320,6 +432,8 @@ def agent_run(
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
     runs_dir.mkdir(parents=True, exist_ok=True)
+    if use_physics and not problem:
+        raise typer.BadParameter("--problem is required when --use-physics is set (p1|p2|p3)")
     # Load constraints if provided
     constraints: list[dict[str, Any]] | None = None
     # Allow constraints JSON to be a dict with overrides {constraints:[...], gn_iters, damping, tol}
@@ -355,6 +469,10 @@ def agent_run(
             correction=correction,
             constraints=constraints,
             use_physics=use_physics,
+            problem=problem,
+            init_seeds=init_seeds,
+            guard_simple=guard_simple,
+            guard_geo=guard_geo,
             pcfm_gn_iters=pcfm_gn_iters,
             pcfm_damping=pcfm_damping,
             pcfm_tol=pcfm_tol,
