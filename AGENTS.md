@@ -124,12 +124,21 @@ Required pieces:
 - Write `runs/<ts>/config.yaml`, `runs/<ts>/proposals.jsonl`, `runs/<ts>/metrics.csv`, `runs/<ts>/best.json`.
 - Include a `README.md` in each run folder with CLI used and env info.
 
+Artifacts fields (clarity and provenance)
+- CSV columns include: `evaluator_score` (from official evaluator when present), `agg_score` (our aggregated score), `elapsed_ms` (per‑eval time), `feasible` (bool), `fail_reason` (string), and `source` (`placeholder|real`).
+- `best.json` stores `agg_score` (and a backward‑compatible `score` alias), optional `evaluator_score`, and a `metrics` object without a conflicting `score` key.
+
+Physics test opt‑in
+- Physics‑gated tests are skipped by default to avoid heavy imports on misconfigured systems.
+- Set `CONSTELX_RUN_PHYSICS_TESTS=1` to enable parity/physics tests locally or in CI (physics job).
+
 ## CLI behavior to implement
 
 - `constelx data fetch --nfp 3 --limit 128`
 - `constelx eval forward --boundary-file examples/boundary.json`
 - `constelx eval score --metrics-file runs/<ts>/metrics.csv`
 - `constelx opt cmaes --nfp 3 --budget 50 [--seed 0]`
+- `constelx opt run --baseline trust-constr|alm|cmaes --nfp 3 --budget 50 [--seed 0] [--use-physics --problem p1]`
 - `constelx agent run --nfp 3 --budget 50 [--seed 0] [--resume PATH]`
 
 ## Testing checklist

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from datasets import Dataset, load_dataset
@@ -16,7 +17,7 @@ def select_columns(ds: Dataset) -> Dataset:
     return ds.remove_columns([c for c in ds.column_names if c not in cols])
 
 
-def _safe_nfp(rec: dict) -> int:
+def _safe_nfp(rec: dict[str, Any]) -> int:
     """Extract NFP from a dataset record, handling both nested and flat layouts.
 
     Returns -1 if unavailable or invalid.
@@ -54,7 +55,7 @@ def make_seeds_jsonl(ds: Dataset, out: Path, k: int = 64) -> Path:
     with out.open("w") as f:
         count = 0
         for rec in ds:
-            b: dict | None = None
+            b: dict[str, Any] | None = None
             if "boundary" in rec and isinstance(rec["boundary"], dict):
                 import json
 
