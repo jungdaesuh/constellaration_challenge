@@ -333,10 +333,16 @@ def run(config: AgentConfig) -> Path:
                     cache_dir=config.cache_dir,
                     prefer_vmec=config.use_physics,
                     use_real=config.use_physics,
+                    problem="p1" if config.use_physics else "p1",
                 )
                 for j, (b, m) in enumerate(zip(batch, results)):
                     try:
-                        s = eval_score(m)
+                        # Prefer score from metrics when present (official evaluator)
+                        s = (
+                            float(m["score"])
+                            if "score" in m
+                            else eval_score(m, problem="p1" if config.use_physics else None)
+                        )
                     except Exception:
                         continue
                     log_entry(it, j, seeds[j], b, m, s)
@@ -349,8 +355,13 @@ def run(config: AgentConfig) -> Path:
                             cache_dir=config.cache_dir,
                             prefer_vmec=config.use_physics,
                             use_real=config.use_physics,
+                            problem="p1" if config.use_physics else "p1",
                         )
-                        s = eval_score(m)
+                        s = (
+                            float(m["score"])
+                            if "score" in m
+                            else eval_score(m, problem="p1" if config.use_physics else None)
+                        )
                     except Exception:
                         continue
                     log_entry(it, j, seeds[j], b, m, s)
@@ -392,8 +403,13 @@ def run(config: AgentConfig) -> Path:
                         cache_dir=config.cache_dir,
                         prefer_vmec=config.use_physics,
                         use_real=config.use_physics,
+                        problem="p1" if config.use_physics else "p1",
                     )
-                    s = eval_score(metrics)
+                    s = (
+                        float(metrics["score"])
+                        if "score" in metrics
+                        else eval_score(metrics, problem="p1" if config.use_physics else None)
+                    )
                 except Exception:
                     # Skip invalid points; penalize in CMA-ES
                     s = float("inf")
