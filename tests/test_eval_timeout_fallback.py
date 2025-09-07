@@ -23,4 +23,3 @@ def test_timeout_records_failure_and_fallback(monkeypatch) -> None:
     assert "feasible" in m
     assert "fail_reason" in m
     assert "source" in m
-
