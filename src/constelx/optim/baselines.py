@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Sequence, Tuple
 
 import numpy as np
@@ -20,6 +21,7 @@ class BaselineConfig:
     seed: int = 0
     use_physics: bool = False
     problem: str = "p1"
+    cache_dir: Path = Path(".cache/eval")
 
 
 def _make_boundary(x: Sequence[float] | NDArray[np.floating[Any]], nfp: int) -> dict[str, Any]:
@@ -40,6 +42,7 @@ def _objective(x: np.ndarray, cfg: BaselineConfig) -> float:
         b,
         prefer_vmec=cfg.use_physics,
         use_real=cfg.use_physics,
+        cache_dir=cfg.cache_dir,
         problem=cfg.problem,
     )
     # Prefer evaluator-provided score when present and problem is known via eval_score
@@ -79,6 +82,7 @@ def run_alm(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
             b,
             prefer_vmec=cfg.use_physics,
             use_real=cfg.use_physics,
+            cache_dir=cfg.cache_dir,
             problem=cfg.problem,
         )
         base = float(eval_score(m, problem=cfg.problem if cfg.use_physics else None))
