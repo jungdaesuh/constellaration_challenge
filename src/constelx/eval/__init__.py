@@ -98,7 +98,10 @@ def _cache_backend(cache_dir: Optional[Path]) -> Optional[CacheBackend]:
     if cache_dir is None:
         return None
     try:
-        return get_cache_backend(cache_dir)
+        # Allow TTL via environment without changing public signatures.
+        ttl_env = os.getenv("CONSTELX_CACHE_TTL_SECONDS")
+        ttl_val = int(ttl_env) if isinstance(ttl_env, str) and ttl_env.isdigit() else None
+        return get_cache_backend(cache_dir, ttl_seconds=ttl_val)
     except Exception:
         return None
 
@@ -240,7 +243,14 @@ def forward(
     except Exception:
         pass
     if cache is not None:
-        cache.set(cache_key, result)
+        try:
+            to_store = dict(result)
+            to_store.pop("elapsed_ms", None)
+            cache.set(cache_key, to_store)
+            # Return a result consistent with cached (strip non-deterministic timing)
+            result = to_store
+        except Exception:
+            cache.set(cache_key, result)
     return result
 
 
@@ -318,7 +328,13 @@ def forward_many(
                     for fut in as_completed(futs, timeout=None):
                         i = futs[fut]
                         try:
-                            out[i] = fut.result(timeout=0)
+                            r = fut.result(timeout=0)
+                            if isinstance(r, dict):
+                                r.setdefault("source", "real")
+                                sv = _scoring_version()
+                                if sv:
+                                    r.setdefault("scoring_version", sv)
+                            out[i] = r
                         except Exception:
                             out[i] = {
                                 "feasible": False,
@@ -329,7 +345,7 @@ def forward_many(
                                 * 1000.0,
                                 "source": "real",
                                 "scoring_version": _scoring_version() or "",
-                            }
+                                }
                     # Mark timed-out futures
                     for fut, i in futs.items():
                         if out[i] is None:
@@ -346,7 +362,13 @@ def forward_many(
                     for fut, i in futs.items():
                         if out[i] is None:
                             try:
-                                out[i] = fut.result(timeout=0.01)
+                                r = fut.result(timeout=0.01)
+                                if isinstance(r, dict):
+                                    r.setdefault("source", "real")
+                                    sv = _scoring_version()
+                                    if sv:
+                                        r.setdefault("scoring_version", sv)
+                                out[i] = r
                             except Exception:
                                 out[i] = {
                                     "feasible": False,
@@ -381,6 +403,10 @@ def forward_many(
                                     else ""
                                 )
                                 metrics_any1["fail_reason"] = fr
+                        metrics_any1.setdefault("source", "real")
+                        sv = _scoring_version()
+                        if sv:
+                            metrics_any1.setdefault("scoring_version", sv)
                         out[i] = metrics_any1
                 except Exception:
                     for i, b in to_compute:
@@ -401,6 +427,10 @@ def forward_many(
                         if not feasible and "fail_reason" not in metrics_any2:
                             fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
                             metrics_any2["fail_reason"] = fr
+                    metrics_any2.setdefault("source", "real")
+                    sv = _scoring_version()
+                    if sv:
+                        metrics_any2.setdefault("scoring_version", sv)
                     out[i] = metrics_any2
             except Exception:
                 for i, b in to_compute:
@@ -414,6 +444,7 @@ def forward_many(
                     metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
                     metrics.setdefault("feasible", True)
                     metrics.setdefault("fail_reason", "")
+                    metrics.setdefault("source", "placeholder")
                 except Exception:
                     pass
                 out[i] = metrics
@@ -423,7 +454,10 @@ def forward_many(
                     futs = {ex.submit(_placeholder_eval_task, dict(b)): i for i, b in to_compute}
                     for fut in as_completed(futs):
                         i = futs[fut]
-                        out[i] = fut.result()
+                        r = fut.result()
+                        if isinstance(r, dict):
+                            r.setdefault("source", "placeholder")
+                        out[i] = r
             except Exception:
                 # Fallback to sequential if process pool is unavailable (e.g., sandboxed env)
                 for i, b in to_compute:
@@ -434,17 +468,19 @@ def forward_many(
                         metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
                         metrics.setdefault("feasible", True)
                         metrics.setdefault("fail_reason", "")
+                        metrics.setdefault("source", "placeholder")
                     except Exception:
                         pass
                     out[i] = metrics
 
     # Strip non-deterministic timing before caching/returning to keep cache equality stable
     if cache is not None:
-        for i, r in enumerate(out):
-            assert r is not None
-            r.pop("elapsed_ms", None)
+        for i, rec in enumerate(out):
+            assert rec is not None
+            row = rec
+            row.pop("elapsed_ms", None)
             k = keys[i] or _hash_boundary(items[i])
-            cache.set(k, r)
+            cache.set(k, row)
 
     # type narrowing
     # Remove elapsed_ms to make results deterministic for equality checks
@@ -462,6 +498,17 @@ def score(metrics: Mapping[str, Any], problem: Optional[str] = None) -> float:
     This is a placeholder aggregation compatible with the starter's toy metrics.
     Swap in evaluator-default aggregation when integrating the real metrics.
     """
+
+    # If evaluator flagged failure, return +inf deterministically
+    try:
+        feas = metrics.get("feasible")
+        if isinstance(feas, bool) and feas is False:
+            return inf
+        fr = metrics.get("fail_reason")
+        if isinstance(fr, str) and fr:
+            return inf
+    except Exception:
+        pass
 
     # Use official scorer when available and a problem is provided
     if problem is not None:
@@ -506,12 +553,16 @@ def _real_eval_task(args: tuple[dict[str, Any], str]) -> dict[str, Any]:
         metrics: Dict[str, Any] = dict(_metrics_raw)
         _t1 = time.perf_counter()
         metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+        metrics.setdefault("source", "real")
         if isinstance(info, dict):
             feasible = bool(info.get("feasible", True))
             metrics.setdefault("feasible", feasible)
             if not feasible and "fail_reason" not in metrics:
                 fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
                 metrics["fail_reason"] = fr
+        sv = _scoring_version()
+        if sv:
+            metrics.setdefault("scoring_version", sv)
         return metrics
     except Exception:
         # Fallback to placeholder if real path unavailable in worker
@@ -536,6 +587,7 @@ def _placeholder_eval_task(b: dict[str, Any]) -> dict[str, Any]:
         metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
         metrics.setdefault("feasible", True)
         metrics.setdefault("fail_reason", "")
+        metrics.setdefault("source", "placeholder")
     except Exception:
         pass
     return metrics
