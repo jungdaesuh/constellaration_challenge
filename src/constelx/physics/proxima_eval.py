@@ -52,7 +52,8 @@ def forward_metrics(
         elif prob_key in {"p2", "simple", "qi_simple", "simple_qi"}:
             ev = SimpleToBuildQIStellarator().evaluate(b)
         else:
-            ev = MHDStableQIStellarator().evaluate(b)
+            # Multi-objective problem expects a list of boundaries
+            ev = MHDStableQIStellarator().evaluate([b])
 
         # Convert evaluation to metrics dict
         metrics: dict[str, Any] = {}
@@ -70,6 +71,8 @@ def forward_metrics(
         # Multi-objective: capture objectives if present
         objs = d.get("objectives")
         if isinstance(objs, (list, tuple)):
+            # Keep a list for callers that expect multi-objective shape
+            metrics["objectives"] = [float(v) for v in objs if isinstance(v, (int, float))]
             for k, val in enumerate(objs):
                 if isinstance(val, (int, float)):
                     metrics[f"objective_{k}"] = float(val)
@@ -93,8 +96,8 @@ def forward_metrics(
             r = float(m.get("r_cos_norm", 0.0))
             z = float(m.get("z_sin_norm", 0.0))
             metrics_f["objectives"] = [r, z]
-        # Mark provenance to indicate evaluator intent even under graceful degradation
-        return metrics_f, {"problem": problem, "feasible": True, "source": "constellaration"}
+        # Mark provenance correctly as placeholder
+        return metrics_f, {"problem": problem, "feasible": True, "source": "placeholder"}
 
 
 def score(problem: str, metrics: Mapping[str, Any]) -> float:

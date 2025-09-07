@@ -112,6 +112,16 @@ To run with the real evaluator dependencies:
 - macOS (Homebrew):
   - `brew install netcdf`
   - `pip install -e ".[dev,physics]"`
+
+  macOS notes (booz_xform/NetCDF):
+  - Some prebuilt macOS wheels for `booz_xform` may look for an older Homebrew NetCDF dylib (e.g., `libnetcdf.19.dylib`) while Homebrew provides a newer one (e.g., `libnetcdf.22.dylib`). If you see an ImportError mentioning `libnetcdf.*.dylib` when importing `booz_xform`, reinstall `booz_xform` from source linked against your local NetCDF:
+    - `brew install netcdf cmake ninja`
+    - `export NETCDF_DIR=/opt/homebrew/opt/netcdf`
+    - `export LDFLAGS="-L/opt/homebrew/opt/netcdf/lib"`
+    - `export CPPFLAGS="-I/opt/homebrew/opt/netcdf/include"`
+    - `PIP_NO_BINARY=booz_xform pip install -v git+https://github.com/hiddenSymmetries/booz_xform.git`
+  - Optional: to avoid thread oversubscription during real evaluations, set:
+    - `export OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1`
 - Windows: recommended via conda-forge:
   - `conda install -c conda-forge netcdf-c netcdf-cxx4 cmake ninja`
   - `pip install -e ".[dev,physics]"`
