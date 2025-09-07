@@ -366,20 +366,22 @@ def forward_many(
 
                     for i, b in to_compute:
                         _t0 = time.perf_counter()
-                        metrics, info = px_forward(dict(b), problem=problem)
+                        _metrics_raw, info = px_forward(dict(b), problem=problem)
+                        # Widen type to allow non-float annotations
+                        metrics_any1: Dict[str, Any] = dict(_metrics_raw)
                         _t1 = time.perf_counter()
-                        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                        metrics_any1.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
                         if isinstance(info, dict):
                             feasible = bool(info.get("feasible", True))
-                            metrics.setdefault("feasible", feasible)
-                            if not feasible and "fail_reason" not in metrics:
+                            metrics_any1.setdefault("feasible", feasible)
+                            if not feasible and "fail_reason" not in metrics_any1:
                                 fr = (
                                     info.get("reason")
                                     if isinstance(info.get("reason"), str)
                                     else ""
                                 )
-                                metrics["fail_reason"] = fr
-                        out[i] = metrics
+                                metrics_any1["fail_reason"] = fr
+                        out[i] = metrics_any1
                 except Exception:
                     for i, b in to_compute:
                         out[i] = evaluate_boundary(dict(b), use_real=False)
@@ -389,16 +391,17 @@ def forward_many(
 
                 for i, b in to_compute:
                     _t0 = time.perf_counter()
-                    metrics, info = px_forward(dict(b), problem=problem)
+                    _metrics_raw, info = px_forward(dict(b), problem=problem)
+                    metrics_any2: Dict[str, Any] = dict(_metrics_raw)
                     _t1 = time.perf_counter()
-                    metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                    metrics_any2.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
                     if isinstance(info, dict):
                         feasible = bool(info.get("feasible", True))
-                        metrics.setdefault("feasible", feasible)
-                        if not feasible and "fail_reason" not in metrics:
+                        metrics_any2.setdefault("feasible", feasible)
+                        if not feasible and "fail_reason" not in metrics_any2:
                             fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
-                            metrics["fail_reason"] = fr
-                    out[i] = metrics
+                            metrics_any2["fail_reason"] = fr
+                    out[i] = metrics_any2
             except Exception:
                 for i, b in to_compute:
                     out[i] = evaluate_boundary(dict(b), use_real=False)
@@ -499,7 +502,8 @@ def _real_eval_task(args: tuple[dict[str, Any], str]) -> dict[str, Any]:
         from ..physics.proxima_eval import forward_metrics as px_forward
 
         _t0 = time.perf_counter()
-        metrics, info = px_forward(b, problem=prob)
+        _metrics_raw, info = px_forward(b, problem=prob)
+        metrics: Dict[str, Any] = dict(_metrics_raw)
         _t1 = time.perf_counter()
         metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
         if isinstance(info, dict):
