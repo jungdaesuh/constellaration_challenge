@@ -37,7 +37,15 @@ Notes:
 - **Models**: simple MLP baseline + placeholders for FNO/transformers.
 - **Hard-constraint tooling**: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
 
-See `docs/ROADMAP.md` for the suggested implementation path.
+See `docs/ROADMAP.md` (engineering roadmap) and `docs/STRATEGY.md`
+(research/agent strategy) for the suggested path and background.
+
+## Docs
+
+- Engineering roadmap: `docs/ROADMAP.md`
+- Strategy and agent playbook: `docs/STRATEGY.md`
+- Contributor runbook: `AGENTS.md`
+- Background/guide: `docs/GUIDELINE.md`
 
 ## CLI usage
 
@@ -109,6 +117,20 @@ To run with the real evaluator dependencies:
   - `pip install -e ".[dev,physics]"`
 
 When physics extras are unavailable, the CLI and tests use lightweight placeholder evaluators that avoid native builds.
+
+## Environment (.env) and evaluator knobs
+
+The CLI and evaluator auto-load a local `.env` if `python-dotenv` is installed (included in the `dev` extra). Useful variables:
+
+- `CONSTELX_USE_REAL_EVAL`: `1|true` to route eval to the real physics path when available.
+- `CONSTELX_ALLOW_PARALLEL_REAL`: `1|true` to enable parallel real-eval in `forward_many`.
+- `CONSTELX_REAL_TIMEOUT_MS`: per-call timeout in milliseconds (default `20000`).
+- `CONSTELX_REAL_RETRIES`: number of retries on timeout/error (default `1`).
+- `CONSTELX_REAL_BACKOFF`: multiplicative backoff factor between retries (default `1.5`).
+
+Artifacts now include clear scoring and provenance fields:
+- CSV: `evaluator_score`, `agg_score`, `elapsed_ms`, `feasible`, `fail_reason`, `source`.
+- `best.json`: `agg_score`, optional `evaluator_score`, and metrics without a conflicting `score` key.
 
 ## Citing
 
