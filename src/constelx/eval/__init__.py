@@ -161,7 +161,7 @@ def _real_eval_with_timeout(boundary: Mapping[str, Any], problem: str) -> Dict[s
                     pass
                 return metrics
         except TimeoutError:
-            last_err = f"timeout_after_{int(deadline*1000)}ms"
+            last_err = f"timeout_after_{int(deadline * 1000)}ms"
         except Exception as e:  # pragma: no cover - depends on external evaluator
             last_err = f"error:{type(e).__name__}"
         # retry loop continues
@@ -337,7 +337,7 @@ def forward_many(
                             if elapsed > timeout_s:
                                 out[i] = {
                                     "feasible": False,
-                                    "fail_reason": f"timeout_after_{int(timeout_s*1000)}ms",
+                                    "fail_reason": f"timeout_after_{int(timeout_s * 1000)}ms",
                                     "elapsed_ms": elapsed * 1000.0,
                                     "source": "real",
                                     "scoring_version": _scoring_version() or "",
@@ -350,7 +350,7 @@ def forward_many(
                             except Exception:
                                 out[i] = {
                                     "feasible": False,
-                                    "fail_reason": f"timeout_after_{int(timeout_s*1000)}ms",
+                                    "fail_reason": f"timeout_after_{int(timeout_s * 1000)}ms",
                                     "elapsed_ms": (
                                         time.perf_counter()
                                         - start_times.get(i, time.perf_counter())
