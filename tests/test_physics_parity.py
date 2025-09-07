@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import math
+import os
 
 import pytest
 
-pytest.importorskip("constellaration")
+# Skip the entire module unless explicitly enabled to avoid importing heavy
+# physics dependencies on misconfigured systems.
+RUN_PHYS = os.getenv("CONSTELX_RUN_PHYSICS_TESTS", "0").lower() in {"1", "true", "yes"}
+pytestmark = pytest.mark.skipif(
+    not RUN_PHYS, reason="Set CONSTELX_RUN_PHYSICS_TESTS=1 to run physics parity tests"
+)
 
-from constelx.physics.constel_api import example_boundary
-from constelx.physics.proxima_eval import forward_metrics
+from constelx.physics.constel_api import example_boundary  # noqa: E402
+from constelx.physics.proxima_eval import forward_metrics  # noqa: E402
 
 
 def test_p1_score_bounded() -> None:
