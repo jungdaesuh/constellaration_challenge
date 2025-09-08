@@ -348,6 +348,8 @@ def forward_many(
                 q = min(max(q, 0.0), 1.0)
                 sorted_idx = sorted(idxs, key=lambda i: proxy_scores[i])
                 k_keep = int(round(q * len(sorted_idx)))
+                if len(sorted_idx) > 0 and k_keep < 1:
+                    k_keep = 1
                 for i in sorted_idx[:k_keep]:
                     survivors.add(i)
             if mf_max_high is not None and len(survivors) > int(mf_max_high):
