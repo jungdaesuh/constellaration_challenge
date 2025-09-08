@@ -345,7 +345,7 @@ def forward_many(
                                 * 1000.0,
                                 "source": "real",
                                 "scoring_version": _scoring_version() or "",
-                                }
+                            }
                     # Mark timed-out futures
                     for fut, i in futs.items():
                         if out[i] is None:
