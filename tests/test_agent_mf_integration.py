@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from constelx.agents.simple_agent import AgentConfig, run as run_agent
+from constelx.agents.simple_agent import AgentConfig
+from constelx.agents.simple_agent import run as run_agent
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -64,4 +65,3 @@ def test_agent_real_phase_gated(tmp_path: Path) -> None:
     assert "phase" in rows[0]
     # At least one real-phase row expected when physics is available
     assert any(row.get("phase") == "real" for row in rows)
-
