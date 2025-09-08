@@ -410,6 +410,18 @@ def agent_run(
     guard_geo: bool = typer.Option(
         False, help="Apply geometric nudge (tighten helical amps and align ratio)."
     ),
+    guard_geom_validate: bool = typer.Option(
+        False, help="Strict geometry validity check; skip invalid candidates."
+    ),
+    guard_r0_min: float = typer.Option(
+        0.05, help="Guard: minimum base radius (R0)", show_default=True
+    ),
+    guard_r0_max: float = typer.Option(
+        5.0, help="Guard: maximum base radius (R0)", show_default=True
+    ),
+    guard_helical_ratio_max: float = typer.Option(
+        0.5, help="Guard: max total |m=1| amplitude as a fraction of R0", show_default=True
+    ),
     # PCFM tuning (applies when --correction pcfm)
     pcfm_gn_iters: Optional[int] = typer.Option(
         None, help="PCFM Gauss–Newton iterations (override constraints file)."
@@ -481,9 +493,40 @@ def agent_run(
             pcfm_gn_iters=pcfm_gn_iters,
             pcfm_damping=pcfm_damping,
             pcfm_tol=pcfm_tol,
+            guard_geom_validate=guard_geom_validate,
+            guard_geom_r0_min=guard_r0_min,
+            guard_geom_r0_max=guard_r0_max,
+            guard_geom_helical_ratio_max=guard_helical_ratio_max,
         )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")
+
+
+# -------------------- SUBMIT --------------------
+submit_app = typer.Typer(help="Submission packaging helpers")
+app.add_typer(submit_app, name="submit")
+
+
+@submit_app.command("pack")
+def submit_pack(
+    run_dir: Path = typer.Argument(..., help="Path to a completed run directory (runs/<ts>)."),
+    out: Path = typer.Option(Path("submission.zip"), help="Output zip file path"),
+    top_k: int = typer.Option(1, help="Include top-K boundaries as boundaries.jsonl (K>1)"),
+) -> None:
+    """Pack a run directory into a submission zip.
+
+    Writes:
+    - boundary.json (best boundary by aggregate score)
+    - best.json (if present in the run folder)
+    - metadata.json (includes problem, scoring_version, git_sha, top_k)
+    - boundaries.jsonl (only when --top-k > 1): one JSON per line with
+      {iteration,index,agg_score,evaluator_score,feasible,fail_reason,
+       source,scoring_version,boundary}.
+    """
+    from .submit.pack import pack_run
+
+    out_path = pack_run(run_dir, out, top_k=top_k)
+    console.print(f"Created submission: [bold]{out_path}[/bold]")
 
 
 if __name__ == "__main__":

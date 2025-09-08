@@ -17,7 +17,13 @@ def _zeros(shape: Tuple[int, int]) -> Coeff2D:
     return [[0.0 for _ in range(n)] for _ in range(m)]
 
 
-def sample_random(nfp: int, seed: int, shape: Tuple[int, int] = (5, 9)) -> Dict[str, Any]:
+def sample_random(
+    nfp: int,
+    seed: int,
+    shape: Tuple[int, int] = (5, 9),
+    *,
+    use_fourier: bool = True,
+) -> Dict[str, Any]:
     """Generate a random, bounded boundary dict in a small fixed basis.
 
     - Stellarator-symmetric: r_sin, z_cos present but set to zeros.
@@ -39,14 +45,30 @@ def sample_random(nfp: int, seed: int, shape: Tuple[int, int] = (5, 9)) -> Dict[
 
     rng = np.random.default_rng(seed)
     m, n = shape
+    if use_fourier:
+        # Build via BoundaryFourier to centralize indexing conventions
+        from .boundary_fourier import BoundaryFourier
+
+        n_offset = n // 2
+        bf = BoundaryFourier.empty(nfp=int(nfp), m_dim=m, n_dim=n, n_offset=n_offset)
+        # Base radius at validator’s conventional column j=4
+        j_base = min(4, n - 1)
+        bf.r_cos[0][j_base] = 1.0
+        # Helical pair at (m=1, j=5) when available
+        if m > 1 and n > j_base + 1:
+            amp = 0.05
+            bf.r_cos[1][j_base + 1] = float(-abs(rng.uniform(0, amp)))
+            bf.z_sin[1][j_base + 1] = float(abs(rng.uniform(0, amp)))
+        b = bf.to_surface_rz_fourier_dict()
+        return b
+
     r_cos = _zeros(shape)
     z_sin = _zeros(shape)
     # For stellarator-symmetric case, r_sin and z_cos should be None
     r_sin: Coeff2D | None = None
     z_cos: Coeff2D | None = None
 
-    # Set a base major radius on the (m=0, n=nfp+1) term (index nfp+2 considering zero-index)
-    # Using index 4 like the example (works for n >= 5)
+    # Set a base major radius on column index 4 (when available)
     idx_n = min(4, n - 1)
     r_cos[0][idx_n] = 1.0
 
