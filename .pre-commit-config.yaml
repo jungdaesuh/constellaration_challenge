@@ -1,3 +1,4 @@
+exclude: ^(?:\.cache/|runs/|outputs/|\.venv/|tmp_.*|.*\.egg-info/)
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.6.9

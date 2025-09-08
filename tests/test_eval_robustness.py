@@ -43,4 +43,3 @@ def test_cache_ttl_env_is_accepted(tmp_path: Path) -> None:
         _ = forward_many([b], cache_dir=tmp_path, use_real=False, max_workers=1)
     finally:
         os.environ.pop("CONSTELX_CACHE_TTL_SECONDS", None)
-
