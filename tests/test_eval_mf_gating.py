@@ -3,7 +3,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from constelx.eval import forward_many, score as eval_score
+from constelx.eval import forward_many
+from constelx.eval import score as eval_score
 from constelx.physics.constel_api import example_boundary
 
 
@@ -44,4 +45,3 @@ def test_mf_gating_selects_by_threshold_and_sets_phase() -> None:
     # Scores should be finite and ordered by our construction
     scores = [float(eval_score(r, problem=None)) for r in results]
     assert all(math.isfinite(s) for s in scores)
-
