@@ -128,6 +128,15 @@ Artifacts fields (clarity and provenance)
 - CSV columns include: `evaluator_score` (from official evaluator when present), `agg_score` (our aggregated score), `elapsed_ms` (per‑eval time), `feasible` (bool), `fail_reason` (string), and `source` (`placeholder|real`).
 - `best.json` stores `agg_score` (and a backward‑compatible `score` alias), optional `evaluator_score`, and a `metrics` object without a conflicting `score` key.
 
+Submission packaging
+- `constelx submit pack runs/<ts> --out submissions/<name>.zip [--top-k K]` packs a run.
+  - Always writes:
+    - `boundary.json` (best boundary by `agg_score`), `metadata.json`.
+    - `best.json` is included when present.
+  - `metadata.json` fields include: `problem`, `scoring_version`, `git_sha`, and `top_k`.
+  - When `--top-k > 1`, also writes `boundaries.jsonl` (one JSON per line) with
+    `{iteration,index,agg_score,evaluator_score,feasible,fail_reason,source,scoring_version,boundary}`.
+
 Physics test opt‑in
 - Physics‑gated tests are skipped by default to avoid heavy imports on misconfigured systems.
 - Set `CONSTELX_RUN_PHYSICS_TESTS=1` to enable parity/physics tests locally or in CI (physics job).
@@ -141,6 +150,18 @@ Physics test opt‑in
 - `constelx opt run --baseline trust-constr|alm|cmaes --nfp 3 --budget 50 [--seed 0] [--use-physics --problem p1]`
 - `constelx agent run --nfp 3 --budget 50 [--seed 0] [--resume PATH]`
 
+### New helper flags (already available)
+
+- Agent geometry guard: `--guard-geom-validate` pre-screens invalid shapes and logs
+  `fail_reason=invalid_geometry` without spending evaluator calls. Thresholds are configurable:
+  - `--guard-r0-min` (default 0.05)
+  - `--guard-r0-max` (default 5.0)
+  - `--guard-helical-ratio-max` (default 0.5)
+
+- Submission packaging: `constelx submit pack runs/<ts> --out submissions/<name>.zip [--top-k 5]`
+  - Packs `boundary.json` (best) and `metadata.json`. With `--top-k > 1`, also writes
+    `boundaries.jsonl` with the top‑K boundaries by aggregate score.
+
 ## Testing checklist
 
 - Unit: boundary validation, scoring math, CMA‑ES step.
@@ -149,11 +170,4 @@ Physics test opt‑in
 
 ## Performance rules
 
-- Vectorize evaluator calls when possible; otherwise process pool with a small `--max-workers`.
-- Cache per‑boundary derived geometry (hashable key) in a local sqlite or diskcache.
-
-## Definition of done (per task)
-
-- Working code + tests + docstring example + one paragraph in README.
-- CI green.
-- No perf regressions on the small e2e test.
+- Vectorize evaluator calls when po
