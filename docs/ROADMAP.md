@@ -30,7 +30,7 @@ This repository ships with stubs and guardrails so you can iterate quickly. A re
 - **Caching/parallel**: disk cache backend available; controlled parallelism for real evaluator with thread caps.
 - **Constraint hooks**: `eci_linear` (projection onto Ax=b) and `pcfm` (Gauss–Newton) with example JSON specs.
 - **Surrogates**: simple MLP trainer available via `constelx surrogate train` (artifacts under `outputs/surrogates/mlp`).
-- **Tests**: physics‑gated scoring parity test for P1 (skipped when physics deps missing); agent/data/eval unit and small integration tests.
+- **Tests**: physics‑gated scoring parity tests for P1–P3 (skipped when physics deps are missing); agent/data/eval unit and small integration tests.
 
 —
 
