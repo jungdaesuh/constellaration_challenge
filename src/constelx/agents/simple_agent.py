@@ -45,6 +45,12 @@ class AgentConfig:
     guard_simple: bool = False
     # Optional geometric nudge: tighten helical amps and align ratio toward 1
     guard_geo: bool = False
+    # Optional strict geometry validation (skip invalid and log fail_reason)
+    guard_geom_validate: bool = False
+    # Geometry guard thresholds (apply when guard_geom_validate=True)
+    guard_geom_r0_min: float = 0.05
+    guard_geom_r0_max: float = 5.0
+    guard_geom_helical_ratio_max: float = 0.5
 
 
 def _timestamp() -> str:
@@ -449,6 +455,31 @@ def run(config: AgentConfig) -> Path:
                     try:
                         b = maybe_guard_geo(b)
                         b = maybe_guard(b)
+                        if config.guard_geom_validate:
+                            from ..eval.geometry import quick_geometry_validate
+
+                            ok, reason = quick_geometry_validate(
+                                b,
+                                r0_min=float(config.guard_geom_r0_min),
+                                r0_max=float(config.guard_geom_r0_max),
+                                helical_ratio_max=float(config.guard_geom_helical_ratio_max),
+                            )
+                            if not ok:
+                                log_entry(
+                                    it,
+                                    idx,
+                                    seed_val,
+                                    b,
+                                    {
+                                        "feasible": False,
+                                        "fail_reason": "invalid_geometry",
+                                        "source": "placeholder",
+                                    },
+                                    float("inf"),
+                                )
+                                completed += 1
+                                idx += 1
+                                continue
                         validate_boundary(b)
                         b = maybe_correct(b)
                     except Exception:
@@ -459,6 +490,31 @@ def run(config: AgentConfig) -> Path:
                     b = maybe_guard_geo(b)
                     b = maybe_guard_geo(b)
                     b = maybe_guard(b)
+                    if config.guard_geom_validate:
+                        from ..eval.geometry import quick_geometry_validate
+
+                        ok, reason = quick_geometry_validate(
+                            b,
+                            r0_min=float(config.guard_geom_r0_min),
+                            r0_max=float(config.guard_geom_r0_max),
+                            helical_ratio_max=float(config.guard_geom_helical_ratio_max),
+                        )
+                        if not ok:
+                            log_entry(
+                                it,
+                                idx,
+                                seed_val,
+                                b,
+                                {
+                                    "feasible": False,
+                                    "fail_reason": "invalid_geometry",
+                                    "source": "placeholder",
+                                },
+                                float("inf"),
+                            )
+                            completed += 1
+                            idx += 1
+                            continue
                     validate_boundary(b)
                     b = maybe_correct(b)
                 seeds.append(seed_val)
@@ -544,12 +600,41 @@ def run(config: AgentConfig) -> Path:
                 if completed >= budget:
                     break
                 seed_val = (rng_seed + it * 10007 + j * 7919) % (2**31 - 1)
+                metrics: Dict[str, Any]
                 b = sample_random(nfp=config.nfp, seed=seed_val)
                 # Override two helical coeffs deterministically from CMA-ES params
                 try:
                     b["r_cos"][1][5] = float(-abs(x[0]))
                     b["z_sin"][1][5] = float(abs(x[1]))
                     b = maybe_guard(b)
+                    if config.guard_geom_validate:
+                        from ..eval.geometry import quick_geometry_validate
+
+                        ok, reason = quick_geometry_validate(
+                            b,
+                            r0_min=float(config.guard_geom_r0_min),
+                            r0_max=float(config.guard_geom_r0_max),
+                            helical_ratio_max=float(config.guard_geom_helical_ratio_max),
+                        )
+                        if not ok:
+                            s = float("inf")
+                            metrics = {
+                                "feasible": False,
+                                "fail_reason": "invalid_geometry",
+                                "source": "placeholder",
+                            }
+                            log_entry(
+                                it,
+                                j,
+                                seed_val,
+                                b,
+                                metrics,
+                                s,
+                            )
+                            xs_eval.append(list(x))
+                            scores.append(s)
+                            completed += 1
+                            continue
                     validate_boundary(b)
                     b = maybe_correct(b)
                     _t0 = time.perf_counter()
