@@ -444,6 +444,17 @@ def agent_run(
             "- pcfm: [{type:'norm_eq', radius:float, terms:[{field,i,j,w}]}]"
         ),
     ),
+    # Multi-fidelity proxy gating
+    mf_proxy: bool = typer.Option(False, help="Enable proxy gating before real evals"),
+    mf_threshold: Optional[float] = typer.Option(
+        None, help="Proxy score threshold (keep <= threshold)."
+    ),
+    mf_quantile: Optional[float] = typer.Option(
+        None, help="Proxy keep quantile in [0,1] when threshold not set."
+    ),
+    mf_max_high: Optional[int] = typer.Option(
+        None, help="Cap number of real-eval survivors per batch."
+    ),
 ) -> None:
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
@@ -497,6 +508,10 @@ def agent_run(
             guard_geom_r0_min=guard_r0_min,
             guard_geom_r0_max=guard_r0_max,
             guard_geom_helical_ratio_max=guard_helical_ratio_max,
+            mf_proxy=mf_proxy,
+            mf_threshold=mf_threshold,
+            mf_quantile=mf_quantile,
+            mf_max_high=mf_max_high,
         )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")

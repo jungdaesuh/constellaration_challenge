@@ -262,6 +262,11 @@ def forward_many(
     prefer_vmec: bool = False,
     use_real: Optional[bool] = None,
     problem: str = "p1",
+    # Multi-fidelity gating (proxy -> select -> real)
+    mf_proxy: bool = False,
+    mf_threshold: float | None = None,
+    mf_quantile: float | None = None,
+    mf_max_high: int | None = None,
 ) -> List[Dict[str, Any]]:
     items = list(boundaries)
     n = len(items)
@@ -291,14 +296,77 @@ def forward_many(
             continue
         to_compute.append((i, b))
 
+    # Optional multi-fidelity proxy pass setup
+    proxy_scores: dict[int, float] = {}
+    proxy_metrics: dict[int, Dict[str, Any]] = {}
+
     # Compute missing
     if to_compute:
+        # If requested, run a cheap proxy evaluation on all to_compute items to select survivors
+        if mf_proxy:
+            for i, b in to_compute:
+                # Proxy cache lookup
+                k = keys[i] or _hash_boundary(b)
+                pm_key = f"{k}:proxy"
+                cached_pm = cache.get(pm_key) if cache is not None else None
+                if isinstance(cached_pm, dict):
+                    m = dict(cached_pm)
+                    m["phase"] = "proxy"
+                else:
+                    _t0p = time.perf_counter()
+                    m = _placeholder_eval_task(dict(b))
+                    _t1p = time.perf_counter()
+                    try:
+                        m.setdefault("elapsed_ms", (_t1p - _t0p) * 1000.0)
+                    except Exception:
+                        pass
+                    m["phase"] = "proxy"
+                    # Store proxy cache without timing for determinism
+                    if cache is not None:
+                        try:
+                            to_store = dict(m)
+                            to_store.pop("elapsed_ms", None)
+                            cache.set(pm_key, to_store)
+                        except Exception:
+                            pass
+                proxy_metrics[i] = m
+                try:
+                    proxy_scores[i] = float(score(m, problem=None))
+                except Exception:
+                    proxy_scores[i] = float("inf")
+
+            # Select survivors by threshold/quantile and optional cap
+            idxs = list(proxy_scores.keys())
+            survivors: set[int] = set()
+            if mf_threshold is not None:
+                thr = float(mf_threshold)
+                for i in idxs:
+                    if proxy_scores[i] <= thr:
+                        survivors.add(i)
+            else:
+                q = 0.5 if mf_quantile is None else float(mf_quantile)
+                q = min(max(q, 0.0), 1.0)
+                sorted_idx = sorted(idxs, key=lambda i: proxy_scores[i])
+                k_keep = int(round(q * len(sorted_idx)))
+                for i in sorted_idx[:k_keep]:
+                    survivors.add(i)
+            if mf_max_high is not None and len(survivors) > int(mf_max_high):
+                best = sorted(list(survivors), key=lambda i: proxy_scores[i])[: int(mf_max_high)]
+                survivors = set(best)
+
+            # Assign proxy results to non-survivors now; keep survivors in to_compute
+            non_survivors = {i for (i, _b) in to_compute} - survivors
+            for i in non_survivors:
+                if out[i] is None and i in proxy_metrics:
+                    out[i] = proxy_metrics[i]
+            to_compute = [(i, b) for (i, b) in to_compute if i in survivors]
+
         allow_parallel = os.getenv("CONSTELX_ALLOW_PARALLEL_REAL", "0").lower() in {
             "1",
             "true",
             "yes",
         }
-        if use_real and max_workers > 1 and allow_parallel:
+        if use_real and max_workers > 1 and allow_parallel and to_compute:
             # Opt-in parallel execution for real evaluator. Configure BLAS/OpenMP threads
             # per worker to avoid oversubscription on many-core Macs.
             try:
@@ -335,6 +403,8 @@ def forward_many(
                                     sv = _scoring_version()
                                     if sv:
                                         r.setdefault("scoring_version", sv)
+                            if isinstance(r, dict):
+                                r.setdefault("phase", "real")
                             out[i] = r
                         except Exception:
                             out[i] = {
@@ -346,6 +416,7 @@ def forward_many(
                                 * 1000.0,
                                 "source": "real",
                                 "scoring_version": _scoring_version() or "",
+                                "phase": "real",
                             }
                     # Mark timed-out futures
                     for fut, i in futs.items():
@@ -368,6 +439,7 @@ def forward_many(
                                     sv = _scoring_version()
                                     if sv:
                                         r.setdefault("scoring_version", sv)
+                                    r.setdefault("phase", "real")
                                 out[i] = r
                             except Exception:
                                 out[i] = {
@@ -380,6 +452,7 @@ def forward_many(
                                     * 1000.0,
                                     "source": "real",
                                     "scoring_version": _scoring_version() or "",
+                                    "phase": "real",
                                 }
             except Exception:
                 # Fallback to sequential real-eval
@@ -407,11 +480,12 @@ def forward_many(
                         sv = _scoring_version()
                         if sv:
                             metrics_any1.setdefault("scoring_version", sv)
+                        metrics_any1.setdefault("phase", "real")
                         out[i] = metrics_any1
                 except Exception:
                     for i, b in to_compute:
                         out[i] = evaluate_boundary(dict(b), use_real=False)
-        elif use_real:
+        elif use_real and to_compute:
             try:
                 from ..physics.proxima_eval import forward_metrics as px_forward
 
@@ -431,11 +505,12 @@ def forward_many(
                     sv = _scoring_version()
                     if sv:
                         metrics_any2.setdefault("scoring_version", sv)
+                    metrics_any2.setdefault("phase", "real")
                     out[i] = metrics_any2
             except Exception:
                 for i, b in to_compute:
                     out[i] = evaluate_boundary(dict(b), use_real=False)
-        elif max_workers <= 1:
+        elif max_workers <= 1 and to_compute:
             for i, b in to_compute:
                 _t0 = time.perf_counter()
                 metrics = evaluate_boundary(dict(b), use_real=False)
@@ -447,8 +522,10 @@ def forward_many(
                     metrics.setdefault("source", "placeholder")
                 except Exception:
                     pass
+                if mf_proxy:
+                    metrics.setdefault("phase", "proxy")
                 out[i] = metrics
-        else:
+        elif to_compute:
             try:
                 with ProcessPoolExecutor(max_workers=max_workers) as ex:
                     futs = {ex.submit(_placeholder_eval_task, dict(b)): i for i, b in to_compute}
@@ -457,6 +534,8 @@ def forward_many(
                         r = fut.result()
                         if isinstance(r, dict):
                             r.setdefault("source", "placeholder")
+                            if mf_proxy:
+                                r.setdefault("phase", "proxy")
                         out[i] = r
             except Exception:
                 # Fallback to sequential if process pool is unavailable (e.g., sandboxed env)
@@ -471,6 +550,8 @@ def forward_many(
                         metrics.setdefault("source", "placeholder")
                     except Exception:
                         pass
+                    if mf_proxy:
+                        metrics.setdefault("phase", "proxy")
                     out[i] = metrics
 
     # Strip non-deterministic timing before caching/returning to keep cache equality stable
@@ -480,7 +561,11 @@ def forward_many(
             row = rec
             row.pop("elapsed_ms", None)
             k = keys[i] or _hash_boundary(items[i])
-            cache.set(k, row)
+            # Separate namespaces for proxy vs real results when MF is enabled
+            if row.get("phase") == "proxy":
+                cache.set(f"{k}:proxy", row)
+            else:
+                cache.set(k, row)
 
     # type narrowing
     # Remove elapsed_ms to make results deterministic for equality checks
