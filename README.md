@@ -63,6 +63,10 @@ Agent
 - CMA-ES (falls back to random if cma missing):
   `constelx agent run --nfp 3 --budget 20 --algo cmaes --seed 0`
 - Resume a run: `constelx agent run --nfp 3 --budget 10 --resume runs/<ts>`
+- Geometry guard: `--guard-geom-validate` pre-screens invalid shapes and logs
+  `fail_reason=invalid_geometry` without spending evaluator calls.
+   - Thresholds can be tuned: `--guard-r0-min`, `--guard-r0-max`, and
+     `--guard-helical-ratio-max`.
  - PCFM correction (examples):
    - Norm equality: constrain helical amplitude to a circle of radius 0.06
      - JSON: `examples/pcfm_norm.json`
@@ -82,6 +86,14 @@ Artifacts (written under `runs/<timestamp>/`)
 - `best.json`: best score + metrics + boundary
 - `README.md`: how the run was launched and environment details
 
+Submission
+- Pack a completed run into a submission zip:
+  `constelx submit pack runs/<ts> --out submissions/run_<ts>.zip`
+  Includes `boundary.json`, `best.json` (if present), and a small `metadata.json`.
+ - Include the top-K boundaries by aggregate score:
+   `constelx submit pack runs/<ts> --out submissions/run_<ts>.zip --top-k 5`
+   This adds `boundaries.jsonl` with records of the form `{iteration,index,agg_score,evaluator_score,feasible,fail_reason,source,scoring_version,boundary}`.
+
 ## Development
 
 Quality gates
@@ -89,6 +101,11 @@ Quality gates
 - Lint: `ruff check .`
 - Types: `mypy src/constelx`
 - Tests: `pytest -q`
+
+Physics parity tests
+- Parity tests for P1–P3 are included and gated by physics deps to keep CI fast.
+- Enable locally with real evaluator installed: `export CONSTELX_RUN_PHYSICS_TESTS=1` then run `pytest -q -k scoring_parity`.
+- These tests assert our `eval.score(..., problem=...)` matches the official aggregator for each problem.
 
 Pre-commit
 - [![pre-commit enabled](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
@@ -99,7 +116,7 @@ Pre-commit
 
 CI
 - Core job: ruff (format+lint), mypy, pytest — fast, Python-only path.
-- Physics job: installs NetCDF system libs and `.[physics]`, then runs full tests.
+- Physics job: installs NetCDF system libs and `.[physics]`, then runs full tests (including P1–P3 parity).
 
 ## Physics stack installation
 
