@@ -77,7 +77,14 @@ Agent
    - Product equality: enforce `r_cos[1][5] * z_sin[1][5] = 0.003`
      - JSON: `examples/pcfm_product.json`
      - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_product.json`
-   - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8` or via top-level keys in the constraints JSON: `{gn_iters,damping,tol}`
+  - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8` or via top-level keys in the constraints JSON: `{gn_iters,damping,tol}`
+
+Multi-fidelity gating
+- Enable a cheap proxy pass before real evaluations to reduce expensive calls:
+  - Flags (agent): `--mf-proxy [--mf-threshold <t> | --mf-quantile <q>] [--mf-max-high K]`
+  - Behavior: compute proxy metrics for a batch, select survivors by score threshold or best-q quantile; cap survivors by `K`; then evaluate survivors with real path (when `--use-physics`).
+- Provenance: results include `phase=proxy|real` and existing `source`/`scoring_version` fields.
+- Caching: proxy results are cached separately under a proxy namespace to avoid collisions with real results.
 
 Artifacts (written under `runs/<timestamp>/`)
 - `config.yaml`: run config, env info, git SHA, package versions
