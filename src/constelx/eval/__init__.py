@@ -330,10 +330,11 @@ def forward_many(
                         try:
                             r = fut.result(timeout=0)
                             if isinstance(r, dict):
-                                r.setdefault("source", "real")
-                                sv = _scoring_version()
-                                if sv:
-                                    r.setdefault("scoring_version", sv)
+                                # Trust worker provenance; only add scoring_version when real.
+                                if r.get("source") == "real":
+                                    sv = _scoring_version()
+                                    if sv:
+                                        r.setdefault("scoring_version", sv)
                             out[i] = r
                         except Exception:
                             out[i] = {
@@ -363,8 +364,7 @@ def forward_many(
                         if out[i] is None:
                             try:
                                 r = fut.result(timeout=0.01)
-                                if isinstance(r, dict):
-                                    r.setdefault("source", "real")
+                                if isinstance(r, dict) and r.get("source") == "real":
                                     sv = _scoring_version()
                                     if sv:
                                         r.setdefault("scoring_version", sv)
@@ -553,7 +553,7 @@ def _real_eval_task(args: tuple[dict[str, Any], str]) -> dict[str, Any]:
         metrics: Dict[str, Any] = dict(_metrics_raw)
         _t1 = time.perf_counter()
         metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
-        metrics.setdefault("source", "real")
+        metrics["source"] = "real"
         if isinstance(info, dict):
             feasible = bool(info.get("feasible", True))
             metrics.setdefault("feasible", feasible)
@@ -573,6 +573,7 @@ def _real_eval_task(args: tuple[dict[str, Any], str]) -> dict[str, Any]:
             metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
             metrics.setdefault("feasible", True)
             metrics.setdefault("fail_reason", "")
+            metrics["source"] = "placeholder"
         except Exception:
             pass
         return metrics
