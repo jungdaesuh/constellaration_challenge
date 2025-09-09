@@ -528,7 +528,7 @@ def run(config: AgentConfig) -> Path:
             # Evaluate
             if not batch:
                 break
-            if config.max_workers > 1:
+            if config.max_workers > 1 or config.mf_proxy:
                 from ..eval import forward_many
 
                 results = forward_many(
