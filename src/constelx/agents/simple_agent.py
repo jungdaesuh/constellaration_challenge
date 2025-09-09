@@ -51,6 +51,11 @@ class AgentConfig:
     guard_geom_r0_min: float = 0.05
     guard_geom_r0_max: float = 5.0
     guard_geom_helical_ratio_max: float = 0.5
+    # Multi-fidelity gating
+    mf_proxy: bool = False
+    mf_threshold: float | None = None
+    mf_quantile: float | None = None
+    mf_max_high: int | None = None
 
 
 def _timestamp() -> str:
@@ -523,7 +528,7 @@ def run(config: AgentConfig) -> Path:
             # Evaluate
             if not batch:
                 break
-            if config.max_workers > 1:
+            if config.max_workers > 1 or config.mf_proxy:
                 from ..eval import forward_many
 
                 results = forward_many(
@@ -533,6 +538,16 @@ def run(config: AgentConfig) -> Path:
                     prefer_vmec=config.use_physics,
                     use_real=config.use_physics,
                     problem=problem,
+                    mf_proxy=bool(config.mf_proxy),
+                    mf_threshold=(
+                        float(config.mf_threshold) if config.mf_threshold is not None else None
+                    ),
+                    mf_quantile=(
+                        float(config.mf_quantile) if config.mf_quantile is not None else None
+                    ),
+                    mf_max_high=(
+                        int(config.mf_max_high) if config.mf_max_high is not None else None
+                    ),
                 )
                 for j, (b, m) in enumerate(zip(batch, results)):
                     try:
