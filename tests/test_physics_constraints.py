@@ -27,6 +27,15 @@ def test_aspect_ratio_simple() -> None:
     assert ar == pytest.approx(4.4721, rel=1e-3)
 
 
+def test_aspect_ratio_m1_uses_column5() -> None:
+    """Minor radius should use the first m=1 column (index 5)."""
+    b = _base_boundary()
+    b["r_cos"][1][4] = 0.0
+    b["z_sin"][1][4] = 0.0
+    ar = aspect_ratio(b)
+    assert ar == pytest.approx(4.4721, rel=1e-3)
+
+
 def test_curvature_smoothness_variation() -> None:
     b_const = _base_boundary()
     smooth0 = curvature_smoothness(b_const)
