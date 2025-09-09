@@ -65,7 +65,7 @@ def project_gauss_newton(
     using a stable least-squares formulation. Performs a short line-search to
     ensure residual reduction. Returns the updated vector (never raises).
     """
-    x = np.asarray(u, dtype=float).copy()
+    x: NDArray[np.floating[Any]] = np.asarray(u, dtype=float).copy()
     lam = float(damping)
     for _ in range(max_iters):
         h = np.asarray(residual(x), dtype=float)
