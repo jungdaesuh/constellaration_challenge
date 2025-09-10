@@ -211,6 +211,10 @@ def pack_run(run_dir: Path, out_path: Path, top_k: int = 1) -> Path:
                     rec = {
                         "iteration": row.get("iteration"),
                         "index": row.get("index"),
+                        "nfp": row.get(
+                            "nfp",
+                            bnd.get("n_field_periods") if isinstance(bnd, dict) else None,
+                        ),
                         "agg_score": row.get("agg_score"),
                         "evaluator_score": row.get("evaluator_score"),
                         "feasible": row.get("feasible"),

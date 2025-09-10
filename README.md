@@ -63,21 +63,30 @@ Agent
 - CMA-ES (falls back to random if cma missing):
   `constelx agent run --nfp 3 --budget 20 --algo cmaes --seed 0`
 - Resume a run: `constelx agent run --nfp 3 --budget 10 --resume runs/<ts>`
+- Multi-start NFP exploration (round-robin across values):
+  `constelx agent run --nfp-list "3,4,5" --budget 12 --seed 0`
+  The budget is shared across NFPs and proposals are allocated in a round-robin fashion. Artifacts include an `nfp` field in `proposals.jsonl`, `metrics.csv`, and in `boundaries.jsonl` (when packing submissions with `--top-k`).
 - Geometry guard: `--guard-geom-validate` pre-screens invalid shapes and logs
   `fail_reason=invalid_geometry` without spending evaluator calls.
    - Thresholds can be tuned: `--guard-r0-min`, `--guard-r0-max`, and
      `--guard-helical-ratio-max`.
+
+
  - PCFM correction (examples):
    - Norm equality: constrain helical amplitude to a circle of radius 0.06
      - JSON: `examples/pcfm_norm.json`
      - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_norm.json`
-   - Ratio equality: enforce `z_sin[1][5] / r_cos[1][5] = -1.25`
+  - Ratio equality: enforce `z_sin[1][5] / r_cos[1][5] = -1.25`
      - JSON: `examples/pcfm_ratio.json`
      - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_ratio.json`
    - Product equality: enforce `r_cos[1][5] * z_sin[1][5] = 0.003`
      - JSON: `examples/pcfm_product.json`
      - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_product.json`
   - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8` or via top-level keys in the constraints JSON: `{gn_iters,damping,tol}`
+
+Upcoming (tracked)
+- Surrogate screening in the agent to pre-filter proposals before proxy/real evals (#73).
+- ResultsDB novelty gating to skip near-duplicate proposals (#74).
 
 Multi-fidelity gating
 - Enable a cheap proxy pass before real evaluations to reduce expensive calls:
@@ -100,6 +109,16 @@ Submission
  - Include the top-K boundaries by aggregate score:
    `constelx submit pack runs/<ts> --out submissions/run_<ts>.zip --top-k 5`
    This adds `boundaries.jsonl` with records of the form `{iteration,index,agg_score,evaluator_score,feasible,fail_reason,source,scoring_version,boundary}`.
+
+Ablation
+- Quick component ablations: `constelx ablate run --nfp 3 --budget 6 --components guard_simple,mf_proxy`
+  - Also supports `correction=eci_linear` and `correction=pcfm` toggles (uses simple defaults).
+  - Writes a timestamped folder under `runs/ablations/` with per-variant subfolders and `summary.csv`/`summary.json` at the root.
+ - Spec-driven plan with multi-seed aggregation:
+   - Create `plan.json`:
+     `{ "base": {"nfp":3, "budget":3}, "seeds": [0,1], "variants": [{"name":"baseline","overrides":{}},{"name":"eci_linear","overrides":{"correction":"eci_linear","constraints":[{"rhs":0.0,"coeffs":[{"field":"r_cos","i":1,"j":5,"c":1.0},{"field":"z_sin","i":1,"j":5,"c":1.0}]}]}}] }`
+   - Run: `constelx ablate run --spec plan.json --runs-dir runs/ablations`
+   - Produces `details.csv` (per-variant/seed) and `summary.csv` (best and mean agg_score per variant).
 
 ## Development
 
@@ -171,7 +190,7 @@ Caching
   pass `--cache-dir runs/<ts>/cache` to `constelx eval/agent` commands. The `runs/` tree is ignored.
 
 Artifacts now include clear scoring and provenance fields:
-- CSV: `evaluator_score`, `agg_score`, `elapsed_ms`, `feasible`, `fail_reason`, `source`.
+- CSV: `nfp`, `evaluator_score`, `agg_score`, `elapsed_ms`, `feasible`, `fail_reason`, `source`.
 - `best.json`: `agg_score`, optional `evaluator_score`, and metrics without a conflicting `score` key.
 
 ## Citing
