@@ -22,11 +22,12 @@ def _base_and_minor(boundary: Dict[str, Any]) -> Tuple[float, float]:
         and isinstance(r_cos[1], list)
     ):
         return 0.0, 0.0
-    j0 = min(4, len(r_cos[0]) - 1, len(r_cos[1]) - 1, len(z_sin[1]) - 1)
+    j0 = min(4, len(r_cos[0]) - 1)
+    j1 = min(5, len(r_cos[1]) - 1, len(z_sin[1]) - 1)
     try:
         r0 = float(r_cos[0][j0])
-        r1 = float(r_cos[1][j0])
-        z1 = float(z_sin[1][j0])
+        r1 = float(r_cos[1][j1])
+        z1 = float(z_sin[1][j1])
     except (TypeError, ValueError, IndexError):
         return 0.0, 0.0
     minor = float(np.hypot(r1, z1))
