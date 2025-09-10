@@ -80,12 +80,8 @@ def data_fetch(
     # synthetic path
     from .data.dataset import fetch_dataset, save_subset
 
-    ds = fetch_dataset()
-    if nfp is not None:
-        # Use single-process filter to avoid fork issues in constrained environments/tests
-        ds = ds.filter(lambda x: x == nfp, input_columns=["boundary.n_field_periods"], num_proc=1)
-    if limit is not None:
-        ds = ds.select(range(min(limit, len(ds))))
+    count = int(limit) if limit is not None else 128
+    ds = fetch_dataset(count=count, nfp=int(nfp) if nfp is not None else 3)
     out = save_subset(ds, cache_dir)
     console.print(f"Saved subset to: [bold]{out}[/bold]")
 
@@ -400,11 +396,14 @@ def surrogate_train(
         Path("outputs/surrogates/mlp"), "--out-dir", "--output-dir", help="Model output directory"
     ),
     use_pbfm: bool = typer.Option(False, help="Use PBFM conflict-free loss combination"),
+    steps: int = typer.Option(20, help="Number of optimizer steps"),
 ) -> None:
     from .surrogate.train import train_simple_mlp
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    train_simple_mlp(cache_dir=cache_dir, output_dir=output_dir, use_pbfm=use_pbfm)
+    train_simple_mlp(
+        cache_dir=cache_dir, output_dir=output_dir, use_pbfm=use_pbfm, steps=int(steps)
+    )
     console.print(f"Saved surrogate to {output_dir}")
 
 
