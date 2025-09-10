@@ -11,7 +11,6 @@
 8. [#51] Unified metrics/constraints module as single source of truth.
 
 ## Parallelizable Tasks
-- [#54] Results database and novelty checks.
 - [#53] Ablation harness for pipeline components.
 - [#52] Multi-start NFP exploration with provenance tracking.
 - [#47] Near-axis expansion seeding for QS/QI-friendly starts.
