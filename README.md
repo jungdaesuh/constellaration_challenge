@@ -180,6 +180,14 @@ The CLI and evaluator auto-load a local `.env` if `python-dotenv` is installed (
 - `CONSTELX_REAL_TIMEOUT_MS`: per-call timeout in milliseconds (default `20000`).
 - `CONSTELX_REAL_RETRIES`: number of retries on timeout/error (default `1`).
 - `CONSTELX_REAL_BACKOFF`: multiplicative backoff factor between retries (default `1.5`).
+ - `CONSTELX_CACHE_TTL_SECONDS`: optional TTL (in seconds) for evaluator cache entries when
+   `diskcache` is available (install with `.[cache]`). After TTL, cached results expire and will be
+   recomputed. JSON fallback ignores TTL.
+
+Caching
+- Evaluator results are cached to speed up repeated calls. Default cache dir is `.cache/eval/`.
+- To keep repositories clean and runs isolated, prefer per-run caches:
+  pass `--cache-dir runs/<ts>/cache` to `constelx eval/agent` commands. The `runs/` tree is ignored.
 
 Artifacts now include clear scoring and provenance fields:
 - CSV: `nfp`, `evaluator_score`, `agg_score`, `elapsed_ms`, `feasible`, `fail_reason`, `source`.
