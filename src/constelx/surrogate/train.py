@@ -32,7 +32,9 @@ class MLP(nn.Module):
         return cast(torch.Tensor, self.net(x))
 
 
-def train_simple_mlp(cache_dir: Path, output_dir: Path, *, use_pbfm: bool = False) -> None:
+def train_simple_mlp(
+    cache_dir: Path, output_dir: Path, *, use_pbfm: bool = False, steps: int = 20
+) -> None:
     df = pd.read_parquet(Path(cache_dir) / "subset.parquet")
     X = df[_boundary_cols(df)].fillna(0.0).to_numpy()
     # Toy target: pick one available scalar metric if present, else zeros
@@ -49,7 +51,7 @@ def train_simple_mlp(cache_dir: Path, output_dir: Path, *, use_pbfm: bool = Fals
     model = MLP(X.shape[1], 1)
     opt = optim.Adam(model.parameters(), lr=3e-4)
 
-    for _ in range(200):
+    for _ in range(int(steps)):
         if not use_pbfm:
             opt.zero_grad()
             pred = model(X)
