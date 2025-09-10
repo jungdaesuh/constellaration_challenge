@@ -34,5 +34,5 @@ def test_agent_metrics_has_required_columns(tmp_path: Path) -> None:
     assert csv_path.exists(), "missing metrics.csv"
     header = next(csv.DictReader(csv_path.open()))
     cols = set(header.keys())
-    for c in {"evaluator_score", "agg_score", "elapsed_ms", "feasible", "fail_reason", "source"}:
+    for c in {"evaluator_score", "agg_score", "elapsed_ms", "feasible", "fail_reason", "source", "nfp"}:
         assert c in cols, f"missing column: {c}"
