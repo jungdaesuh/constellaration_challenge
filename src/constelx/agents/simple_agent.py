@@ -58,7 +58,6 @@ class AgentConfig:
     mf_threshold: float | None = None
     mf_quantile: float | None = None
     mf_max_high: int | None = None
-    
 
 
 def _timestamp() -> str:

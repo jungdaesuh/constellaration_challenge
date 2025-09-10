@@ -146,9 +146,7 @@ def eval_forward(
     json_out: bool = typer.Option(False, "--json", help="Emit raw JSON metrics."),
 ) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
-        raise typer.BadParameter(
-            "Choose exactly one of --example, --boundary-json, or --random"
-        )
+        raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
 
     if example:
         from .physics.constel_api import example_boundary
@@ -156,6 +154,7 @@ def eval_forward(
         b = example_boundary()
     elif random_boundary:
         from .eval.boundary_param import sample_random, validate as validate_boundary
+
         b = sample_random(nfp=nfp, seed=seed)
         validate_boundary(b)
     else:
