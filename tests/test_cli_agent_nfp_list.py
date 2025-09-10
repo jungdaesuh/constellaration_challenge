@@ -46,4 +46,3 @@ def test_agent_nfp_list_round_robin_and_provenance(tmp_path: Path) -> None:
     assert "nfp" in rows[0], "missing nfp column in metrics.csv"
     nfp_vals = [int(r["nfp"]) for r in rows]
     assert nfp_vals == [3, 4, 3, 4]
-
