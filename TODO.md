@@ -17,6 +17,8 @@
    - Parse/store provenance; ensure cache keys separate by resolution level.
 8. [#51] Unified metrics/constraints module
    - Single source of truth for geometry/QS proxies to avoid drift across paths.
+9. [#28] ConStellaration evaluator wiring
+   - Core landed; track robustness/docs follow-ups here.
 
 Note: [#30] HF dataset helpers and seeds are implemented; keep the issue open for expanded ingestion and examples.
 

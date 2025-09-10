@@ -7,6 +7,7 @@ data/
 !src/constelx/data/
 outputs/
 runs/
+.cache/
 .env
 .mpl_cache/
 *.egg-info/
