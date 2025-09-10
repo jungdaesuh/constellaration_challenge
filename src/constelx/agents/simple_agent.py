@@ -24,6 +24,8 @@ class AgentConfig:
     nfp: int
     seed: int
     out_dir: Path
+    # Optional: explore multiple NFP values in one run (round-robin allocation)
+    nfp_list: list[int] | None = None
     algo: str = "random"  # one of: random, cmaes
     budget: int = 50  # total evaluations allowed
     resume: Path | None = None
@@ -56,6 +58,7 @@ class AgentConfig:
     mf_threshold: float | None = None
     mf_quantile: float | None = None
     mf_max_high: int | None = None
+    
 
 
 def _timestamp() -> str:
@@ -295,7 +298,19 @@ def run(config: AgentConfig) -> Path:
         elapsed_ms: float | None = None,
     ) -> None:
         nonlocal best_score, best_payload, metrics_writer
-        prop = {"iteration": it, "index": idx, "seed": seed_val, "boundary": boundary}
+        # Derive nfp from boundary when present
+        try:
+            nfp_raw = boundary.get("n_field_periods")
+            nfp_val = int(nfp_raw) if isinstance(nfp_raw, (int, float)) else None
+        except Exception:
+            nfp_val = None
+        prop = {
+            "iteration": it,
+            "index": idx,
+            "seed": seed_val,
+            "nfp": nfp_val,
+            "boundary": boundary,
+        }
         proposals_f.write(json.dumps(prop) + "\n")
         # Separate evaluator-provided score from aggregated score to avoid confusion
         evaluator_score: float | None = None
@@ -313,6 +328,7 @@ def run(config: AgentConfig) -> Path:
         row = {
             "iteration": it,
             "index": idx,
+            "nfp": nfp_val,
             **metrics_no_collision,
             "evaluator_score": evaluator_score,
             "agg_score": agg_s,
@@ -337,6 +353,7 @@ def run(config: AgentConfig) -> Path:
                 "evaluator_score": evaluator_score,
                 "metrics": metrics_no_collision,
                 "boundary": boundary,
+                "nfp": nfp_val,
             }
 
     # Optional correction hook (eci_linear)
@@ -443,6 +460,23 @@ def run(config: AgentConfig) -> Path:
         except Exception:
             seed_boundaries = []
 
+    # Prepare NFP selection (round-robin over provided list if any)
+    nfp_values: list[int] = []
+    try:
+        if config.nfp_list:
+            nfp_values = [int(x) for x in config.nfp_list if int(x) > 0]
+    except Exception:
+        nfp_values = []
+    if not nfp_values:
+        nfp_values = [int(config.nfp)]
+    _nfp_rr_idx = 0
+
+    def _next_nfp() -> int:
+        nonlocal _nfp_rr_idx
+        val = nfp_values[_nfp_rr_idx % len(nfp_values)]
+        _nfp_rr_idx += 1
+        return val
+
     # Random search
     def run_random() -> None:
         nonlocal completed
@@ -491,7 +525,7 @@ def run(config: AgentConfig) -> Path:
                         pass
                 else:
                     seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
-                    b = sample_random(nfp=config.nfp, seed=seed_val)
+                    b = sample_random(nfp=_next_nfp(), seed=seed_val)
                     b = maybe_guard_geo(b)
                     b = maybe_guard_geo(b)
                     b = maybe_guard(b)
@@ -616,7 +650,7 @@ def run(config: AgentConfig) -> Path:
                     break
                 seed_val = (rng_seed + it * 10007 + j * 7919) % (2**31 - 1)
                 metrics: Dict[str, Any]
-                b = sample_random(nfp=config.nfp, seed=seed_val)
+                b = sample_random(nfp=_next_nfp(), seed=seed_val)
                 # Override two helical coeffs deterministically from CMA-ES params
                 try:
                     b["r_cos"][1][5] = float(-abs(x[0]))

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: I001  (import-sorting suppressed for local grouping inside commands)
+
 import json
 import random
 from pathlib import Path
@@ -144,16 +146,16 @@ def eval_forward(
     json_out: bool = typer.Option(False, "--json", help="Emit raw JSON metrics."),
 ) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
-        raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
+        raise typer.BadParameter(
+            "Choose exactly one of --example, --boundary-json, or --random"
+        )
 
     if example:
         from .physics.constel_api import example_boundary
 
         b = example_boundary()
     elif random_boundary:
-        from .eval.boundary_param import sample_random
-        from .eval.boundary_param import validate as validate_boundary
-
+        from .eval.boundary_param import sample_random, validate as validate_boundary
         b = sample_random(nfp=nfp, seed=seed)
         validate_boundary(b)
     else:
@@ -414,7 +416,17 @@ app.add_typer(agent_app, name="agent")
 
 @agent_app.command("run")
 def agent_run(
-    nfp: int = typer.Option(3, help="Number of field periods for random boundaries."),
+    nfp: int = typer.Option(
+        3,
+        help=("Number of field periods for random boundaries (default when --nfp-list not set)."),
+    ),
+    nfp_list: Optional[str] = typer.Option(
+        None,
+        help=(
+            "Comma or space separated list of NFP values to explore in one run; "
+            "budget is shared and candidates are allocated round-robin (e.g., '3,4,5')."
+        ),
+    ),
     budget: int = typer.Option(50, help="Total number of evaluations to run."),
     algo: str = typer.Option("random", help="Optimization algorithm: random or cmaes."),
     seed: int = typer.Option(0, help="Global seed for reproducibility."),
@@ -516,6 +528,11 @@ def agent_run(
     out = run_agent(
         AgentConfig(
             nfp=nfp,
+            nfp_list=(
+                [int(x) for x in ([s for s in nfp_list.replace(",", " ").split() if s.strip()])]
+                if isinstance(nfp_list, str) and nfp_list.strip()
+                else None
+            ),
             seed=seed,
             out_dir=runs_dir,
             algo=algo,
@@ -571,6 +588,109 @@ def submit_pack(
 
     out_path = pack_run(run_dir, out, top_k=top_k)
     console.print(f"Created submission: [bold]{out_path}[/bold]")
+
+
+# -------------------- ABLATION --------------------
+ablate_app = typer.Typer(help="Ablation harness for pipeline components")
+app.add_typer(ablate_app, name="ablate")
+
+
+@ablate_app.command("run")
+def ablate_run(
+    nfp: int = typer.Option(3, help="Boundary NFP (passed to agent)."),
+    budget: int = typer.Option(6, help="Per-run budget for quick ablations."),
+    seed: int = typer.Option(0, help="Seed for reproducibility."),
+    spec: Optional[Path] = typer.Option(
+        None, "--spec", "--spec-file", help="JSON spec defining a full ablation plan"
+    ),
+    components: str = typer.Option(
+        "guard_simple,mf_proxy",
+        help=(
+            "Comma-separated list of components to toggle one-at-a-time. "
+            "Known: guard_simple, guard_geo, mf_proxy, algo=cmaes"
+        ),
+    ),
+    runs_dir: Path = typer.Option(
+        Path("runs/ablations"), "--runs-dir", help="Root directory for ablation runs."
+    ),
+    cache_dir: Path = typer.Option(Path(".cache/eval"), help="Cache directory for evals."),
+    max_workers: int = typer.Option(1, help="Worker count for evaluator."),
+    use_physics: bool = typer.Option(
+        False, "--use-physics", help="Use official evaluator when available."
+    ),
+    problem: Optional[str] = typer.Option(
+        None, help="Problem id when using --use-physics (p1|p2|p3)."
+    ),
+) -> None:
+    """Run a small ablation over selected components or a JSON spec plan.
+
+    When --spec is provided, it must be a JSON file with the schema:
+    {
+      "base": {AgentConfig-like fields},
+      "seeds": [0,1,2],
+      "variants": [{"name": "baseline", "overrides": {...}}, ...]
+    }
+    It writes per-variant/per-seed folders and summary CSVs.
+    Without --spec, it runs a baseline and one run per component toggle.
+    """
+    if use_physics and not problem:
+        typer.echo("--problem is required", err=True)
+        raise typer.Exit(code=2)
+
+    from .agents.simple_agent import AgentConfig
+
+    runs_dir.mkdir(parents=True, exist_ok=True)
+
+    if spec is not None:
+        data = json.loads(spec.read_text())
+        base = dict(data.get("base", {}))
+        # Ensure base provides minimal fields; override with CLI values if present
+        base.setdefault("nfp", nfp)
+        base.setdefault("budget", budget)
+        base.setdefault("algo", "random")
+        if use_physics:
+            base["use_physics"] = True
+            if problem:
+                base["problem"] = problem
+        seeds = data.get("seeds") or [seed]
+        variants_in = data.get("variants", [])
+        from .agents.ablation import AblationPlan, PlanVariant, run_ablation_plan
+
+        variants = [
+            PlanVariant(name=str(v.get("name")), overrides=dict(v.get("overrides", {})))
+            for v in variants_in
+        ]
+        plan = AblationPlan(base=base, seeds=[int(s) for s in seeds], variants=variants)
+        root = run_ablation_plan(plan=plan, out_root=runs_dir)
+        console.print(f"Ablation (spec) complete. Artifacts in: [bold]{root}[/bold]")
+        return
+
+    # Component-toggles path
+    from .agents.ablation import run_ablation
+
+    cfg = AgentConfig(
+        nfp=nfp,
+        seed=seed,
+        out_dir=runs_dir,
+        algo="random",
+        budget=budget,
+        resume=None,
+        max_workers=max_workers,
+        cache_dir=cache_dir,
+        use_physics=use_physics,
+        problem=(problem or "p1"),
+    )
+    comps = [c.strip() for c in components.split(",") if c.strip()]
+    results = run_ablation(base=cfg, components=comps, out_root=runs_dir)
+
+    # Print a compact summary
+    table = Table(title="Ablation results")
+    table.add_column("component")
+    table.add_column("best_score")
+    table.add_column("run_dir")
+    for r in results:
+        table.add_row(r.name, f"{r.best_score:.6g}", str(r.run_dir))
+    console.print(table)
 
 
 if __name__ == "__main__":
