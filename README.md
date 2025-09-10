@@ -71,7 +71,7 @@ Agent
    - Thresholds can be tuned: `--guard-r0-min`, `--guard-r0-max`, and
      `--guard-helical-ratio-max`.
 
- 
+
  - PCFM correction (examples):
    - Norm equality: constrain helical amplitude to a circle of radius 0.06
      - JSON: `examples/pcfm_norm.json`
