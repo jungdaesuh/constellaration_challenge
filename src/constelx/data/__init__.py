@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from typing import List
+from .results_db import ResultsDB
 
-__all__: List[str] = []
+__all__ = ["ResultsDB"]
