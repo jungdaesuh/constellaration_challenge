@@ -127,7 +127,7 @@ Required pieces:
 - Include a `README.md` in each run folder with CLI used and env info.
 
 Artifacts fields (clarity and provenance)
-- CSV columns include: `evaluator_score` (from official evaluator when present), `agg_score` (our aggregated score), `elapsed_ms` (per‑eval time), `feasible` (bool), `fail_reason` (string), and `source` (`placeholder|real`).
+- CSV columns include: `nfp`, `evaluator_score` (from official evaluator when present), `agg_score` (our aggregated score), `elapsed_ms` (per‑eval time), `feasible` (bool), `fail_reason` (string), and `source` (`placeholder|real`).
 - When multi‑fidelity gating is enabled, a `phase` column indicates `proxy` or `real` evaluation phase for each row. Proxy results are cached separately from real results.
 - `best.json` stores `agg_score` (and a backward‑compatible `score` alias), optional `evaluator_score`, and a `metrics` object without a conflicting `score` key.
 
