@@ -1,14 +1,12 @@
 # TODOs
 
-## Sequential Tasks
-1. [#28] Wire to ConStellaration evaluator and official scoring (drop-in physics).
-2. [#30] Real dataset ingestion with Hugging Face dataset and Parquet cache.
-3. [#32] Baselines: ALM/trust-constr optimizers and `opt run` CLI.
-4. [#33] Scoring parity tests for P1–P3 with golden fixtures.
-5. [#39] Multi-fidelity toggle for proxy vs high-fidelity scoring with provenance.
-6. [#38] PCFM repair pack: aspect-ratio band, edge-iota proxy, clearance constraints.
-7. [#50] VMEC resolution ladder and hot-restart toggles.
-8. [#51] Unified metrics/constraints module as single source of truth.
+## Sequential Tasks (next up)
+1. [#30] Real dataset ingestion with Hugging Face dataset and Parquet cache.
+2. [#32] Baselines: ALM/trust-constr optimizers and `opt run` CLI.
+3. [#38] PCFM repair pack: aspect-ratio band, edge-iota proxy, clearance constraints.
+4. [#50] VMEC resolution ladder and hot-restart toggles.
+5. [#51] Unified metrics/constraints module as single source of truth.
+6. [#28] ConStellaration evaluator wiring — core landed; track robustness/docs follow-ups here.
 
 ## Parallelizable Tasks
 - [#53] Ablation harness for pipeline components.
@@ -21,3 +19,11 @@
 - [#42] DESC integration: gradient trust-region baseline and resolution ladder.
 - [#41] Integrate QS proxies into PCFM constraints and multi-fidelity gating.
 - [#40] Constrained BoTorch qNEI baseline.
+
+## Completed Recently
+- [#33] Scoring parity tests for P1–P3 with golden fixtures — implemented and documented (PR #62).
+- [#39] Multi-fidelity toggle with proxy→selection→real and provenance — implemented (PR #63) with single-worker phase fix (PR #65).
+- [#54] Results DB + novelty checks — implemented (PR #69) and issue closed.
+- Docs roadmap added (PR #68).
+- Dataset/surrogate speedups (PR #70).
+- Fix: boundary m=1 column mapping (PR #66).
