@@ -42,4 +42,3 @@ def test_cli_ablate_quick_components(tmp_path: Path) -> None:
     assert "guard_simple" in content
     assert "mf_proxy" in content
     assert "correction=eci_linear" in content or "eci_linear" in content
-

@@ -90,3 +90,10 @@ This is a Python package for ML + physics-based optimization of stellarator plas
 - Ruff configuration: line length 100, basic linting enabled
 - This is a starter/skeleton repo with many TODO stubs for extension
 - Physics constraints (PCFM/PBFM) are placeholder modules for future implementation
+
+## PR etiquette: auto-close issues
+
+- When your PR fully resolves an issue, add a closing keyword to the PR description so GitHub auto-closes it on merge (including auto-merge):
+  - Examples: `Closes #30`, `Fixes #32`, `Resolves owner/repo#38`.
+- Only include these when the PR truly completes the issue. For docs-only or partial changes, omit closing keywords and reference issues without the keywords.
+- If using auto-merge, double-check the PR description includes any intended `Closes #…` lines before enabling auto-merge.

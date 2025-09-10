@@ -398,7 +398,7 @@ def run_ablation_plan(*, plan: AblationPlan, out_root: Path) -> Path:
         else:
             best, mean = inf, inf
         summary_rows.append({"variant": name, "best_agg_score": best, "mean_agg_score": mean})
-    summary_rows.sort(key=lambda x: x["variant"])  
+    summary_rows.sort(key=lambda x: x["variant"])
 
     with (ts_root / "summary.csv").open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=["variant", "best_agg_score", "mean_agg_score"])
