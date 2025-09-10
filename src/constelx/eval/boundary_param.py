@@ -88,6 +88,78 @@ def sample_random(
     }
 
 
+def sample_near_axis_qs(
+    nfp: int,
+    seed: int,
+    shape: Tuple[int, int] = (5, 9),
+    *,
+    r0: float = 1.0,
+    epsilon: float = 0.06,
+    ellipticity: float = 0.0,
+) -> Dict[str, Any]:
+    """Generate a near-axis-inspired QS/QI-friendly boundary seed.
+
+    This constructs a simple stellarator-symmetric boundary consistent with a
+    small-ε near-axis picture: a circular base of radius ``r0`` and a modest
+    helical perturbation at (m=1, n=+1). Optionally adds a tiny m=2 ellipticity.
+
+    The construction is intentionally lightweight and deterministic, avoiding
+    heavy near-axis libraries. It is suitable for seeding optimizers and for
+    quick tests where QS/QI-friendly starts are desired.
+
+    Parameters
+    - nfp: Number of field periods (positive integer).
+    - seed: RNG seed for determinism (used only to introduce tiny, bounded
+      jitter on amplitudes to avoid duplicated seeds across runs).
+    - shape: (m, n) truncation for Fourier coefficient grids.
+    - r0: Base major radius term at (m=0, n=0) column index ~4.
+    - epsilon: Relative helical amplitude as a fraction of r0 (0 < ε << 1).
+    - ellipticity: Optional relative m=2 shaping magnitude (fraction of r0).
+
+    Returns
+    - A JSON-serializable dict matching `SurfaceRZFourier` fields.
+    """
+    if nfp <= 0:
+        raise ValueError("nfp must be positive")
+
+    import numpy as np  # local import to keep module import light
+
+    rng = np.random.default_rng(seed)
+    m_dim, n_dim = shape
+
+    from .boundary_fourier import BoundaryFourier
+
+    n_offset = n_dim // 2
+    bf = BoundaryFourier.empty(nfp=int(nfp), m_dim=m_dim, n_dim=n_dim, n_offset=n_offset)
+
+    # Base radius at a conventional column j≈4, clipped to grid
+    j0 = min(4, n_dim - 1)
+    bf.r_cos[0][j0] = float(max(1e-6, r0))
+
+    # Helical pair at (m=1, n=+1) with QS/QI-friendly sign convention
+    # r_cos(1, +1) negative, z_sin(1, +1) positive, magnitudes ~ ε*r0.
+    if m_dim > 1 and n_dim > j0 + 1:
+        amp = float(abs(epsilon) * bf.r_cos[0][j0])
+        # add tiny deterministic jitter (±5%) from seed to diversify seeds
+        jitter = 1.0 + float(rng.uniform(-0.05, 0.05))
+        a = max(0.0, min(2.0 * amp, amp * jitter))
+        bf.r_cos[1][j0 + 1] = -a
+        bf.z_sin[1][j0 + 1] = +a
+
+    # Optional mild ellipticity at (m=2, n=0)
+    if ellipticity and m_dim > 2:
+        e = float(abs(ellipticity) * bf.r_cos[0][j0])
+        e = min(e, 0.2 * bf.r_cos[0][j0])
+        try:
+            i2, j2 = bf.idx(2, 0)
+            bf.r_cos[i2][j2] = e
+            # z_sin(2,0) often set 0 in stellarator-symmetric setups; keep 0.0
+        except Exception:
+            pass
+
+    return bf.to_surface_rz_fourier_dict()
+
+
 def _check_same_shape(a: Coeff2D, b: Coeff2D) -> bool:
     return len(a) == len(b) and all(len(ai) == len(bi) for ai, bi in zip(a, b))
 

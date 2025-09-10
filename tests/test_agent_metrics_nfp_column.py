@@ -42,4 +42,3 @@ def test_metrics_csv_contains_nfp_and_value_matches(tmp_path: Path) -> None:
     for row in rows:
         assert row.get("nfp") not in (None, ""), "nfp value missing in a row"
         assert int(float(row["nfp"])) == 3
-

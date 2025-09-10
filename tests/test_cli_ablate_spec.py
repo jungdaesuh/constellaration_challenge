@@ -58,4 +58,3 @@ def test_cli_ablate_spec_plan(tmp_path: Path) -> None:
     assert details.exists() and summary.exists()
     content = summary.read_text()
     assert "baseline" in content and "eci_linear" in content
-
