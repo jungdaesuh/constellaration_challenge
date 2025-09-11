@@ -52,6 +52,7 @@ See `docs/ROADMAP.md` (engineering roadmap) and `docs/STRATEGY.md`
 Evaluation
 - `constelx eval forward --example`
 - `constelx eval forward --random --nfp 3 --seed 0`
+- Near-axis QS/QI-friendly seed: `constelx eval forward --near-axis --nfp 3 --seed 0`
 - `constelx eval score --metrics-json examples/metrics_small.json`
 
 Optimization
@@ -60,6 +61,7 @@ Optimization
 
 Agent
 - Random search: `constelx agent run --nfp 3 --budget 6 --seed 0 --runs-dir runs`
+- Near-axis seeding: `constelx agent run --nfp 3 --budget 6 --seed-mode near-axis`
 - CMA-ES (falls back to random if cma missing):
   `constelx agent run --nfp 3 --budget 20 --algo cmaes --seed 0`
 - Resume a run: `constelx agent run --nfp 3 --budget 10 --resume runs/<ts>`

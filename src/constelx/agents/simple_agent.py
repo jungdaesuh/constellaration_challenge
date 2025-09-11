@@ -16,7 +16,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Callable
 
 from ..eval import forward as eval_forward, score as eval_score
-from ..eval.boundary_param import sample_random, validate as validate_boundary
+from ..eval.boundary_param import (
+    sample_random,
+    sample_near_axis_qs,
+    validate as validate_boundary,
+)
 
 
 @dataclass(frozen=True)
@@ -58,6 +62,8 @@ class AgentConfig:
     mf_threshold: float | None = None
     mf_quantile: float | None = None
     mf_max_high: int | None = None
+    # Seed generator: "random" or "near-axis"
+    seed_mode: str = "random"
 
 
 def _timestamp() -> str:
@@ -524,7 +530,10 @@ def run(config: AgentConfig) -> Path:
                         pass
                 else:
                     seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
-                    b = sample_random(nfp=_next_nfp(), seed=seed_val)
+                    if (config.seed_mode or "random").lower() == "near-axis":
+                        b = sample_near_axis_qs(nfp=_next_nfp(), seed=seed_val)
+                    else:
+                        b = sample_random(nfp=_next_nfp(), seed=seed_val)
                     b = maybe_guard_geo(b)
                     b = maybe_guard(b)
                     if config.guard_geom_validate:
@@ -648,7 +657,10 @@ def run(config: AgentConfig) -> Path:
                     break
                 seed_val = (rng_seed + it * 10007 + j * 7919) % (2**31 - 1)
                 metrics: Dict[str, Any]
-                b = sample_random(nfp=_next_nfp(), seed=seed_val)
+                if (config.seed_mode or "random").lower() == "near-axis":
+                    b = sample_near_axis_qs(nfp=_next_nfp(), seed=seed_val)
+                else:
+                    b = sample_random(nfp=_next_nfp(), seed=seed_val)
                 # Override two helical coeffs deterministically from CMA-ES params
                 try:
                     b["r_cos"][1][5] = float(-abs(x[0]))
