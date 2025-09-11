@@ -526,7 +526,6 @@ def run(config: AgentConfig) -> Path:
                     seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
                     b = sample_random(nfp=_next_nfp(), seed=seed_val)
                     b = maybe_guard_geo(b)
-                    b = maybe_guard_geo(b)
                     b = maybe_guard(b)
                     if config.guard_geom_validate:
                         from ..eval.geometry import quick_geometry_validate

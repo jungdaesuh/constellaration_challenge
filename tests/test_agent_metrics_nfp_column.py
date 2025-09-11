@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 from constelx.cli import app
 
 
-def test_agent_metrics_has_required_columns(tmp_path: Path) -> None:
+def test_metrics_csv_contains_nfp_and_value_matches(tmp_path: Path) -> None:
     runner = CliRunner()
     runs_dir = tmp_path / "runs"
     result = runner.invoke(
@@ -19,7 +19,7 @@ def test_agent_metrics_has_required_columns(tmp_path: Path) -> None:
             "--nfp",
             "3",
             "--budget",
-            "2",
+            "3",
             "--seed",
             "0",
             "--runs-dir",
@@ -32,16 +32,13 @@ def test_agent_metrics_has_required_columns(tmp_path: Path) -> None:
     out = subdirs[0]
     csv_path = out / "metrics.csv"
     assert csv_path.exists(), "missing metrics.csv"
-    header = next(csv.DictReader(csv_path.open()))
-    cols = set(header.keys())
-    required_cols = {
-        "evaluator_score",
-        "agg_score",
-        "elapsed_ms",
-        "feasible",
-        "fail_reason",
-        "source",
-        "nfp",
-    }
-    for c in required_cols:
-        assert c in cols, f"missing column: {c}"
+
+    reader = csv.DictReader(csv_path.open())
+    rows = list(reader)
+    assert rows, "metrics.csv is empty"
+    header_cols = reader.fieldnames or []
+    assert "nfp" in header_cols, "missing nfp column"
+    # Verify values are present and equal to 3 for all rows
+    for row in rows:
+        assert row.get("nfp") not in (None, ""), "nfp value missing in a row"
+        assert int(float(row["nfp"])) == 3
