@@ -131,6 +131,11 @@ def eval_forward(
     random_boundary: bool = typer.Option(
         False, "--random", help="Use a random sampled boundary (deterministic with --seed)."
     ),
+    near_axis: bool = typer.Option(
+        False,
+        "--near-axis",
+        help="Use a near-axis QS/QI-friendly seed (deterministic with --seed).",
+    ),
     nfp: int = typer.Option(3, help="NFP used with --random."),
     seed: int = typer.Option(0, help="Seed used with --random."),
     cache_dir: Path = typer.Option(
@@ -145,17 +150,26 @@ def eval_forward(
     problem: str = typer.Option("p1", help="Problem id for scoring/metrics (e.g., p1/p2/p3)."),
     json_out: bool = typer.Option(False, "--json", help="Emit raw JSON metrics."),
 ) -> None:
-    if sum([bool(example), boundary_json is not None, bool(random_boundary)]) != 1:
-        raise typer.BadParameter("Choose exactly one of --example, --boundary-json, or --random")
+    if sum([bool(example), boundary_json is not None, bool(random_boundary), bool(near_axis)]) != 1:
+        raise typer.BadParameter(
+            "Choose exactly one of --example, --boundary-json, --random, or --near-axis"
+        )
 
     if example:
         from .physics.constel_api import example_boundary
 
         b = example_boundary()
-    elif random_boundary:
-        from .eval.boundary_param import sample_random, validate as validate_boundary
+    elif random_boundary or near_axis:
+        from .eval.boundary_param import (
+            sample_random,
+            sample_near_axis_qs,
+            validate as validate_boundary,
+        )
 
-        b = sample_random(nfp=nfp, seed=seed)
+        if near_axis:
+            b = sample_near_axis_qs(nfp=nfp, seed=seed)
+        else:
+            b = sample_random(nfp=nfp, seed=seed)
         validate_boundary(b)
     else:
         assert boundary_json is not None
@@ -495,6 +509,11 @@ def agent_run(
     mf_max_high: Optional[int] = typer.Option(
         None, help="Cap number of real-eval survivors per batch."
     ),
+    seed_mode: str = typer.Option(
+        "random",
+        help="Seed generator for new proposals: random|near-axis",
+        case_sensitive=False,
+    ),
 ) -> None:
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
@@ -557,6 +576,7 @@ def agent_run(
             mf_threshold=mf_threshold,
             mf_quantile=mf_quantile,
             mf_max_high=mf_max_high,
+            seed_mode=seed_mode,
         )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")
