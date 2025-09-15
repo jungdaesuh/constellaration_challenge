@@ -59,6 +59,16 @@ Optimization
 - Toy sphere: `constelx opt cmaes --toy --budget 20 --seed 0`
 - Boundary mode: `constelx opt cmaes --nfp 3 --budget 50 --seed 0`
 
+Optimization baselines (trust‑constr / ALM)
+- Trust‑constr (2D helical coefficients):
+  `constelx opt run --baseline trust-constr --nfp 3 --budget 10`
+- Augmented‑Lagrangian (simple penalty outer loop):
+  `constelx opt run --baseline alm --nfp 3 --budget 10`
+- With physics path (requires problem id):
+  `constelx opt run --baseline trust-constr --nfp 3 --budget 10 --use-physics --problem p1`
+  When `--use-physics` is set, metrics and scoring route through the official evaluator
+  if available; otherwise the command falls back to the placeholder path.
+
 Agent
 - Random search: `constelx agent run --nfp 3 --budget 6 --seed 0 --runs-dir runs`
 - Near-axis seeding: `constelx agent run --nfp 3 --budget 6 --seed-mode near-axis`
