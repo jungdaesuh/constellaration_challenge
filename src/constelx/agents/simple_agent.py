@@ -64,6 +64,12 @@ class AgentConfig:
     mf_max_high: int | None = None
     # Seed generator: "random" or "near-axis"
     seed_mode: str = "random"
+    # Novelty gating
+    novelty_skip: bool = False
+    novelty_metric: str = "l2"  # l2|cosine|allclose
+    novelty_eps: float = 1e-6
+    novelty_window: int = 128
+    novelty_db: Path | None = None
 
 
 def _timestamp() -> str:
@@ -257,6 +263,12 @@ def run(config: AgentConfig) -> Path:
     metrics_csv_path = out_dir / "metrics.csv"
     best_json_path = out_dir / "best.json"
     readme_path = out_dir / "README.md"
+    # Novelty DB path (optional)
+    novelty_db_path = (
+        (config.novelty_db if config.novelty_db is not None else out_dir / "novelty.jsonl")
+        if config.novelty_skip
+        else None
+    )
 
     # Resume bookkeeping
     completed = 0
@@ -291,6 +303,83 @@ def run(config: AgentConfig) -> Path:
     rng_seed = int(config.seed)
     budget = int(config.budget)
     problem = (config.problem or "p1") if config.use_physics else "p1"
+
+    # ---------------- Novelty helpers ----------------
+    from collections import deque
+    import numpy as _np
+
+    def _flatten_map(boundary: Mapping[str, Any]) -> Mapping[str, float]:
+        # Include nfp to avoid collisions across NFPs
+        out: Dict[str, float] = {"nfp": float(boundary.get("n_field_periods", 0) or 0)}
+        try:
+            r_cos = boundary.get("r_cos") or []
+            z_sin = boundary.get("z_sin") or []
+            for i, row in enumerate(r_cos):
+                for j, v in enumerate(row):
+                    out[f"r_cos_{i}_{j}"] = float(v)
+            for i, row in enumerate(z_sin):
+                for j, v in enumerate(row):
+                    out[f"z_sin_{i}_{j}"] = float(v)
+        except Exception:
+            pass
+        return out
+
+    def _flatten_vec(boundary: Mapping[str, Any]) -> tuple[int, _np.ndarray]:
+        nfp_val = int(boundary.get("n_field_periods", 0) or 0)
+        rc = boundary.get("r_cos") or []
+        zs = boundary.get("z_sin") or []
+        vals: list[float] = [float(nfp_val)]
+        try:
+            for row in rc:
+                for v in row:
+                    vals.append(float(v))
+            for row in zs:
+                for v in row:
+                    vals.append(float(v))
+        except Exception:
+            pass
+        return nfp_val, _np.asarray(vals, dtype=float)
+
+    def _is_novel_local(boundary: Mapping[str, Any], window: dict[int, deque[_np.ndarray]]) -> bool:
+        nfp_val, v = _flatten_vec(boundary)
+        hist = window.get(nfp_val)
+        if not hist:
+            return True
+        metric = (config.novelty_metric or "l2").lower()
+        eps = float(config.novelty_eps)
+        if metric == "cosine":
+
+            def cdist(a: _np.ndarray, b: _np.ndarray) -> float:
+                na = _np.linalg.norm(a)
+                nb = _np.linalg.norm(b)
+                if na == 0 or nb == 0:
+                    return float("inf")
+                cos = float(a.dot(b) / (na * nb))
+                return 1.0 - cos
+        elif metric == "allclose":
+
+            def cdist(a: _np.ndarray, b: _np.ndarray) -> float:
+                return 0.0 if _np.allclose(a, b, atol=eps, rtol=0.0) else float("inf")
+        else:  # l2
+
+            def cdist(a: _np.ndarray, b: _np.ndarray) -> float:
+                d = a - b
+                return float(_np.sqrt(float(d.dot(d))))
+
+        for u in hist:
+            if cdist(v, u) <= eps:
+                return False
+        return True
+
+    novelty_window: dict[int, deque[_np.ndarray]] = {}
+    novelty_db = None
+    if config.novelty_skip and novelty_db_path is not None:
+        try:
+            from ..data.results_db import ResultsDB
+
+            novelty_db = ResultsDB(novelty_db_path)
+        except Exception:
+            novelty_db = None
 
     def log_entry(
         it: int,
@@ -360,6 +449,13 @@ def run(config: AgentConfig) -> Path:
                 "boundary": boundary,
                 "nfp": nfp_val,
             }
+        # Persist novelty record when requested
+        if config.novelty_skip and novelty_db is not None and novelty_db_path is not None:
+            try:
+                novelty_db.add(_flatten_map(boundary), {"agg_score": float(agg_s)})
+                novelty_db.save()
+            except Exception:
+                pass
 
     # Optional correction hook (eci_linear)
     hook: Optional[_CorrectionHook] = None
@@ -524,6 +620,45 @@ def run(config: AgentConfig) -> Path:
                                 completed += 1
                                 idx += 1
                                 continue
+                        # Novelty skip (on seeds)
+                        if config.novelty_skip:
+                            # Check persisted DB first
+                            if novelty_db is not None:
+                                try:
+                                    if not novelty_db.is_novel(
+                                        _flatten_map(b), atol=float(config.novelty_eps), rtol=0.0
+                                    ):
+                                        log_entry(
+                                            it,
+                                            idx,
+                                            seed_val,
+                                            b,
+                                            {
+                                                "feasible": False,
+                                                "fail_reason": "duplicate_novelty",
+                                                "source": "placeholder",
+                                            },
+                                            float("inf"),
+                                        )
+                                        idx += 1
+                                        continue
+                                except Exception:
+                                    pass
+                            if not _is_novel_local(b, novelty_window):
+                                log_entry(
+                                    it,
+                                    idx,
+                                    seed_val,
+                                    b,
+                                    {
+                                        "feasible": False,
+                                        "fail_reason": "duplicate_novelty",
+                                        "source": "placeholder",
+                                    },
+                                    float("inf"),
+                                )
+                                idx += 1
+                                continue
                         validate_boundary(b)
                         b = maybe_correct(b)
                     except Exception:
@@ -559,6 +694,44 @@ def run(config: AgentConfig) -> Path:
                                 float("inf"),
                             )
                             completed += 1
+                            idx += 1
+                            continue
+                    # Novelty skip (on generated)
+                    if config.novelty_skip:
+                        if novelty_db is not None:
+                            try:
+                                if not novelty_db.is_novel(
+                                    _flatten_map(b), atol=float(config.novelty_eps), rtol=0.0
+                                ):
+                                    log_entry(
+                                        it,
+                                        idx,
+                                        seed_val,
+                                        b,
+                                        {
+                                            "feasible": False,
+                                            "fail_reason": "duplicate_novelty",
+                                            "source": "placeholder",
+                                        },
+                                        float("inf"),
+                                    )
+                                    idx += 1
+                                    continue
+                            except Exception:
+                                pass
+                        if not _is_novel_local(b, novelty_window):
+                            log_entry(
+                                it,
+                                idx,
+                                seed_val,
+                                b,
+                                {
+                                    "feasible": False,
+                                    "fail_reason": "duplicate_novelty",
+                                    "source": "placeholder",
+                                },
+                                float("inf"),
+                            )
                             idx += 1
                             continue
                     validate_boundary(b)
@@ -631,6 +804,14 @@ def run(config: AgentConfig) -> Path:
                         continue
                     log_entry(it, j, seeds[j], b, m, agg_s, elapsed_ms=(_t1 - _t0) * 1000.0)
                     completed += 1
+            # Update novelty memory after each batch to include evaluated items
+            if config.novelty_skip:
+                from collections import deque as _deque  # shadow safe
+
+                for bb in batch:
+                    nfpv, vv = _flatten_vec(bb)
+                    dq = novelty_window.setdefault(nfpv, _deque(maxlen=int(config.novelty_window)))
+                    dq.append(vv)
             if idx % 100 == 0:
                 it += 1
 
