@@ -8,18 +8,15 @@ import pytest
 try:
     import torch
 except ImportError:  # pragma: no cover - skip when torch unavailable
-    torch = None  # type: ignore[assignment]
+    pytest.skip("PyTorch not installed", allow_module_level=True)
+    raise
 
-from constelx.surrogate.screen import SurrogateScreenError, load_scorer
+from constelx.surrogate.screen import load_scorer
 from constelx.surrogate.train import MLP
-
-requires_torch = pytest.mark.skipif(torch is None, reason="PyTorch not installed")
 
 
 def _write_dummy_model(tmp_path: Path) -> tuple[Path, Path]:
     model = MLP(2, 1)
-    if torch is None:  # pragma: no cover - guarded by marker
-        raise SurrogateScreenError("torch required")
     with torch.no_grad():
         for layer in model.net:  # type: ignore[attr-defined]
             if isinstance(layer, torch.nn.Linear):
@@ -37,7 +34,6 @@ def _write_dummy_model(tmp_path: Path) -> tuple[Path, Path]:
     return model_path, metadata_path
 
 
-@requires_torch
 def test_surrogate_scorer_scores_boundary(tmp_path: Path) -> None:
     model_path, metadata_path = _write_dummy_model(tmp_path)
     scorer = load_scorer(model_path, metadata_path)
