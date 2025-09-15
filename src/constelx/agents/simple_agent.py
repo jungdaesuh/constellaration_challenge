@@ -287,9 +287,25 @@ def run(config: AgentConfig) -> Path:
     completed = 0
     best_score = float("inf")
     best_payload: Dict[str, Any] = {}
+    metrics_counted = False
+    if metrics_csv_path.exists():
+        try:
+            with metrics_csv_path.open("r", newline="") as mf:
+                dict_reader = csv.DictReader(mf)
+                seen_row = False
+                for row in dict_reader:
+                    seen_row = True
+                    phase_val = (row.get("phase") or "").strip().lower()
+                    if phase_val == "surrogate":
+                        continue
+                    completed += 1
+                metrics_counted = seen_row
+        except Exception:
+            completed = 0
+            metrics_counted = False
     if proposals_path.exists():
-        # Count existing proposals
-        completed = sum(1 for _ in proposals_path.open())
+        if not metrics_counted:
+            completed = sum(1 for _ in proposals_path.open())
     if best_json_path.exists():
         try:
             best_payload = json.loads(best_json_path.read_text())
@@ -306,8 +322,8 @@ def run(config: AgentConfig) -> Path:
     if metrics_csv_path.exists() and metrics_csv_path.stat().st_size > 0:
         try:
             with metrics_csv_path.open("r", newline="") as rf:
-                reader = csv.reader(rf)
-                header = next(reader, None)
+                csv_reader = csv.reader(rf)
+                header = next(csv_reader, None)
             if header:
                 metrics_writer = csv.DictWriter(metrics_f, fieldnames=header, extrasaction="ignore")
         except Exception:
