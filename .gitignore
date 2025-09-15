@@ -11,3 +11,7 @@ runs/
 .env
 .mpl_cache/
 *.egg-info/
+.claude/
+.mcp.json
+logs/
+submissions/

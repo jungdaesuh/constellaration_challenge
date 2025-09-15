@@ -514,6 +514,28 @@ def agent_run(
         help="Seed generator for new proposals: random|near-axis",
         case_sensitive=False,
     ),
+    # Novelty gating
+    novelty_skip: bool = typer.Option(
+        False,
+        "--novelty-skip",
+        help="Skip near-duplicate boundaries to save evaluator calls.",
+    ),
+    novelty_metric: str = typer.Option(
+        "l2",
+        help="Novelty metric: l2|cosine|allclose (window-based check).",
+    ),
+    novelty_eps: float = typer.Option(
+        1e-6,
+        help="Novelty threshold (distance<=eps considered duplicate).",
+    ),
+    novelty_window: int = typer.Option(
+        128,
+        help="Window size of recent boundaries kept for novelty checks.",
+    ),
+    novelty_db: Optional[Path] = typer.Option(
+        None,
+        help="Optional JSONL path to persist novelty vectors across runs.",
+    ),
 ) -> None:
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
@@ -577,6 +599,11 @@ def agent_run(
             mf_quantile=mf_quantile,
             mf_max_high=mf_max_high,
             seed_mode=seed_mode,
+            novelty_skip=novelty_skip,
+            novelty_metric=novelty_metric,
+            novelty_eps=novelty_eps,
+            novelty_window=novelty_window,
+            novelty_db=novelty_db,
         )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")
