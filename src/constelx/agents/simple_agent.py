@@ -323,9 +323,7 @@ def run(config: AgentConfig) -> Path:
             best_payload = {}
             best_score = float("inf")
 
-    def _ensure_metrics_columns(
-        path: Path, required: tuple[str, ...]
-    ) -> list[str] | None:
+    def _ensure_metrics_columns(path: Path, required: tuple[str, ...]) -> list[str] | None:
         if not path.exists() or path.stat().st_size == 0:
             return None
         try:
@@ -507,9 +505,7 @@ def run(config: AgentConfig) -> Path:
             for col in forced_metric_columns:
                 if col not in fieldnames:
                     fieldnames.append(col)
-            metrics_writer = csv.DictWriter(
-                metrics_f, fieldnames=fieldnames, extrasaction="ignore"
-            )
+            metrics_writer = csv.DictWriter(metrics_f, fieldnames=fieldnames, extrasaction="ignore")
             if not metrics_csv_path.exists() or metrics_csv_path.stat().st_size == 0:
                 metrics_writer.writeheader()
         else:
