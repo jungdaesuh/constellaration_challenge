@@ -70,6 +70,13 @@ class AgentConfig:
     novelty_eps: float = 1e-6
     novelty_window: int = 128
     novelty_db: Path | None = None
+    # Surrogate screening
+    surrogate_screen: bool = False
+    surrogate_model: Path | None = None
+    surrogate_metadata: Path | None = None
+    surrogate_threshold: float | None = None
+    surrogate_quantile: float | None = None
+    surrogate_keep_max: int | None = None
 
 
 def _timestamp() -> str:
@@ -250,6 +257,12 @@ def run(config: AgentConfig) -> Path:
             cfg["resume"] = str(cfg["resume"])
         if cfg.get("init_seeds") is not None:
             cfg["init_seeds"] = str(cfg["init_seeds"])  # Path -> str
+        if cfg.get("cache_dir") is not None:
+            cfg["cache_dir"] = str(cfg["cache_dir"])
+        if cfg.get("surrogate_model") is not None:
+            cfg["surrogate_model"] = str(cfg["surrogate_model"])
+        if cfg.get("surrogate_metadata") is not None:
+            cfg["surrogate_metadata"] = str(cfg["surrogate_metadata"])
         conf = {
             "run": cfg,
             "env": _gather_env_info(),
@@ -540,6 +553,76 @@ def run(config: AgentConfig) -> Path:
         except Exception:
             return bnd
 
+    surrogate_scorer = None
+    if config.surrogate_screen:
+        if config.surrogate_model is None:
+            raise ValueError("surrogate_screen requires surrogate_model path")
+        try:
+            from ..surrogate.screen import SurrogateScreenError, load_scorer
+        except Exception as exc:  # pragma: no cover - defensive
+            raise RuntimeError("surrogate screening unavailable") from exc
+        try:
+            surrogate_scorer = load_scorer(
+                Path(config.surrogate_model),
+                metadata_path=(
+                    Path(config.surrogate_metadata)
+                    if config.surrogate_metadata is not None
+                    else None
+                ),
+            )
+        except SurrogateScreenError as exc:  # pragma: no cover - import guard
+            raise RuntimeError(str(exc)) from exc
+
+    def _select_survivors(scores: List[float]) -> List[int]:
+        if not scores:
+            return []
+        idxs = list(range(len(scores)))
+        sorted_by_score = sorted(idxs, key=lambda i: scores[i])
+        survivors: set[int]
+        if config.surrogate_threshold is not None:
+            thr = float(config.surrogate_threshold)
+            survivors = {i for i in idxs if scores[i] <= thr}
+        else:
+            q = 0.5 if config.surrogate_quantile is None else float(config.surrogate_quantile)
+            q = max(0.0, min(1.0, q))
+            keep = max(1, int(round(q * len(sorted_by_score))))
+            survivors = set(sorted_by_score[:keep])
+        if config.surrogate_keep_max is not None:
+            kmax = int(config.surrogate_keep_max)
+            if kmax > 0:
+                survivors &= set(sorted_by_score[:kmax])
+            elif kmax == 0:
+                survivors = set()
+        if not survivors:
+            survivors = {sorted_by_score[0]}
+        return [i for i in idxs if i in survivors]
+
+    def apply_surrogate(
+        *,
+        batch: List[Dict[str, Any]],
+        seeds: List[int],
+        iteration: int,
+        indices: List[int],
+    ) -> tuple[List[Dict[str, Any]], List[int], List[int], Dict[int, float]]:
+        if surrogate_scorer is None or not batch:
+            return batch, seeds, list(range(len(batch))), {}
+        preds = surrogate_scorer.score_many(batch)
+        survivors_idx = _select_survivors(preds)
+        survivors_set = set(survivors_idx)
+        filtered_scores = {i: preds[i] for i in range(len(preds)) if i not in survivors_set}
+        for i, score in filtered_scores.items():
+            metrics = {
+                "feasible": False,
+                "fail_reason": "filtered_surrogate",
+                "source": "placeholder",
+                "phase": "surrogate",
+                "surrogate_score": float(score),
+            }
+            log_entry(iteration, indices[i], seeds[i], batch[i], metrics, float("inf"))
+        survivors_batch = [batch[i] for i in survivors_idx]
+        survivors_seeds = [seeds[i] for i in survivors_idx]
+        return survivors_batch, survivors_seeds, survivors_idx, filtered_scores
+
     # Load initial seed boundaries if provided
     seed_boundaries: List[Dict[str, Any]] = []
     if config.init_seeds is not None and Path(config.init_seeds).exists():
@@ -739,6 +822,19 @@ def run(config: AgentConfig) -> Path:
                 seeds.append(seed_val)
                 batch.append(b)
                 idx += 1
+            if surrogate_scorer is not None and batch:
+                base_idx = idx - len(batch)
+                idxs = [base_idx + k for k in range(len(batch))]
+                batch, seeds, _, _ = apply_surrogate(
+                    batch=batch,
+                    seeds=seeds,
+                    iteration=it,
+                    indices=idxs,
+                )
+                if completed >= budget:
+                    break
+                if not batch:
+                    continue
             # Evaluate
             if not batch:
                 break
@@ -833,16 +929,18 @@ def run(config: AgentConfig) -> Path:
             xs = es.ask()
             xs_eval: List[List[float]] = []
             scores: List[float] = []
+            proposals: List[Dict[str, Any]] = []
+            seeds_batch: List[int] = []
+            xs_params: List[List[float]] = []
+            idxs: List[int] = []
             for j, x in enumerate(xs):
                 if completed >= budget:
                     break
                 seed_val = (rng_seed + it * 10007 + j * 7919) % (2**31 - 1)
-                metrics: Dict[str, Any]
                 if (config.seed_mode or "random").lower() == "near-axis":
                     b = sample_near_axis_qs(nfp=_next_nfp(), seed=seed_val)
                 else:
                     b = sample_random(nfp=_next_nfp(), seed=seed_val)
-                # Override two helical coeffs deterministically from CMA-ES params
                 try:
                     b["r_cos"][1][5] = float(-abs(x[0]))
                     b["z_sin"][1][5] = float(abs(x[1]))
@@ -857,27 +955,57 @@ def run(config: AgentConfig) -> Path:
                             helical_ratio_max=float(config.guard_geom_helical_ratio_max),
                         )
                         if not ok:
-                            s = float("inf")
                             metrics = {
                                 "feasible": False,
                                 "fail_reason": "invalid_geometry",
                                 "source": "placeholder",
                             }
-                            log_entry(
-                                it,
-                                j,
-                                seed_val,
-                                b,
-                                metrics,
-                                s,
-                            )
+                            log_entry(it, j, seed_val, b, metrics, float("inf"))
                             xs_eval.append(list(x))
-                            scores.append(s)
+                            scores.append(float("inf"))
                             completed += 1
                             continue
                     validate_boundary(b)
                     b = maybe_correct(b)
-                    _t0 = time.perf_counter()
+                except Exception:
+                    metrics = {}
+                    log_entry(it, j, seed_val, b, metrics, float("inf"))
+                    xs_eval.append(list(x))
+                    scores.append(float("inf"))
+                    completed += 1
+                    continue
+                proposals.append(b)
+                seeds_batch.append(seed_val)
+                xs_params.append(list(x))
+                idxs.append(j)
+
+            if surrogate_scorer is not None and proposals and completed < budget:
+                xs_params_all = list(xs_params)
+                idxs_all = list(idxs)
+                proposals, seeds_batch, survivors_idx, filtered_scores = apply_surrogate(
+                    batch=proposals,
+                    seeds=seeds_batch,
+                    iteration=it,
+                    indices=idxs,
+                )
+                for i in sorted(filtered_scores):
+                    xs_eval.append(xs_params_all[i])
+                    scores.append(float("inf"))
+                xs_params = [xs_params_all[i] for i in survivors_idx]
+                idxs = [idxs_all[i] for i in survivors_idx]
+            if completed >= budget:
+                if xs_eval:
+                    es.tell(xs_eval, scores)
+                break
+
+            for local_idx, b in enumerate(proposals):
+                if completed >= budget:
+                    break
+                seed_val = seeds_batch[local_idx]
+                x_vec = xs_params[local_idx]
+                idx_val = idxs[local_idx]
+                _t0 = time.perf_counter()
+                try:
                     metrics = eval_forward(
                         b,
                         cache_dir=config.cache_dir,
@@ -885,26 +1013,25 @@ def run(config: AgentConfig) -> Path:
                         use_real=config.use_physics,
                         problem=problem,
                     )
-                    _t1 = time.perf_counter()
                     s = (
                         float(metrics["score"])
                         if "score" in metrics
                         else eval_score(metrics, problem=problem if config.use_physics else None)
                     )
                 except Exception:
-                    # Skip invalid points; penalize in CMA-ES
-                    s = float("inf")
                     metrics = {}
+                    s = float("inf")
+                _t1 = time.perf_counter()
                 log_entry(
                     it,
-                    j,
+                    idx_val,
                     seed_val,
                     b,
                     metrics,
                     s,
-                    elapsed_ms=(_t1 - _t0) * 1000.0 if "_t1" in locals() else None,
+                    elapsed_ms=(_t1 - _t0) * 1000.0,
                 )
-                xs_eval.append(list(x))
+                xs_eval.append(list(x_vec))
                 scores.append(s)
                 completed += 1
             if xs_eval:

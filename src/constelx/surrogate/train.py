@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import cast
 
@@ -12,9 +13,10 @@ from ..physics.pbfm import conflict_free_update
 
 
 def _boundary_cols(df: pd.DataFrame) -> list[str]:
-    return [
+    cols = [
         c for c in df.columns if c.startswith("boundary.r_cos") or c.startswith("boundary.z_sin")
     ]
+    return sorted(cols)
 
 
 class MLP(nn.Module):
@@ -36,7 +38,8 @@ def train_simple_mlp(
     cache_dir: Path, output_dir: Path, *, use_pbfm: bool = False, steps: int = 20
 ) -> None:
     df = pd.read_parquet(Path(cache_dir) / "subset.parquet")
-    X = df[_boundary_cols(df)].fillna(0.0).to_numpy()
+    feature_cols = _boundary_cols(df)
+    X = df[feature_cols].fillna(0.0).to_numpy()
     # Toy target: pick one available scalar metric if present, else zeros
     target_col = next(
         (c for c in df.columns if c.startswith("metrics.") and df[c].dtype != object),
@@ -93,3 +96,5 @@ def train_simple_mlp(
         opt.step()
     output_dir.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), Path(output_dir) / "mlp.pt")
+    metadata = {"feature_columns": feature_cols}
+    (Path(output_dir) / "metadata.json").write_text(json.dumps(metadata, indent=2))
