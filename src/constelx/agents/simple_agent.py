@@ -1013,11 +1013,11 @@ def run(config: AgentConfig) -> Path:
                         use_real=config.use_physics,
                         problem=problem,
                     )
-                    s = (
-                        float(metrics["score"])
-                        if "score" in metrics
-                        else eval_score(metrics, problem=problem if config.use_physics else None)
-                    )
+                    raw_score = metrics.get("score")
+                    if isinstance(raw_score, (int, float)):
+                        s = float(raw_score)
+                    else:
+                        s = eval_score(metrics, problem=problem if config.use_physics else None)
                 except Exception:
                     metrics = {}
                     s = float("inf")

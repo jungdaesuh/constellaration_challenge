@@ -7,8 +7,8 @@ from typing import Any, Mapping, Sequence
 
 try:
     import torch
-except Exception as exc:  # pragma: no cover - import guard
-    torch = None  # type: ignore[assignment]
+except Exception:  # pragma: no cover - import guard
+    torch = None
 
 from .train import MLP
 
@@ -70,23 +70,26 @@ def _feature_value(boundary: Mapping[str, Any], feature: str) -> float:
 class SurrogateScorer:
     """Utility to score boundaries with a trained surrogate."""
 
-    def __init__(self, model: MLP, feature_columns: Sequence[str], device: torch.device) -> None:  # type: ignore[valid-type]
+    def __init__(
+        self, model: MLP, feature_columns: Sequence[str], torch_module: Any, device: Any
+    ) -> None:
         self.model = model
         self.model.eval()
         self.device = device
         self.features = list(feature_columns)
+        self._torch = torch_module
 
-    def _vectors(self, boundaries: Sequence[Mapping[str, Any]]) -> torch.Tensor:  # type: ignore[valid-type]
+    def _vectors(self, boundaries: Sequence[Mapping[str, Any]]) -> Any:
         rows = [[_feature_value(b, feature) for feature in self.features] for b in boundaries]
-        return torch.tensor(rows, dtype=torch.float32, device=self.device)  # type: ignore[no-any-return]
+        return self._torch.tensor(rows, dtype=self._torch.float32, device=self.device)
 
     def score_many(self, boundaries: Sequence[Mapping[str, Any]]) -> list[float]:
         if not boundaries:
             return []
-        with torch.no_grad():  # type: ignore[union-attr]
+        with self._torch.no_grad():
             vecs = self._vectors(boundaries)
             preds = self.model(vecs)
-        flat = preds.reshape(-1)  # type: ignore[union-attr]
+        flat = preds.reshape(-1)
         return [float(x) for x in flat.detach().cpu().tolist()]
 
     def score_one(self, boundary: Mapping[str, Any]) -> float:
@@ -97,14 +100,17 @@ def load_scorer(
     model_path: Path,
     metadata_path: Path | None = None,
     *,
-    device: str | torch.device | None = None,  # type: ignore[valid-type]
+    device: str | Any | None = None,
 ) -> SurrogateScorer:
     if torch is None:  # pragma: no cover - import guard
         raise SurrogateScreenError("PyTorch is required for surrogate screening")
+    torch_module = torch
     model_file = Path(model_path)
     if not model_file.exists():
         raise SurrogateScreenError(f"surrogate model not found: {model_file}")
-    meta_file = Path(metadata_path) if metadata_path is not None else model_file.parent / "metadata.json"
+    meta_file = (
+        Path(metadata_path) if metadata_path is not None else model_file.parent / "metadata.json"
+    )
     metadata = _load_metadata(meta_file)
     feat_dim = len(metadata.feature_columns)
     try:
@@ -112,13 +118,13 @@ def load_scorer(
     except Exception as exc:  # pragma: no cover - defensive
         raise SurrogateScreenError("failed to construct surrogate model") from exc
     try:
-        state = torch.load(model_file, map_location="cpu")
+        state = torch_module.load(model_file, map_location="cpu")
         model.load_state_dict(state)
     except Exception as exc:
         raise SurrogateScreenError(f"failed to load surrogate weights from {model_file}") from exc
-    dev = torch.device(device) if device is not None else torch.device("cpu")  # type: ignore[arg-type]
+    dev = torch_module.device(device) if device is not None else torch_module.device("cpu")
     model.to(dev)
-    return SurrogateScorer(model, metadata.feature_columns, dev)
+    return SurrogateScorer(model, metadata.feature_columns, torch_module, dev)
 
 
 __all__ = ["SurrogateScorer", "SurrogateScreenError", "SurrogateMetadata", "load_scorer"]

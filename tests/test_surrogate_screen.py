@@ -13,7 +13,6 @@ except ImportError:  # pragma: no cover - skip when torch unavailable
 from constelx.surrogate.screen import SurrogateScreenError, load_scorer
 from constelx.surrogate.train import MLP
 
-
 requires_torch = pytest.mark.skipif(torch is None, reason="PyTorch not installed")
 
 
