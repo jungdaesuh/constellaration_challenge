@@ -16,7 +16,7 @@ This repository ships with stubs and guardrails so you can iterate quickly. A re
 5. **Physics‑constrained generation (optional)**:
    - Use `constelx.physics.pcfm` to project generated fields onto hard constraints (norm/ratio/product examples provided).
    - Use `constelx.physics.pbfm` training utilities to add residuals without conflicting with distribution learning.
-6. **Submission packaging**: (planned) `constelx submit pack` to export boundaries to the leaderboard format.
+6. **Submission packaging**: `constelx submit pack` exports boundaries to the leaderboard format.
 
 —
 

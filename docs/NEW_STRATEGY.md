@@ -1,3 +1,5 @@
+Note: This content has been merged into `docs/STRATEGY.md` (research/plan) and `docs/ARCHITECTURE.md` (implementation aligned to this repo). Prefer those docs for up‑to‑date guidance; the content below is preserved for background and may reference scaffolding/tools not used here.
+
 Below is a complete, self‑contained plan to compete for (and win) the ConStellaration Challenge, built directly from the materials you uploaded. I’ve (1) distilled what “winning” requires, (2) analyzed each paper for leverageable ideas, (3) fused the insights into a coherent technical strategy, (4) extracted concrete, reusable techniques, (5) laid out an execution plan to top the leaderboard, (6) designed a self‑improving system with LLM agents, and (7) backed the approach with math/physics/computation arguments.
 
 ⸻
