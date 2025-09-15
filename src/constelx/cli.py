@@ -536,6 +536,30 @@ def agent_run(
         None,
         help="Optional JSONL path to persist novelty vectors across runs.",
     ),
+    surrogate_screen: bool = typer.Option(
+        False,
+        help="Enable surrogate screening before evaluator calls.",
+    ),
+    surrogate_model: Optional[Path] = typer.Option(
+        None,
+        help="Path to surrogate weights (e.g., outputs/surrogates/mlp/mlp.pt).",
+    ),
+    surrogate_metadata: Optional[Path] = typer.Option(
+        None,
+        help="Optional metadata JSON (defaults to metadata.json next to the model).",
+    ),
+    surrogate_threshold: Optional[float] = typer.Option(
+        None,
+        help="Keep proposals with surrogate score <= threshold.",
+    ),
+    surrogate_quantile: Optional[float] = typer.Option(
+        None,
+        help="Surrogate keep quantile when threshold not set (default 0.5).",
+    ),
+    surrogate_keep_max: Optional[int] = typer.Option(
+        None,
+        help="Maximum survivors per batch after surrogate screening.",
+    ),
 ) -> None:
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
@@ -604,6 +628,12 @@ def agent_run(
             novelty_eps=novelty_eps,
             novelty_window=novelty_window,
             novelty_db=novelty_db,
+            surrogate_screen=surrogate_screen,
+            surrogate_model=surrogate_model,
+            surrogate_metadata=surrogate_metadata,
+            surrogate_threshold=surrogate_threshold,
+            surrogate_quantile=surrogate_quantile,
+            surrogate_keep_max=surrogate_keep_max,
         )
     )
     console.print(f"Run complete. Artifacts in: [bold]{out}[/bold]")

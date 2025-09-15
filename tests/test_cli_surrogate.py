@@ -46,6 +46,7 @@ def test_surrogate_train_cli_runs(tmp_path: Path) -> None:
     )
     assert result2.exit_code == 0
     assert (out_dir / "mlp.pt").exists()
+    assert (out_dir / "metadata.json").exists()
 
 
 @pytest.mark.skipif(not torch_available(), reason="PyTorch not installed")
@@ -68,3 +69,4 @@ def test_surrogate_train_cli_runs_with_pbfm(tmp_path: Path) -> None:
     )
     assert res.exit_code == 0
     assert (out_dir / "mlp.pt").exists()
+    assert (out_dir / "metadata.json").exists()
