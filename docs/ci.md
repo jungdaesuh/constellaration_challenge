@@ -29,4 +29,3 @@ Surrogate (optional)
 Future Improvements
 - If needed, introduce a dedicated surrogate CI job that installs the surrogate extra and runs only surrogate tests to keep the core job fast while still validating surrogate functionality.
 - Consider using a prebuilt container image for the physics job with NetCDF/CMake/Ninja preinstalled to reduce bootstrap time further.
-

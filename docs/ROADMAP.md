@@ -52,6 +52,13 @@ This repository ships with stubs and guardrails so you can iterate quickly. A re
 
 —
 
+Status updates
+- Agent novelty gating (#74): Implemented.
+  - Flags: `--novelty-skip`, `--novelty-metric l2|cosine|allclose`, `--novelty-eps`, `--novelty-window`, `--novelty-db`.
+  - Behavior: skip near-duplicate boundaries without spending evaluator calls; log `fail_reason=duplicate_novelty`; persist novelty vectors to `novelty.jsonl` when enabled.
+
+—
+
 ## Phased Delivery
 
 This repo’s work is organized into phases with tracked issues. Use these to plan PRs and CI sequencing.
