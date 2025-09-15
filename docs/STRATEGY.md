@@ -1,5 +1,31 @@
 # Strategy — Agent and Research Roadmap
 
+TL;DR (repo‑aligned)
+- Train simple, fast surrogates on ConStellaration‑style data (MLP baseline available) and optionally add a PBFM‑style conflict‑free residual term during training.
+- Enforce constraints at inference via correction hooks: ECI (linear Ax=b projection) and PCFM (nonlinear Gauss–Newton projection). Both are wired into `constelx agent run` with `--correction eci_linear|pcfm` and JSON specs (see `examples/pcfm_*.json`).
+- Improve throughput with multi‑fidelity proxy gating (`--mf-proxy ...`), novelty gating, and optional surrogate screening before evaluator calls.
+- Optimize with currently implemented baselines (trust‑constr, ALM, CMA‑ES) and the ablation harness; plan feasibility‑first TR‑BO (FuRBO/BoTorch) as a next milestone.
+- Keep runs reproducible and packageable: the agent writes `runs/<ts>/...` and `constelx submit pack` creates the submission zip.
+
+What’s implemented vs. planned
+- Implemented now
+  - Constraint hooks: `eci_linear` and `pcfm` under `constelx.agents.corrections.*`.
+  - Multi‑fidelity gating, caching, and real‑evaluator timeouts/retries.
+  - Surrogate baseline with optional PBFM conflict‑free update (`constelx surrogate train --use-pbfm`).
+  - Optimizers: `opt cmaes` + `opt run --baseline trust-constr|alm`.
+  - Agent loop: resume, geometry guards, novelty gating, surrogate screening, NFP round‑robin; artifacts and schema verified by tests.
+  - Submission packaging: `constelx submit pack` (supports `--top-k`).
+- Planned (next steps)
+  - Feasibility‑first TR‑BO (FuRBO/BoTorch), qEHVI for P3, broader surrogate families.
+  - Optional LLM‑assisted planner that emits ablation specs for `constelx ablate run`.
+
+Practical CLI mapping
+- ECI: `constelx agent run --correction eci_linear --constraints-file constraints.json`
+- PCFM: `constelx agent run --correction pcfm --constraints-file examples/pcfm_norm.json [--pcfm-gn-iters ...]`
+- Multi‑fidelity: `constelx agent run --mf-proxy --mf-quantile 0.3`
+- Surrogate training: `constelx surrogate train --out-dir outputs/surrogates/mlp --use-pbfm`
+- Baselines: `constelx opt run --baseline trust-constr --use-physics --problem p1`
+
 This document is the higher-level strategy for ConStelX: it frames the
 challenge, physics heuristics, model/agent portfolio, and a self-improving
 agentic loop. It complements the engineering roadmap in `docs/ROADMAP.md`,
@@ -185,6 +211,9 @@ References & sources
 Final word
 
 The combination of (i) constraint‑preserving generative sampling (PCFM/PBFM), (ii) physics‑informed surrogates trained on the official database, (iii) local polishers (CMA‑ES/BO) with high‑m sparsity priors, and (iv) an agentic research loop (MLE‑STAR + ASI‑ARCH) gives us the right ingredients to systematically climb the leaderboards in P1–P3. The math backs the moves (constraint invariance; e\_{L\nabla B} scaling; QI/mirror coupling), and the engineering choices are aligned with the official toolchain. This is the shortest path to strong results now, and a scalable path to self‑improving discovery thereafter.
+
+Note on LLM agents (scope)
+- The current codebase does not integrate LLMs. The “agent” is a deterministic pipeline (propose → evaluate → select) with ablations, novelty, MF gating, constraint hooks, and baseline optimizers. LLM‑driven planner/orchestrator roles remain a research direction and should interface by emitting ablation specs consumable by `constelx ablate run`, with caching and reproducibility.
 
 Below is a practical, production‑oriented plan to (i) pick LLMs for your agents (with current, verifiable sources), (ii) give your GPT‑5 coding agent a concrete implementation blueprint end‑to‑end, (iii) map that blueprint to your Apple M3 Max vs. cloud, and (iv) turn the whole thing into a self‑improving system that reliably climbs—and stays at the top of—the ConStellaration leaderboard.
 
