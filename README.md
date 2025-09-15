@@ -92,6 +92,15 @@ Novelty gating (skip near-duplicates)
   - Persistence: `--novelty-db path.jsonl` to persist novelty across runs (defaults to `runs/<ts>/novelty.jsonl` when enabled)
 - Logging: duplicates are recorded to `metrics.csv` with `feasible=False` and `fail_reason=duplicate_novelty` without consuming budget.
 
+Surrogate screening (proxy gating before evaluator)
+- Enable: `--surrogate-screen --surrogate-model outputs/surrogates/mlp/mlp.pt`
+  - Optional: `--surrogate-metadata PATH` (defaults to `metadata.json` alongside the model)
+- Tuning:
+  - Threshold: `--surrogate-threshold <float>` keeps candidates with predicted score ≤ threshold.
+  - Quantile: `--surrogate-quantile <q>` (default `0.5`) when no threshold is set; keep-lowest fraction per batch.
+  - Cap survivors: `--surrogate-keep-max <K>` to bound the number forwarded to the evaluator.
+- Logging: filtered entries appear in `metrics.csv` with `fail_reason=filtered_surrogate`, `phase=surrogate`, and a `surrogate_score` column.
+
 
  - PCFM correction (examples):
    - Norm equality: constrain helical amplitude to a circle of radius 0.06
@@ -106,7 +115,6 @@ Novelty gating (skip near-duplicates)
   - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8` or via top-level keys in the constraints JSON: `{gn_iters,damping,tol}`
 
 Upcoming (tracked)
-- Surrogate screening in the agent to pre-filter proposals before proxy/real evals (#73).
 - ResultsDB novelty gating to skip near-duplicate proposals (#74).
 
 Multi-fidelity gating
