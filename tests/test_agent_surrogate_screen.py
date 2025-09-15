@@ -13,7 +13,6 @@ except ImportError:  # pragma: no cover - skip when torch unavailable
 from constelx.agents.simple_agent import AgentConfig, run
 from constelx.surrogate.train import MLP
 
-
 requires_torch = pytest.mark.skipif(torch is None, reason="PyTorch not installed")
 
 
