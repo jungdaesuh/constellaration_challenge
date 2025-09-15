@@ -283,6 +283,13 @@ def run(config: AgentConfig) -> Path:
         else None
     )
 
+    # When surrogate screening is enabled, make sure metrics.csv always exposes the
+    # surrogate-specific bookkeeping columns so resume logic can distinguish proxy
+    # rows even if filtering starts after the first evaluation.
+    forced_metric_columns: tuple[str, ...] = ()
+    if config.surrogate_screen:
+        forced_metric_columns = ("phase", "surrogate_score")
+
     # Resume bookkeeping
     completed = 0
     best_score = float("inf")
@@ -296,7 +303,8 @@ def run(config: AgentConfig) -> Path:
                 for row in dict_reader:
                     seen_row = True
                     phase_val = (row.get("phase") or "").strip().lower()
-                    if phase_val == "surrogate":
+                    fail_reason_val = (row.get("fail_reason") or "").strip().lower()
+                    if phase_val == "surrogate" or fail_reason_val == "filtered_surrogate":
                         continue
                     completed += 1
                 metrics_counted = seen_row
@@ -315,11 +323,47 @@ def run(config: AgentConfig) -> Path:
             best_payload = {}
             best_score = float("inf")
 
+    def _ensure_metrics_columns(
+        path: Path, required: tuple[str, ...]
+    ) -> list[str] | None:
+        if not path.exists() or path.stat().st_size == 0:
+            return None
+        try:
+            with path.open("r", newline="") as rf:
+                dict_reader = csv.DictReader(rf)
+                rows = list(dict_reader)
+                header = list(dict_reader.fieldnames or [])
+        except Exception:
+            return None
+        missing = [col for col in required if col not in header]
+        if not missing:
+            return header
+        header.extend(missing)
+        with path.open("w", newline="") as wf:
+            writer = csv.DictWriter(wf, fieldnames=header)
+            writer.writeheader()
+            for row in rows:
+                for col in missing:
+                    row.setdefault(col, "")
+                writer.writerow(row)
+        return header
+
+    existing_header: list[str] | None = None
+    if metrics_csv_path.exists() and metrics_csv_path.stat().st_size > 0:
+        existing_header = _ensure_metrics_columns(metrics_csv_path, forced_metric_columns)
+
     # Open for append
     proposals_f = proposals_path.open("a")
     metrics_f = metrics_csv_path.open("a", newline="")
     metrics_writer: csv.DictWriter[str] | None = None
-    if metrics_csv_path.exists() and metrics_csv_path.stat().st_size > 0:
+    if existing_header:
+        try:
+            metrics_writer = csv.DictWriter(
+                metrics_f, fieldnames=existing_header, extrasaction="ignore"
+            )
+        except Exception:
+            metrics_writer = None
+    elif metrics_csv_path.exists() and metrics_csv_path.stat().st_size > 0:
         try:
             with metrics_csv_path.open("r", newline="") as rf:
                 csv_reader = csv.reader(rf)
@@ -459,8 +503,12 @@ def run(config: AgentConfig) -> Path:
         }
         if metrics_writer is None:
             # Initialize writer with current row's keys and create header
+            fieldnames = list(row.keys())
+            for col in forced_metric_columns:
+                if col not in fieldnames:
+                    fieldnames.append(col)
             metrics_writer = csv.DictWriter(
-                metrics_f, fieldnames=list(row.keys()), extrasaction="ignore"
+                metrics_f, fieldnames=fieldnames, extrasaction="ignore"
             )
             if not metrics_csv_path.exists() or metrics_csv_path.stat().st_size == 0:
                 metrics_writer.writeheader()
