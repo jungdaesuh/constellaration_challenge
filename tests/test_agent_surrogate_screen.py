@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -55,6 +57,19 @@ def test_agent_records_surrogate_filtered_rows(tmp_path: Path) -> None:
     )
     run_dir = run(cfg)
     metrics_path = run_dir / "metrics.csv"
-    rows = metrics_path.read_text().strip().splitlines()
-    assert rows, "metrics.csv should not be empty"
-    assert any("filtered_surrogate" in row for row in rows[1:]), "surrogate filter row missing"
+    with metrics_path.open(newline="") as fh:
+        reader = list(csv.DictReader(fh))
+    assert reader, "metrics.csv should not be empty"
+    surrogate_rows = [r for r in reader if (r.get("phase") or "").lower() == "surrogate"]
+    assert surrogate_rows, "surrogate filter row missing"
+
+    real_before = [r for r in reader if (r.get("phase") or "").lower() != "surrogate"]
+
+    resume_cfg = replace(cfg, resume=run_dir, budget=cfg.budget + 1)
+    run(resume_cfg)
+
+    with metrics_path.open(newline="") as fh:
+        reader_after = list(csv.DictReader(fh))
+
+    real_after = [r for r in reader_after if (r.get("phase") or "").lower() != "surrogate"]
+    assert len(real_after) > len(real_before), "resume run must add real evaluations"
