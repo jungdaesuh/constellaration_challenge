@@ -83,6 +83,15 @@ Agent
    - Thresholds can be tuned: `--guard-r0-min`, `--guard-r0-max`, and
      `--guard-helical-ratio-max`.
 
+Novelty gating (skip near-duplicates)
+- Enable skip: `--novelty-skip` to avoid spending evaluator calls on proposals too close to recent ones.
+- Tuning:
+  - Metric: `--novelty-metric l2|cosine|allclose` (default `l2`)
+  - Threshold: `--novelty-eps <float>` (distance <= eps → duplicate; default `1e-6`)
+  - Window: `--novelty-window <N>` recent proposals kept per NFP (default `128`)
+  - Persistence: `--novelty-db path.jsonl` to persist novelty across runs (defaults to `runs/<ts>/novelty.jsonl` when enabled)
+- Logging: duplicates are recorded to `metrics.csv` with `feasible=False` and `fail_reason=duplicate_novelty` without consuming budget.
+
 
  - PCFM correction (examples):
    - Norm equality: constrain helical amplitude to a circle of radius 0.06

@@ -47,4 +47,3 @@ def test_agent_novelty_skip_with_duplicate_seeds(tmp_path: Path) -> None:
     text = metrics.read_text()
     # Ensure at least one novelty skip was recorded
     assert "duplicate_novelty" in text
-
