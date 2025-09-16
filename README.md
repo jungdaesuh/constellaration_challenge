@@ -109,9 +109,18 @@ Surrogate screening (proxy gating before evaluator)
   - Ratio equality: enforce `z_sin[1][5] / r_cos[1][5] = -1.25`
      - JSON: `examples/pcfm_ratio.json`
      - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_ratio.json`
-   - Product equality: enforce `r_cos[1][5] * z_sin[1][5] = 0.003`
-     - JSON: `examples/pcfm_product.json`
-     - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_product.json`
+  - Product equality: enforce `r_cos[1][5] * z_sin[1][5] = 0.003`
+    - JSON: `examples/pcfm_product.json`
+    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_product.json`
+  - Aspect-ratio band: keep `R0/a` within `[4, 8]`
+    - JSON: `examples/pcfm_ar_band.json`
+    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_ar_band.json`
+  - Edge iota ratio: target helical ratio ≈ 0.1
+    - JSON: `examples/pcfm_edge_iota.json`
+    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_edge_iota.json`
+  - Clearance floor: ensure `|R0| - ||m=1|| ≥ 0.95`
+    - JSON: `examples/pcfm_clearance.json`
+    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_clearance.json`
   - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8` or via top-level keys in the constraints JSON: `{gn_iters,damping,tol}`
 
 Upcoming (tracked)

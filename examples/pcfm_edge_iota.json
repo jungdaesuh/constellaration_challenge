@@ -1,0 +1,11 @@
+[
+  {
+    "type": "edge_iota",
+    "major": {"field": "r_cos", "i": 0, "j": 4},
+    "helical": [
+      {"field": "r_cos", "i": 1, "j": 5},
+      {"field": "z_sin", "i": 1, "j": 5}
+    ],
+    "target": 0.1
+  }
+]
