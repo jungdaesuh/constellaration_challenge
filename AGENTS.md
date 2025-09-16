@@ -101,6 +101,7 @@ Target correctness, determinism, and incremental performance. Prefer small verti
 - `constelx.models`: baseline MLP + scaffolding for FNO/transformers.
 - `constelx.agents`: propose→simulate→select loop; checkpointing & resumability.
 - `constelx.cli`: `constelx [data|eval|opt|surrogate|agent] ...`
+- `constelx.physics`: evaluator shims, constraint tooling, and Boozer-space QS/QI proxies (`booz_proxy`).
 
 ## Minimum end‑to‑end (Sprint 0)
 

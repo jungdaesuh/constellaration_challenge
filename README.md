@@ -32,7 +32,7 @@ Notes:
 ## What’s inside
 
 - **CLI (`constelx`)**: `data` (fetch/filter/csv), `eval` (forward metrics, scoring), `opt` (baselines), `surrogate` (train/serve simple models), `agent` (multi-step propose→simulate→select loop).
-- **Physics wrappers**: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects.
+- **Physics wrappers**: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects, plus bounded Boozer-space QS/QI proxies (`constelx.physics.booz_proxy`).
 - **Optimization**: CMA-ES and (optional) BoTorch Bayesian optimization stubs.
 - **Models**: simple MLP baseline + placeholders for FNO/transformers.
 - **Hard-constraint tooling**: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
@@ -122,10 +122,6 @@ Surrogate screening (proxy gating before evaluator)
     - JSON: `examples/pcfm_clearance.json`
     - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_clearance.json`
   - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8` or via top-level keys in the constraints JSON: `{gn_iters,damping,tol}`
-
-Upcoming (tracked)
-- ResultsDB novelty gating to skip near-duplicate proposals (#74).
-
 Multi-fidelity gating
 - Enable a cheap proxy pass before real evaluations to reduce expensive calls:
   - Flags (agent): `--mf-proxy [--mf-threshold <t> | --mf-quantile <q>] [--mf-max-high K]`

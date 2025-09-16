@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
+from contextlib import contextmanager
 from math import inf, isnan
-from typing import Any, Mapping, Tuple
+from typing import Any, Callable, Generator, Mapping, Tuple
 
 
 def boundary_to_vmec(boundary: Mapping[str, Any]) -> Any:
@@ -28,6 +30,39 @@ def _fallback_metrics(boundary: Mapping[str, Any]) -> dict[str, Any]:
     return _eval(dict(boundary), use_real=False)
 
 
+@contextmanager
+def _vmec_verbose_context(enable: bool) -> Generator[None, None, None]:
+    if not enable:
+        yield
+        return
+    try:
+        from constellaration.forward_model import ConstellarationSettings
+
+        orig_high = ConstellarationSettings.default_high_fidelity
+        orig_skip = ConstellarationSettings.default_high_fidelity_skip_qi
+
+        def _wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                settings = fn(*args, **kwargs)
+                try:
+                    settings.vmec_preset_settings.verbose = True
+                except Exception:
+                    pass
+                return settings
+
+            return wrapper
+
+        ConstellarationSettings.default_high_fidelity = staticmethod(_wrap(orig_high))
+        ConstellarationSettings.default_high_fidelity_skip_qi = staticmethod(_wrap(orig_skip))
+        try:
+            yield
+        finally:
+            ConstellarationSettings.default_high_fidelity = orig_high
+            ConstellarationSettings.default_high_fidelity_skip_qi = orig_skip
+    except Exception:
+        yield
+
+
 def forward_metrics(
     boundary: Mapping[str, Any], *, problem: str, vmec_opts: dict[str, Any] | None = None
 ) -> Tuple[dict[str, Any], dict[str, Any]]:
@@ -45,15 +80,23 @@ def forward_metrics(
             SimpleToBuildQIStellarator,
         )
 
-        b = srf.SurfaceRZFourier.model_validate(dict(boundary))
-        prob_key = problem.lower().strip()
-        if prob_key in {"p1", "geom", "geometric", "geometrical"}:
-            ev = GeometricalProblem().evaluate(b)
-        elif prob_key in {"p2", "simple", "qi_simple", "simple_qi"}:
-            ev = SimpleToBuildQIStellarator().evaluate(b)
-        else:
-            # Multi-objective problem expects a list of boundaries
-            ev = MHDStableQIStellarator().evaluate([b])
+        verbose_flag = os.getenv("CONSTELX_VMEC_VERBOSE", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        log_flag = bool(os.getenv("CONSTELX_EVAL_LOG_DIR"))
+
+        with _vmec_verbose_context(verbose_flag or log_flag):
+            b = srf.SurfaceRZFourier.model_validate(dict(boundary))
+            prob_key = problem.lower().strip()
+            if prob_key in {"p1", "geom", "geometric", "geometrical"}:
+                ev = GeometricalProblem().evaluate(b)
+            elif prob_key in {"p2", "simple", "qi_simple", "simple_qi"}:
+                ev = SimpleToBuildQIStellarator().evaluate(b)
+            else:
+                # Multi-objective problem expects a list of boundaries
+                ev = MHDStableQIStellarator().evaluate([b])
 
         # Convert evaluation to metrics dict
         metrics: dict[str, Any] = {}
