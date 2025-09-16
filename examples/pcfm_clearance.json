@@ -1,0 +1,11 @@
+[
+  {
+    "type": "clearance_min",
+    "major": {"field": "r_cos", "i": 0, "j": 4},
+    "helical": [
+      {"field": "r_cos", "i": 1, "j": 5},
+      {"field": "z_sin", "i": 1, "j": 5}
+    ],
+    "min": 0.95
+  }
+]

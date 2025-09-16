@@ -1,0 +1,12 @@
+[
+  {
+    "type": "ar_band",
+    "major": {"field": "r_cos", "i": 0, "j": 4},
+    "minor": [
+      {"field": "r_cos", "i": 1, "j": 5},
+      {"field": "z_sin", "i": 1, "j": 5}
+    ],
+    "amin": 4.0,
+    "amax": 8.0
+  }
+]

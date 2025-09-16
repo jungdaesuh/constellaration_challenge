@@ -42,6 +42,8 @@ def test_agent_with_pcfm_norm_constraint_runs_and_applies(tmp_path: Path) -> Non
             "pcfm",
             "--constraints-file",
             str(constraints_path),
+            "--pcfm-gn-iters",
+            "6",
         ],
     )
     assert result.exit_code == 0
@@ -57,3 +59,57 @@ def test_agent_with_pcfm_norm_constraint_runs_and_applies(tmp_path: Path) -> Non
     x = float(b["r_cos"][1][5])
     y = float(b["z_sin"][1][5])
     assert abs((x * x + y * y) - 0.06 * 0.06) < 1e-4
+
+
+def test_agent_with_pcfm_ar_band_constraint(tmp_path: Path) -> None:
+    constraints = [
+        {
+            "type": "ar_band",
+            "major": {"field": "r_cos", "i": 0, "j": 4},
+            "minor": [
+                {"field": "r_cos", "i": 1, "j": 5},
+                {"field": "z_sin", "i": 1, "j": 5},
+            ],
+            "amin": 4.0,
+            "amax": 8.0,
+        }
+    ]
+    constraints_path = tmp_path / "ar_band.json"
+    constraints_path.write_text(json.dumps(constraints))
+
+    runner = CliRunner()
+    runs_dir = tmp_path / "runs"
+    result = runner.invoke(
+        app,
+        [
+            "agent",
+            "run",
+            "--nfp",
+            "3",
+            "--budget",
+            "4",
+            "--seed",
+            "0",
+            "--runs-dir",
+            str(runs_dir),
+            "--correction",
+            "pcfm",
+            "--constraints-file",
+            str(constraints_path),
+            "--pcfm-gn-iters",
+            "6",
+        ],
+    )
+    assert result.exit_code == 0
+
+    proposal_files = [p for p in runs_dir.iterdir() if p.is_dir()]
+    assert proposal_files
+    proposals = (proposal_files[0] / "proposals.jsonl").read_text().splitlines()
+    first = json.loads(proposals[0])
+    b = first["boundary"]
+    r0 = abs(float(b["r_cos"][0][4]))
+    rc = float(b["r_cos"][1][5])
+    zs = float(b["z_sin"][1][5])
+    helical = (rc * rc + zs * zs) ** 0.5
+    aspect = r0 / max(helical, 1e-8)
+    assert 4.0 - 1e-2 <= aspect <= 8.0 + 1e-2

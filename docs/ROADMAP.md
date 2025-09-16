@@ -56,6 +56,8 @@ Status updates
 - Agent novelty gating (#74): Implemented.
   - Flags: `--novelty-skip`, `--novelty-metric l2|cosine|allclose`, `--novelty-eps`, `--novelty-window`, `--novelty-db`.
   - Behavior: skip near-duplicate boundaries without spending evaluator calls; log `fail_reason=duplicate_novelty`; persist novelty vectors to `novelty.jsonl` when enabled.
+- PCFM repair pack (#38): Landed.
+  - Adds aspect-ratio band, edge-iota proxy, and clearance constraints with new `examples/pcfm_*.json` specs and Gauss–Newton Jacobians.
 
 —
 
