@@ -20,11 +20,11 @@ These guidelines help contributors build, test, and extend the ConStelX starter 
   - Quick smoke: `constelx data fetch --nfp 3 --limit 8`
 - E2E (small): `constelx agent run --nfp 3 --budget 5 --seed 0`
   - With PCFM correction:
-  - Norm eq: `examples/pcfm_norm.json`
-  - Ratio eq: `examples/pcfm_ratio.json`
-  - Product eq: `examples/pcfm_product.json`
-  - Command: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file <json>`
-  - Tuning: CLI flags or JSON top-level `{gn_iters,damping,tol}`
+    - Norm eq: `examples/pcfm_norm.json`
+    - Ratio eq: `examples/pcfm_ratio.json`
+    - Product eq: `examples/pcfm_product.json`
+    - Command: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file <json>`
+    - Tuning: CLI flags or JSON top-level `{gn_iters,damping,tol}`
 
 ## Pre-commit Hooks
 
@@ -59,6 +59,9 @@ These guidelines help contributors build, test, and extend the ConStelX starter 
 - Auto-merge: it’s fine to enable GitHub’s auto-merge once checks are green. For PRs that should close issues on merge, ensure closing keywords are present in the PR description before enabling auto-merge.
 
 ## Architecture & Ops Notes
+
+Refer to `docs/ARCHITECTURE.md` for a detailed map from CLI commands to modules and
+`docs/ROADMAP.md` for upcoming milestones; the highlights are below.
 
 - Minimum E2E path: `agents.simple_agent` → `eval.forward` → `eval.score` → `optim.cmaes` → artifacts in `runs/` (config, metrics, best).
 - System requirements: NetCDF present; PyTorch may require manual install on macOS arm64.
@@ -177,18 +180,20 @@ Physics test opt‑in
 
 ## Performance rules
 
-- Vectorize evaluator calls when po
+- Vectorize evaluator calls when possible to keep iteration cost down.
 
-Timeless principles
-• KISS, DRY, YAGNI: Keep designs simple, avoid duplication, don’t build speculative features.
-• Separation of Concerns & SRP: Isolate responsibilities so each module has one reason to change.
-• Modularity & Abstraction: Encapsulate details behind stable interfaces to enable safe swaps and evolution.
-• Readability first: Prefer clear naming and straightforward logic—code is read far more than written.
+## Timeless principles
 
-Object-oriented foundations (SOLID & beyond)
-• OCP: Extend behavior without modifying existing code.
-• LSP: Subtypes must honor base-type expectations.
-• ISP: Use small, focused interfaces; don’t force unused methods.
-• DIP: Depend on abstractions, not concrete implementations (enables DI).
-• Favor composition over inheritance: Compose behaviors to reduce brittleness.
-• Use patterns judiciously: Apply proven patterns (e.g., MVC, Observer, Adapter) as shared vocabulary and solutions—not cargo cults.
+- KISS, DRY, YAGNI: Keep designs simple, avoid duplication, don’t build speculative features.
+- Separation of Concerns & SRP: Isolate responsibilities so each module has one reason to change.
+- Modularity & Abstraction: Encapsulate details behind stable interfaces to enable safe swaps and evolution.
+- Readability first: Prefer clear naming and straightforward logic—code is read far more than written.
+
+## Object-oriented foundations (SOLID & beyond)
+
+- OCP: Extend behavior without modifying existing code.
+- LSP: Subtypes must honor base-type expectations.
+- ISP: Use small, focused interfaces; don’t force unused methods.
+- DIP: Depend on abstractions, not concrete implementations (enables DI).
+- Favor composition over inheritance: Compose behaviors to reduce brittleness.
+- Use patterns judiciously: Apply proven patterns (e.g., MVC, Observer, Adapter) as shared vocabulary and solutions—not cargo cults.
