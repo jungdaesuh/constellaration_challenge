@@ -5,4 +5,5 @@ __all__ = [
     "constraints",
     "pcfm",
     "pbfm",
+    "booz_proxy",
 ]

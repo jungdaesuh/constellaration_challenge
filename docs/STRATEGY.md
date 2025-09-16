@@ -13,6 +13,7 @@ What’s implemented vs. planned
   - Multi‑fidelity gating, caching, and real‑evaluator timeouts/retries.
   - Surrogate baseline with optional PBFM conflict‑free update (`constelx surrogate train --use-pbfm`).
   - Optimizers: `opt cmaes` + `opt run --baseline trust-constr|alm`.
+  - Boozer proxies: bounded QS/QI heuristics via `constelx.physics.booz_proxy` with optional real-evaluator hooks.
   - Agent loop: resume, geometry guards, novelty gating, surrogate screening, NFP round‑robin; artifacts and schema verified by tests.
   - Submission packaging: `constelx submit pack` (supports `--top-k`).
 - Planned (next steps)

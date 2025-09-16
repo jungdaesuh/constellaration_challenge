@@ -37,16 +37,14 @@ ConStelX is a sophisticated Python CLI-first framework for ML + physics-based op
 - **PR #65**: Preserved phase information in proxy gating
 
 ### Active Development Tasks
-1. **Issue #73**: Agent integration with surrogate screening (highest priority)
-2. **Issue #74**: Wire ResultsDB novelty checks to skip near-duplicates
+1. **Issue #40**: BoTorch qNEI baseline with feasibility awareness
+2. **Issue #71**: Evaluator cache documentation and housekeeping
 3. **Issue #52**: Multi-start NFP exploration with provenance tracking
 4. **Issue #47**: Near-axis expansion seeding for QS/QI-friendly starts
-5. **Issue #46**: Boozer/QS-QI proxy library for fast quality metrics
+5. **Issue #51**: Unified metrics/constraints module building on the new Boozer proxies
 
 ### Open Issues Summary
-- **2 Critical** (surrogate screening, novelty checks)
-- **11 Enhancement opportunities** (multi-objective, near-axis seeding, etc.)
-- **Strong momentum** with systematic progress on core features
+- **Strong momentum** with systematic progress on core features; surrogate screening and novelty gating are now part of the agent loop.
 
 ## 3. Research Papers Analysis
 
