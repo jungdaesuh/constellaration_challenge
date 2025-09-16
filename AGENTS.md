@@ -20,10 +20,13 @@ These guidelines help contributors build, test, and extend the ConStelX starter 
   - Quick smoke: `constelx data fetch --nfp 3 --limit 8`
 - E2E (small): `constelx agent run --nfp 3 --budget 5 --seed 0`
   - With PCFM correction:
-    - Norm eq: `examples/pcfm_norm.json`
-    - Ratio eq: `examples/pcfm_ratio.json`
-    - Product eq: `examples/pcfm_product.json`
-    - Command: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file <json>`
+  - Norm eq: `examples/pcfm_norm.json`
+  - Ratio eq: `examples/pcfm_ratio.json`
+  - Product eq: `examples/pcfm_product.json`
+  - Aspect-ratio band: `examples/pcfm_ar_band.json`
+  - Edge iota ratio: `examples/pcfm_edge_iota.json`
+  - Clearance floor: `examples/pcfm_clearance.json`
+  - Command: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file <json>`
     - Tuning: CLI flags or JSON top-level `{gn_iters,damping,tol}`
 
 ## Pre-commit Hooks
