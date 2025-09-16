@@ -22,7 +22,6 @@ Note: [#30] HF dataset helpers and seeds are implemented; keep the issue open fo
 - [#53] Ablation harness for pipeline components.
 - [#52] Multi-start NFP exploration with provenance tracking.
 - [#47] Near-axis expansion seeding for QS/QI-friendly starts.
-- [#46] Boozer/QS–QI proxy library with bounded residuals.
 - [#45] Data-driven seeds prior (PCA + RF feasibility + GMM/flow models).
 - [#44] P3 scalarization and Pareto sweep.
 - [#43] Nevergrad NGOpt baseline (ALM parity with challenge).
@@ -40,6 +39,7 @@ Note: [#30] HF dataset helpers and seeds are implemented; keep the issue open fo
 - [#33] Scoring parity tests for P1–P3 (physics-gated) — implemented and documented (PR #62).
 - [#39] Multi-fidelity gating with proxy→selection→real and provenance — implemented (PR #63) with single-worker phase fix (PR #65).
 - [#54] Results DB + novelty checks — implemented (PR #69); awaiting agent wiring.
+- [#46] Boozer/QS–QI proxy library — heuristic proxies landing with bounded outputs and tests.
 - Docs roadmap added (PR #68).
 - Dataset/surrogate speedups (PR #70).
 - Fix: boundary m=1 column mapping (PR #66).
