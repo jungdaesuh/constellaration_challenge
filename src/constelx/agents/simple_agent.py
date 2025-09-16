@@ -413,7 +413,9 @@ def run(config: AgentConfig) -> Path:
             pass
         return nfp_val, _np.asarray(vals, dtype=float)
 
-    def _novelty_features(boundary: Mapping[str, Any]) -> tuple[Mapping[str, float], int, _np.ndarray]:
+    def _novelty_features(
+        boundary: Mapping[str, Any],
+    ) -> tuple[Mapping[str, float], int, _np.ndarray]:
         flat = _flatten_map(boundary)
         nfp_val, vec = _flatten_vec(boundary)
         return flat, nfp_val, vec
@@ -575,7 +577,9 @@ def run(config: AgentConfig) -> Path:
             and novelty_db_path is not None
         ):
             try:
-                flattened = novelty_payload if novelty_payload is not None else _flatten_map(boundary)
+                flattened = (
+                    novelty_payload if novelty_payload is not None else _flatten_map(boundary)
+                )
                 novelty_db.add(flattened, {"agg_score": float(agg_s)})
                 novelty_db.save()
             except Exception:
@@ -914,7 +918,15 @@ def run(config: AgentConfig) -> Path:
                     continue
             # Evaluate
             if not batch:
-                break
+                # All candidates were filtered (e.g., novelty gate). If additional
+                # seed boundaries remain, spin the loop to process them; otherwise
+                # fall back to the user's preference (stop when only seed inputs were
+                # provided, or keep searching when sampling randomly).
+                if seed_boundaries:
+                    continue
+                if config.init_seeds is not None:
+                    break
+                continue
             if config.max_workers > 1 or config.mf_proxy:
                 from ..eval import forward_many
 
