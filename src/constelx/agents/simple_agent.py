@@ -413,7 +413,9 @@ def run(config: AgentConfig) -> Path:
             pass
         return nfp_val, _np.asarray(vals, dtype=float)
 
-    def _novelty_features(boundary: Mapping[str, Any]) -> tuple[Mapping[str, float], int, _np.ndarray]:
+    def _novelty_features(
+        boundary: Mapping[str, Any],
+    ) -> tuple[Mapping[str, float], int, _np.ndarray]:
         flat = _flatten_map(boundary)
         nfp_val, vec = _flatten_vec(boundary)
         return flat, nfp_val, vec
@@ -575,7 +577,9 @@ def run(config: AgentConfig) -> Path:
             and novelty_db_path is not None
         ):
             try:
-                flattened = novelty_payload if novelty_payload is not None else _flatten_map(boundary)
+                flattened = (
+                    novelty_payload if novelty_payload is not None else _flatten_map(boundary)
+                )
                 novelty_db.add(flattened, {"agg_score": float(agg_s)})
                 novelty_db.save()
             except Exception:
