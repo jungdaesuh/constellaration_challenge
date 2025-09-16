@@ -58,6 +58,8 @@ Status updates
   - Behavior: skip near-duplicate boundaries without spending evaluator calls; log `fail_reason=duplicate_novelty`; persist novelty vectors to `novelty.jsonl` when enabled.
 - PCFM repair pack (#38): Landed.
   - Adds aspect-ratio band, edge-iota proxy, and clearance constraints with new `examples/pcfm_*.json` specs and Gauss–Newton Jacobians.
+- Boozer/QS–QI proxies (#46): Implemented.
+  - `constelx.physics.booz_proxy` exposes bounded QS/QI residual heuristics with optional real-evaluator hooks and unit coverage.
 
 —
 
@@ -75,7 +77,7 @@ This repo’s work is organized into phases with tracked issues. Use these to pl
   - #40 (Constrained BoTorch qNEI), #43 (Nevergrad NGOpt), #44 (P3 scalarization + Pareto sweep)
 
 - Phase 3 — Proxies + Seeds
-  - #46 (Boozer/QS–QI proxy library), #41 (Integrate QS proxies – depends on #46), #51 (Metrics/constraints consolidation), #45 (Data‑driven seeds prior), #47 (Near‑axis seeding)
+  - #46 (Boozer/QS–QI proxy library ✅), #41 (Integrate QS proxies – depends on #46), #51 (Metrics/constraints consolidation), #45 (Data‑driven seeds prior), #47 (Near‑axis seeding)
 
 - Phase 4 — Advanced + Ops
   - #42 (DESC gradient TR baseline), #52 (Multi‑start NFP), #53 (Ablation harness), #54 (Results DB + novelty), #49 (Submission packer)
