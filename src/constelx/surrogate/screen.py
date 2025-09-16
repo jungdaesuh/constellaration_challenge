@@ -7,6 +7,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Mapping, Optional, Sequence
 
+from .train import MLP
+
 _torch_module: Optional[ModuleType]
 try:
     module = importlib.import_module("torch")
@@ -16,8 +18,6 @@ else:
     _torch_module = module
 
 TORCH_MODULE = _torch_module
-
-from .train import MLP
 
 
 class SurrogateScreenError(RuntimeError):
