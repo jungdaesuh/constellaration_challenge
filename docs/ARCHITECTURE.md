@@ -37,7 +37,10 @@ This document maps the conceptual strategy to the actual modules and CLI in this
   - Correction hooks: `--correction eci_linear|pcfm --constraints-file <json> [--pcfm-gn-iters ...]`
   - Multi‑fidelity: `--mf-proxy [--mf-threshold|--mf-quantile] [--mf-max-high]`
   - Guards: `--guard-geom-validate [--guard-r0-min|--guard-r0-max|--guard-helical-ratio-max]`
-  - Novelty: `--novelty-skip ...` (window + optional persisted DB)
+  - Novelty: `--novelty-skip ...` (window + optional persisted DB). When a
+    `--novelty-db` path is provided we now reuse the stored embeddings on later
+    runs: duplicates are skipped without new evaluations, while fresh random
+    samples continue until the requested budget is exhausted.
   - Surrogate screening: `--surrogate-screen --surrogate-model <pt> [--threshold|--quantile]`
   - NFP multi‑start: `--nfp-list "3,4,5"` (round‑robin)
 - `constelx submit pack runs/<ts> --out submissions/<name>.zip [--top-k K]` → `submit/pack.py`
@@ -58,4 +61,3 @@ Submission pack (`submit pack`) writes:
 
 - Current: ECI/PCFM hooks, MF‑gating + cache, novelty, surrogate screening, MLP+PBFM trainer, trust‑constr/ALM/CMA‑ES baselines, submission pack.
 - Planned: feasibility‑first TR‑BO (FuRBO/BoTorch), expanded surrogate families, and optional LLM‑assisted planner emitting ablation specs for `constelx ablate run`.
-

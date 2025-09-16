@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import importlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from types import ModuleType
+from typing import Any, Mapping, Optional, Sequence
 
+_torch_module: Optional[ModuleType]
 try:
-    import torch
+    module = importlib.import_module("torch")
 except Exception:  # pragma: no cover - import guard
-    torch = None
+    _torch_module = None
+else:
+    _torch_module = module
+
+TORCH_MODULE = _torch_module
 
 from .train import MLP
 
@@ -102,9 +109,9 @@ def load_scorer(
     *,
     device: str | Any | None = None,
 ) -> SurrogateScorer:
-    if torch is None:  # pragma: no cover - import guard
+    if TORCH_MODULE is None:  # pragma: no cover - import guard
         raise SurrogateScreenError("PyTorch is required for surrogate screening")
-    torch_module = torch
+    torch_module = TORCH_MODULE
     model_file = Path(model_path)
     if not model_file.exists():
         raise SurrogateScreenError(f"surrogate model not found: {model_file}")
