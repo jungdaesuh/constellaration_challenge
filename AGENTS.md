@@ -20,11 +20,11 @@ These guidelines help contributors build, test, and extend the ConStelX starter 
   - Quick smoke: `constelx data fetch --nfp 3 --limit 8`
 - E2E (small): `constelx agent run --nfp 3 --budget 5 --seed 0`
   - With PCFM correction:
-   - Norm eq: `examples/pcfm_norm.json`
-   - Ratio eq: `examples/pcfm_ratio.json`
-   - Product eq: `examples/pcfm_product.json`
-   - Command: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file <json>`
-   - Tuning: CLI flags or JSON top-level `{gn_iters,damping,tol}`
+  - Norm eq: `examples/pcfm_norm.json`
+  - Ratio eq: `examples/pcfm_ratio.json`
+  - Product eq: `examples/pcfm_product.json`
+  - Command: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file <json>`
+  - Tuning: CLI flags or JSON top-level `{gn_iters,damping,tol}`
 
 ## Pre-commit Hooks
 
@@ -127,11 +127,13 @@ Required pieces:
 - Include a `README.md` in each run folder with CLI used and env info.
 
 Artifacts fields (clarity and provenance)
+
 - CSV columns include: `nfp`, `evaluator_score` (from official evaluator when present), `agg_score` (our aggregated score), `elapsed_ms` (per‑eval time), `feasible` (bool), `fail_reason` (string), and `source` (`placeholder|real`).
 - When multi‑fidelity gating is enabled, a `phase` column indicates `proxy` or `real` evaluation phase for each row. Proxy results are cached separately from real results.
 - `best.json` stores `agg_score` (and a backward‑compatible `score` alias), optional `evaluator_score`, and a `metrics` object without a conflicting `score` key.
 
 Submission packaging
+
 - `constelx submit pack runs/<ts> --out submissions/<name>.zip [--top-k K]` packs a run.
   - Always writes:
     - `boundary.json` (best boundary by `agg_score`), `metadata.json`.
@@ -141,6 +143,7 @@ Submission packaging
     `{iteration,index,agg_score,evaluator_score,feasible,fail_reason,source,scoring_version,boundary}`.
 
 Physics test opt‑in
+
 - Physics‑gated tests are skipped by default to avoid heavy imports on misconfigured systems.
 - Set `CONSTELX_RUN_PHYSICS_TESTS=1` to enable parity/physics tests locally or in CI (physics job).
 
@@ -157,6 +160,7 @@ Physics test opt‑in
 
 - Agent geometry guard: `--guard-geom-validate` pre-screens invalid shapes and logs
   `fail_reason=invalid_geometry` without spending evaluator calls. Thresholds are configurable:
+
   - `--guard-r0-min` (default 0.05)
   - `--guard-r0-max` (default 5.0)
   - `--guard-helical-ratio-max` (default 0.5)
@@ -174,3 +178,17 @@ Physics test opt‑in
 ## Performance rules
 
 - Vectorize evaluator calls when po
+
+Timeless principles
+• KISS, DRY, YAGNI: Keep designs simple, avoid duplication, don’t build speculative features.
+• Separation of Concerns & SRP: Isolate responsibilities so each module has one reason to change.
+• Modularity & Abstraction: Encapsulate details behind stable interfaces to enable safe swaps and evolution.
+• Readability first: Prefer clear naming and straightforward logic—code is read far more than written.
+
+Object-oriented foundations (SOLID & beyond)
+• OCP: Extend behavior without modifying existing code.
+• LSP: Subtypes must honor base-type expectations.
+• ISP: Use small, focused interfaces; don’t force unused methods.
+• DIP: Depend on abstractions, not concrete implementations (enables DI).
+• Favor composition over inheritance: Compose behaviors to reduce brittleness.
+• Use patterns judiciously: Apply proven patterns (e.g., MVC, Observer, Adapter) as shared vocabulary and solutions—not cargo cults.
