@@ -263,6 +263,8 @@ def run(config: AgentConfig) -> Path:
             cfg["surrogate_model"] = str(cfg["surrogate_model"])
         if cfg.get("surrogate_metadata") is not None:
             cfg["surrogate_metadata"] = str(cfg["surrogate_metadata"])
+        if cfg.get("novelty_db") is not None:
+            cfg["novelty_db"] = str(cfg["novelty_db"])
         conf = {
             "run": cfg,
             "env": _gather_env_info(),
@@ -411,10 +413,25 @@ def run(config: AgentConfig) -> Path:
             pass
         return nfp_val, _np.asarray(vals, dtype=float)
 
-    def _is_novel_local(boundary: Mapping[str, Any], window: dict[int, deque[_np.ndarray]]) -> bool:
-        nfp_val, v = _flatten_vec(boundary)
+    def _novelty_features(boundary: Mapping[str, Any]) -> tuple[Mapping[str, float], int, _np.ndarray]:
+        flat = _flatten_map(boundary)
+        nfp_val, vec = _flatten_vec(boundary)
+        return flat, nfp_val, vec
+
+    def _is_novel_local_vec(
+        nfp_val: int,
+        candidate: _np.ndarray,
+        window: dict[int, deque[_np.ndarray]],
+        *,
+        extra_vectors: Iterable[_np.ndarray] | None = None,
+    ) -> bool:
+        hist_list: list[_np.ndarray] = []
         hist = window.get(nfp_val)
-        if not hist:
+        if hist:
+            hist_list.extend(hist)
+        if extra_vectors:
+            hist_list.extend(list(extra_vectors))
+        if not hist_list:
             return True
         metric = (config.novelty_metric or "l2").lower()
         eps = float(config.novelty_eps)
@@ -437,10 +454,12 @@ def run(config: AgentConfig) -> Path:
                 d = a - b
                 return float(_np.sqrt(float(d.dot(d))))
 
-        for u in hist:
-            if cdist(v, u) <= eps:
+        for u in hist_list:
+            if cdist(candidate, u) <= eps:
                 return False
         return True
+
+    NoveltyFeature = Tuple[Mapping[str, float], int, _np.ndarray]
 
     novelty_window: dict[int, deque[_np.ndarray]] = {}
     novelty_db = None
@@ -452,6 +471,30 @@ def run(config: AgentConfig) -> Path:
         except Exception:
             novelty_db = None
 
+    def _check_novelty(
+        boundary: Mapping[str, Any],
+        pending_vectors: Mapping[int, Iterable[_np.ndarray]] | None = None,
+    ) -> tuple[bool, NoveltyFeature]:
+        feats = _novelty_features(boundary)
+        if not config.novelty_skip:
+            return True, feats
+        flat, nfp_val, vec = feats
+        if novelty_db is not None:
+            try:
+                if not novelty_db.is_novel(flat, atol=float(config.novelty_eps), rtol=0.0):
+                    return False, feats
+            except Exception:
+                pass
+        extra = pending_vectors.get(nfp_val) if pending_vectors is not None else None
+        if not _is_novel_local_vec(
+            nfp_val,
+            vec,
+            novelty_window,
+            extra_vectors=extra,
+        ):
+            return False, feats
+        return True, feats
+
     def log_entry(
         it: int,
         idx: int,
@@ -461,6 +504,8 @@ def run(config: AgentConfig) -> Path:
         agg_s: float,
         *,
         elapsed_ms: float | None = None,
+        persist_novelty: bool = False,
+        novelty_payload: Mapping[str, float] | None = None,
     ) -> None:
         nonlocal best_score, best_payload, metrics_writer
         # Derive nfp from boundary when present
@@ -523,9 +568,15 @@ def run(config: AgentConfig) -> Path:
                 "nfp": nfp_val,
             }
         # Persist novelty record when requested
-        if config.novelty_skip and novelty_db is not None and novelty_db_path is not None:
+        if (
+            persist_novelty
+            and config.novelty_skip
+            and novelty_db is not None
+            and novelty_db_path is not None
+        ):
             try:
-                novelty_db.add(_flatten_map(boundary), {"agg_score": float(agg_s)})
+                flattened = novelty_payload if novelty_payload is not None else _flatten_map(boundary)
+                novelty_db.add(flattened, {"agg_score": float(agg_s)})
                 novelty_db.save()
             except Exception:
                 pass
@@ -731,6 +782,8 @@ def run(config: AgentConfig) -> Path:
             # Prepare a batch of proposals
             seeds: List[int] = []
             batch: List[Dict[str, Any]] = []
+            batch_features: List[NoveltyFeature] = []
+            pending_vectors: dict[int, list[_np.ndarray]] = {}
             for _ in range(min(batch_size, budget - completed)):
                 if seed_boundaries:
                     b = seed_boundaries.pop(0)
@@ -763,49 +816,27 @@ def run(config: AgentConfig) -> Path:
                                 completed += 1
                                 idx += 1
                                 continue
-                        # Novelty skip (on seeds)
-                        if config.novelty_skip:
-                            # Check persisted DB first
-                            if novelty_db is not None:
-                                try:
-                                    if not novelty_db.is_novel(
-                                        _flatten_map(b), atol=float(config.novelty_eps), rtol=0.0
-                                    ):
-                                        log_entry(
-                                            it,
-                                            idx,
-                                            seed_val,
-                                            b,
-                                            {
-                                                "feasible": False,
-                                                "fail_reason": "duplicate_novelty",
-                                                "source": "placeholder",
-                                            },
-                                            float("inf"),
-                                        )
-                                        idx += 1
-                                        continue
-                                except Exception:
-                                    pass
-                            if not _is_novel_local(b, novelty_window):
-                                log_entry(
-                                    it,
-                                    idx,
-                                    seed_val,
-                                    b,
-                                    {
-                                        "feasible": False,
-                                        "fail_reason": "duplicate_novelty",
-                                        "source": "placeholder",
-                                    },
-                                    float("inf"),
-                                )
-                                idx += 1
-                                continue
                         validate_boundary(b)
                         b = maybe_correct(b)
+                        is_novel, feats = _check_novelty(b, pending_vectors)
+                        if config.novelty_skip and not is_novel:
+                            log_entry(
+                                it,
+                                idx,
+                                seed_val,
+                                b,
+                                {
+                                    "feasible": False,
+                                    "fail_reason": "duplicate_novelty",
+                                    "source": "placeholder",
+                                },
+                                float("inf"),
+                            )
+                            idx += 1
+                            continue
                     except Exception:
-                        pass
+                        idx += 1
+                        continue
                 else:
                     seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
                     if (config.seed_mode or "random").lower() == "near-axis":
@@ -837,60 +868,46 @@ def run(config: AgentConfig) -> Path:
                                 float("inf"),
                             )
                             completed += 1
-                            idx += 1
-                            continue
-                    # Novelty skip (on generated)
-                    if config.novelty_skip:
-                        if novelty_db is not None:
-                            try:
-                                if not novelty_db.is_novel(
-                                    _flatten_map(b), atol=float(config.novelty_eps), rtol=0.0
-                                ):
-                                    log_entry(
-                                        it,
-                                        idx,
-                                        seed_val,
-                                        b,
-                                        {
-                                            "feasible": False,
-                                            "fail_reason": "duplicate_novelty",
-                                            "source": "placeholder",
-                                        },
-                                        float("inf"),
-                                    )
-                                    idx += 1
-                                    continue
-                            except Exception:
-                                pass
-                        if not _is_novel_local(b, novelty_window):
-                            log_entry(
-                                it,
-                                idx,
-                                seed_val,
-                                b,
-                                {
-                                    "feasible": False,
-                                    "fail_reason": "duplicate_novelty",
-                                    "source": "placeholder",
-                                },
-                                float("inf"),
-                            )
-                            idx += 1
-                            continue
-                    validate_boundary(b)
-                    b = maybe_correct(b)
+                        idx += 1
+                        continue
+                    try:
+                        validate_boundary(b)
+                        b = maybe_correct(b)
+                    except Exception:
+                        idx += 1
+                        continue
+                    is_novel, feats = _check_novelty(b, pending_vectors)
+                    if config.novelty_skip and not is_novel:
+                        log_entry(
+                            it,
+                            idx,
+                            seed_val,
+                            b,
+                            {
+                                "feasible": False,
+                                "fail_reason": "duplicate_novelty",
+                                "source": "placeholder",
+                            },
+                            float("inf"),
+                        )
+                        idx += 1
+                        continue
                 seeds.append(seed_val)
                 batch.append(b)
+                batch_features.append(feats)
+                _, nfp_cur, vec_cur = feats
+                pending_vectors.setdefault(nfp_cur, []).append(vec_cur)
                 idx += 1
             if surrogate_scorer is not None and batch:
                 base_idx = idx - len(batch)
                 idxs = [base_idx + k for k in range(len(batch))]
-                batch, seeds, _, _ = apply_surrogate(
+                batch, seeds, survivors_idx, _ = apply_surrogate(
                     batch=batch,
                     seeds=seeds,
                     iteration=it,
                     indices=idxs,
                 )
+                batch_features = [batch_features[i] for i in survivors_idx]
                 if completed >= budget:
                     break
                 if not batch:
@@ -937,7 +954,17 @@ def run(config: AgentConfig) -> Path:
                             ems = float(val_ms)
                     except Exception:
                         ems = None
-                    log_entry(it, j, seeds[j], b, m, agg_s, elapsed_ms=ems)
+                    log_entry(
+                        it,
+                        j,
+                        seeds[j],
+                        b,
+                        m,
+                        agg_s,
+                        elapsed_ms=ems,
+                        persist_novelty=bool(novelty_db),
+                        novelty_payload=batch_features[j][0],
+                    )
                     completed += 1
             else:
                 for j, b in enumerate(batch):
@@ -958,15 +985,25 @@ def run(config: AgentConfig) -> Path:
                         )
                     except Exception:
                         continue
-                    log_entry(it, j, seeds[j], b, m, agg_s, elapsed_ms=(_t1 - _t0) * 1000.0)
+                    log_entry(
+                        it,
+                        j,
+                        seeds[j],
+                        b,
+                        m,
+                        agg_s,
+                        elapsed_ms=(_t1 - _t0) * 1000.0,
+                        persist_novelty=bool(novelty_db),
+                        novelty_payload=batch_features[j][0],
+                    )
                     completed += 1
             # Update novelty memory after each batch to include evaluated items
             if config.novelty_skip:
                 from collections import deque as _deque  # shadow safe
 
-                for bb in batch:
-                    nfpv, vv = _flatten_vec(bb)
-                    dq = novelty_window.setdefault(nfpv, _deque(maxlen=int(config.novelty_window)))
+                maxlen = int(config.novelty_window)
+                for _, nfpv, vv in batch_features:
+                    dq = novelty_window.setdefault(nfpv, _deque(maxlen=maxlen))
                     dq.append(vv)
             if idx % 100 == 0:
                 it += 1
@@ -993,6 +1030,8 @@ def run(config: AgentConfig) -> Path:
             seeds_batch: List[int] = []
             xs_params: List[List[float]] = []
             idxs: List[int] = []
+            proposal_features: List[NoveltyFeature] = []
+            pending_vectors: dict[int, list[_np.ndarray]] = {}
             for j, x in enumerate(xs):
                 if completed >= budget:
                     break
@@ -1027,6 +1066,17 @@ def run(config: AgentConfig) -> Path:
                             continue
                     validate_boundary(b)
                     b = maybe_correct(b)
+                    is_novel, feats = _check_novelty(b, pending_vectors)
+                    if config.novelty_skip and not is_novel:
+                        metrics = {
+                            "feasible": False,
+                            "fail_reason": "duplicate_novelty",
+                            "source": "placeholder",
+                        }
+                        log_entry(it, j, seed_val, b, metrics, float("inf"))
+                        xs_eval.append(list(x))
+                        scores.append(float("inf"))
+                        continue
                 except Exception:
                     metrics = {}
                     log_entry(it, j, seed_val, b, metrics, float("inf"))
@@ -1038,6 +1088,9 @@ def run(config: AgentConfig) -> Path:
                 seeds_batch.append(seed_val)
                 xs_params.append(list(x))
                 idxs.append(j)
+                proposal_features.append(feats)
+                _, nfp_cur, vec_cur = feats
+                pending_vectors.setdefault(nfp_cur, []).append(vec_cur)
 
             if surrogate_scorer is not None and proposals and completed < budget:
                 xs_params_all = list(xs_params)
@@ -1053,6 +1106,7 @@ def run(config: AgentConfig) -> Path:
                     scores.append(float("inf"))
                 xs_params = [xs_params_all[i] for i in survivors_idx]
                 idxs = [idxs_all[i] for i in survivors_idx]
+                proposal_features = [proposal_features[i] for i in survivors_idx]
             if completed >= budget:
                 if xs_eval:
                     es.tell(xs_eval, scores)
@@ -1090,12 +1144,21 @@ def run(config: AgentConfig) -> Path:
                     metrics,
                     s,
                     elapsed_ms=(_t1 - _t0) * 1000.0,
+                    persist_novelty=bool(novelty_db),
+                    novelty_payload=proposal_features[local_idx][0],
                 )
                 xs_eval.append(list(x_vec))
                 scores.append(s)
                 completed += 1
             if xs_eval:
                 es.tell(xs_eval, scores)
+            if config.novelty_skip and proposal_features:
+                from collections import deque as _deque  # shadow safe
+
+                maxlen = int(config.novelty_window)
+                for _, nfpv, vv in proposal_features:
+                    dq = novelty_window.setdefault(nfpv, _deque(maxlen=maxlen))
+                    dq.append(vv)
             it += 1
 
     if config.algo.lower() == "cmaes":
