@@ -5,17 +5,15 @@
    - Trust-constr/ALM are implemented and tested; tighten docs/CLI help and ensure physics path smoke works.
 2. [#40] BoTorch qNEI baseline (optional extra)
    - Import-guarded implementation; start with 2–6D helical coeffs and feasibility-aware acquisition.
-3. [#38] PCFM repair pack
-   - Add aspect-ratio band constraint; lightweight edge-iota proxy; simple clearance proxy. Update examples/docs.
-4. [#74] Agent: wire ResultsDB novelty checks
+3. [#74] Agent: wire ResultsDB novelty checks
    - Skip near-duplicate boundaries via `ResultsDB.is_novel` in the proposal stage; add a small toggle/threshold.
-5. [#71] Docs/housekeeping for evaluator cache
+4. [#71] Docs/housekeeping for evaluator cache
    - Merge PR and document `CONSTELX_CACHE_TTL_SECONDS` + per-run cache dir guidance in README (cross-link CLI `--cache-dir`).
-6. [#50] VMEC resolution ladder and hot-restart toggles
+5. [#50] VMEC resolution ladder and hot-restart toggles
    - Parse/store provenance; ensure cache keys separate by resolution level.
-7. [#51] Unified metrics/constraints module
+6. [#51] Unified metrics/constraints module
    - Single source of truth for geometry/QS proxies to avoid drift across paths.
-8. [#28] ConStellaration evaluator wiring
+7. [#28] ConStellaration evaluator wiring
    - Core landed; track robustness/docs follow-ups here.
 
 Note: [#30] HF dataset helpers and seeds are implemented; keep the issue open for expanded ingestion and examples.
@@ -35,6 +33,7 @@ Note: [#30] HF dataset helpers and seeds are implemented; keep the issue open fo
   (De-dup with Sequential list as work starts.)
 
 ## Completed Recently
+- [#38] PCFM repair pack — aspect-ratio band, edge-iota proxy, and clearance constraint landed with docs/examples.
 - [#73] Agent surrogate screening hook — implemented with CLI/docs.
 - [#60] Evaluator robustness & provenance (timeouts/retries, score inf on failure, cache TTL, deterministic cache) — merged.
 - [#61] Fourier helper, geometry guard thresholds, submit pack with top‑K — merged and documented.

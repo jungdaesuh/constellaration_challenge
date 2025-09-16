@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple, Union
 
@@ -50,7 +51,33 @@ class ProductEq:
     weight: float = 1.0
 
 
-Constraint = Union[NormEq, RatioEq, ProductEq]
+@dataclass(frozen=True)
+class ArBand:
+    major: Var
+    minor: Tuple[Var, ...]
+    amin: float
+    amax: float
+    weight: float = 1.0
+
+
+@dataclass(frozen=True)
+class EdgeIotaEq:
+    major: Var
+    helical: Tuple[Var, ...]
+    target: float
+    eps: float = 1e-6
+    weight: float = 1.0
+
+
+@dataclass(frozen=True)
+class ClearanceMin:
+    major: Var
+    helical: Tuple[Var, ...]
+    minimum: float
+    weight: float = 1.0
+
+
+Constraint = Union[NormEq, RatioEq, ProductEq, ArBand, EdgeIotaEq, ClearanceMin]
 
 
 @dataclass(frozen=True)
@@ -97,6 +124,78 @@ def _build_residual_and_jac(
         (v.field, int(v.i), int(v.j)): k for k, v in enumerate(variables)
     }
 
+    total_rows = sum(2 if isinstance(con, ArBand) else 1 for con in constraints)
+
+    def _value_at(var: Var, x: NDArray[np.floating[Any]]) -> float:
+        return float(x[index[(var.field, int(var.i), int(var.j))]])
+
+    def _values_at(vars: Sequence[Var], x: NDArray[np.floating[Any]]) -> np.ndarray:
+        return np.asarray([_value_at(v, x) for v in vars], dtype=float)
+
+    def _aspect_ratio_and_grad(
+        con: ArBand, x: NDArray[np.floating[Any]]
+    ) -> Tuple[float, Dict[int, float]]:
+        major = _value_at(con.major, x)
+        minor_vals = _values_at(con.minor, x)
+        minor_norm = float(np.linalg.norm(minor_vals))
+        denom = minor_norm + 1e-8
+        aspect = abs(major) / denom
+        grad: Dict[int, float] = {}
+        sign_major = 0.0 if major == 0.0 else (1.0 if major > 0.0 else -1.0)
+        grad[index[(con.major.field, int(con.major.i), int(con.major.j))]] = sign_major / denom
+        if minor_norm > 1e-8:
+            factor = -abs(major) / (denom * denom)
+            inv_norm = 1.0 / minor_norm
+            for v, val in zip(con.minor, minor_vals.tolist()):
+                grad[index[(v.field, int(v.i), int(v.j))]] = factor * inv_norm * float(val)
+        else:
+            for v in con.minor:
+                grad[index[(v.field, int(v.i), int(v.j))]] = 0.0
+        return aspect, grad
+
+    def _edge_iota_and_grad(
+        con: EdgeIotaEq, x: NDArray[np.floating[Any]]
+    ) -> Tuple[float, Dict[int, float]]:
+        major = _value_at(con.major, x)
+        helical_vals = _values_at(con.helical, x)
+        helical_norm = float(np.linalg.norm(helical_vals))
+        denom = abs(major) + float(con.eps)
+        iota = helical_norm / denom
+        grad: Dict[int, float] = {}
+        sign_major = 0.0 if major == 0.0 else (1.0 if major > 0.0 else -1.0)
+        helical_norm_eff = float(con.eps) if helical_norm <= 1e-8 else helical_norm
+        grad[index[(con.major.field, int(con.major.i), int(con.major.j))]] = (
+            -helical_norm_eff * sign_major / (denom * denom)
+        )
+        if helical_norm <= 1e-8 and con.helical:
+            fallback = 1.0 / math.sqrt(len(con.helical))
+            for v in con.helical:
+                grad[index[(v.field, int(v.i), int(v.j))]] = fallback / denom
+        else:
+            coeff = 1.0 / (denom * helical_norm_eff)
+            for v, val in zip(con.helical, helical_vals.tolist()):
+                grad[index[(v.field, int(v.i), int(v.j))]] = coeff * float(val)
+        return iota, grad
+
+    def _clearance_and_grad(
+        con: ClearanceMin, x: NDArray[np.floating[Any]]
+    ) -> Tuple[float, Dict[int, float]]:
+        major = _value_at(con.major, x)
+        helical_vals = _values_at(con.helical, x)
+        helical_norm = float(np.linalg.norm(helical_vals))
+        clearance = abs(major) - helical_norm
+        grad: Dict[int, float] = {}
+        sign_major = 0.0 if major == 0.0 else (1.0 if major > 0.0 else -1.0)
+        grad[index[(con.major.field, int(con.major.i), int(con.major.j))]] = sign_major
+        if helical_norm > 1e-8:
+            coeff = -1.0 / helical_norm
+            for v, val in zip(con.helical, helical_vals.tolist()):
+                grad[index[(v.field, int(v.i), int(v.j))]] = coeff * float(val)
+        else:
+            for v in con.helical:
+                grad[index[(v.field, int(v.i), int(v.j))]] = 0.0
+        return clearance, grad
+
     def residual(x: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
         rs: List[float] = []
         for con in constraints:
@@ -111,32 +210,69 @@ def _build_residual_and_jac(
                 kd = index[(con.den.field, int(con.den.i), int(con.den.j))]
                 denom = float(x[kd]) + float(con.eps)
                 rs.append(con.weight * ((float(x[kn]) / denom) - float(con.target)))
-            else:  # ProductEq
+            elif isinstance(con, ProductEq):
                 ka = index[(con.a.field, int(con.a.i), int(con.a.j))]
                 kb = index[(con.b.field, int(con.b.i), int(con.b.j))]
                 rs.append(con.weight * (float(x[ka]) * float(x[kb]) - float(con.target)))
+            elif isinstance(con, ArBand):
+                aspect, _ = _aspect_ratio_and_grad(con, x)
+                hi = max(0.0, aspect - float(con.amax))
+                lo = max(0.0, float(con.amin) - aspect)
+                rs.append(con.weight * hi)
+                rs.append(con.weight * lo)
+            elif isinstance(con, EdgeIotaEq):
+                iota, _ = _edge_iota_and_grad(con, x)
+                rs.append(con.weight * (iota - float(con.target)))
+            else:  # ClearanceMin
+                clearance, _ = _clearance_and_grad(con, x)
+                rs.append(con.weight * max(0.0, float(con.minimum) - clearance))
         return np.asarray(rs, dtype=float)
 
     def jacobian(x: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
-        m = len(constraints)
+        m = total_rows
         n = len(variables)
         J = np.zeros((m, n), dtype=float)
-        for r, con in enumerate(constraints):
+        row = 0
+        for con in constraints:
             if isinstance(con, NormEq):
                 for t in con.terms:
                     k = index[(t.field, int(t.i), int(t.j))]
-                    J[r, k] += con.weight * (2.0 * float(t.w) * float(x[k]))
+                    J[row, k] += con.weight * (2.0 * float(t.w) * float(x[k]))
+                row += 1
             elif isinstance(con, RatioEq):
                 kn = index[(con.num.field, int(con.num.i), int(con.num.j))]
                 kd = index[(con.den.field, int(con.den.i), int(con.den.j))]
                 denom = float(x[kd]) + float(con.eps)
-                J[r, kn] += con.weight * (1.0 / denom)
-                J[r, kd] += con.weight * (-(float(x[kn]) / (denom * denom)))
-            else:  # ProductEq
+                J[row, kn] += con.weight * (1.0 / denom)
+                J[row, kd] += con.weight * (-(float(x[kn]) / (denom * denom)))
+                row += 1
+            elif isinstance(con, ProductEq):
                 ka = index[(con.a.field, int(con.a.i), int(con.a.j))]
                 kb = index[(con.b.field, int(con.b.i), int(con.b.j))]
-                J[r, ka] += con.weight * float(x[kb])
-                J[r, kb] += con.weight * float(x[ka])
+                J[row, ka] += con.weight * float(x[kb])
+                J[row, kb] += con.weight * float(x[ka])
+                row += 1
+            elif isinstance(con, ArBand):
+                aspect, grad = _aspect_ratio_and_grad(con, x)
+                if aspect > float(con.amax):
+                    for k, g in grad.items():
+                        J[row, k] += con.weight * g
+                row += 1
+                if aspect < float(con.amin):
+                    for k, g in grad.items():
+                        J[row, k] += -con.weight * g
+                row += 1
+            elif isinstance(con, EdgeIotaEq):
+                _, grad = _edge_iota_and_grad(con, x)
+                for k, g in grad.items():
+                    J[row, k] += con.weight * g
+                row += 1
+            else:  # ClearanceMin
+                clearance, grad = _clearance_and_grad(con, x)
+                if clearance < float(con.minimum):
+                    for k, g in grad.items():
+                        J[row, k] += -con.weight * g
+                row += 1
         return J
 
     return residual, jacobian
@@ -179,6 +315,13 @@ def build_spec_from_json(data: Sequence[Dict[str, Any]]) -> PcfmSpec:
             variables.append(LinVariable(field=field, i=int(i), j=int(j)))
         return variables[var_index[key]]
 
+    def parse_var(data: Mapping[str, Any]) -> Var:
+        field = str(data["field"])  # required
+        i = int(data["i"])  # required
+        j = int(data["j"])  # required
+        get_var(field, i, j)
+        return Var(field=field, i=i, j=j)
+
     constraints: List[Constraint] = []
     for item in data:
         t = str(item.get("type", "norm_eq")).lower()
@@ -196,34 +339,53 @@ def build_spec_from_json(data: Sequence[Dict[str, Any]]) -> PcfmSpec:
             weight = float(item.get("weight", 1.0))
             constraints.append(NormEq(terms=terms, radius=radius, weight=weight))
         elif t == "ratio_eq":
-
-            def _v(d: Dict[str, Any]) -> Var:
-                field = str(d["field"])  # required
-                i = int(d["i"])  # required
-                j = int(d["j"])  # required
-                get_var(field, i, j)
-                return Var(field=field, i=i, j=j)
-
-            num = _v(item["num"])  # required
-            den = _v(item["den"])  # required
+            num = parse_var(item["num"])  # required
+            den = parse_var(item["den"])  # required
             target = float(item["target"])  # required
             eps = float(item.get("eps", 1e-6))
             weight = float(item.get("weight", 1.0))
             constraints.append(RatioEq(num=num, den=den, target=target, eps=eps, weight=weight))
         elif t == "product_eq":
-
-            def _v(d: Dict[str, Any]) -> Var:
-                field = str(d["field"])  # required
-                i = int(d["i"])  # required
-                j = int(d["j"])  # required
-                get_var(field, i, j)
-                return Var(field=field, i=i, j=j)
-
-            a = _v(item["a"])  # required
-            b = _v(item["b"])  # required
+            a = parse_var(item["a"])  # required
+            b = parse_var(item["b"])  # required
             target = float(item["target"])  # required
             weight = float(item.get("weight", 1.0))
             constraints.append(ProductEq(a=a, b=b, target=target, weight=weight))
+        elif t == "ar_band":
+            major = parse_var(item["major"])  # required
+            minor_seq = item.get("minor") or item.get("minor_terms")
+            if not minor_seq:
+                raise ValueError("ar_band constraint requires 'minor' terms")
+            minor = tuple(parse_var(d) for d in minor_seq)
+            amin = float(item["amin"])  # required
+            amax = float(item["amax"])  # required
+            weight = float(item.get("weight", 1.0))
+            constraints.append(
+                ArBand(major=major, minor=minor, amin=amin, amax=amax, weight=weight)
+            )
+        elif t == "edge_iota":
+            major = parse_var(item["major"])  # required
+            helical_seq = item.get("helical")
+            if not helical_seq:
+                raise ValueError("edge_iota constraint requires 'helical' terms")
+            helical = tuple(parse_var(d) for d in helical_seq)
+            target = float(item["target"])  # required
+            eps = float(item.get("eps", 1e-6))
+            weight = float(item.get("weight", 1.0))
+            constraints.append(
+                EdgeIotaEq(major=major, helical=helical, target=target, eps=eps, weight=weight)
+            )
+        elif t == "clearance_min":
+            major = parse_var(item["major"])  # required
+            helical_seq = item.get("helical")
+            if not helical_seq:
+                raise ValueError("clearance_min constraint requires 'helical' terms")
+            helical = tuple(parse_var(d) for d in helical_seq)
+            minimum = float(item["min"])  # required
+            weight = float(item.get("weight", 1.0))
+            constraints.append(
+                ClearanceMin(major=major, helical=helical, minimum=minimum, weight=weight)
+            )
         else:
             raise ValueError("Unsupported PCFM constraint type: " + t)
 
@@ -236,6 +398,9 @@ __all__ = [
     "Var",
     "RatioEq",
     "ProductEq",
+    "ArBand",
+    "EdgeIotaEq",
+    "ClearanceMin",
     "PcfmSpec",
     "make_hook",
     "build_spec_from_json",
