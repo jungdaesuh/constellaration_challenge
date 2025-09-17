@@ -24,7 +24,6 @@ Note: [#30] HF dataset helpers and seeds are implemented; keep the issue open fo
 - [#44] P3 scalarization and Pareto sweep.
 - [#43] Nevergrad NGOpt baseline (ALM parity with challenge).
 - [#42] DESC integration: gradient trust-region baseline and resolution ladder.
-- [#41] Integrate QS proxies into PCFM constraints and multi-fidelity gating.
 - [#40] Constrained BoTorch qNEI baseline.
 
   (De-dup with Sequential list as work starts.)
@@ -38,6 +37,7 @@ Note: [#30] HF dataset helpers and seeds are implemented; keep the issue open fo
 - [#39] Multi-fidelity gating with proxy→selection→real and provenance — implemented (PR #63) with single-worker phase fix (PR #65).
 - [#54] Results DB + novelty checks — implemented (PR #69) and wired into the agent resume/novelty path.
 - [#46] Boozer/QS–QI proxy library — heuristic proxies landing with bounded outputs and tests.
+- [#41] Integrate QS proxies into PCFM constraints and multi-fidelity gating — CLI flag `--mf-proxy-metric` wired with Boozer proxy band example.
 - Docs roadmap added (PR #68).
 - Dataset/surrogate speedups (PR #70).
 - Fix: boundary m=1 column mapping (PR #66).

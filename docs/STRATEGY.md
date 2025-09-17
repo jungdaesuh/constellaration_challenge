@@ -22,7 +22,7 @@ What’s implemented vs. planned
 
 Practical CLI mapping
 - ECI: `constelx agent run --correction eci_linear --constraints-file constraints.json`
-- PCFM: `constelx agent run --correction pcfm --constraints-file examples/pcfm_norm.json [--pcfm-gn-iters ...]`
+- PCFM: `constelx agent run --correction pcfm --constraints-file examples/pcfm_norm.json [--pcfm-gn-iters ...]` (extras like `examples/pcfm_qs_band.json` gate the Boozer-derived QS residual directly).
 - Multi‑fidelity: `constelx agent run --mf-proxy --mf-quantile 0.3`
 - Surrogate training: `constelx surrogate train --out-dir outputs/surrogates/mlp --use-pbfm`
 - Baselines: `constelx opt run --baseline trust-constr --use-physics --problem p1`
