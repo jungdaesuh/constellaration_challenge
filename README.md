@@ -102,6 +102,14 @@ Surrogate screening (proxy gating before evaluator)
 - Logging: filtered entries appear in `metrics.csv` with `fail_reason=filtered_surrogate`, `phase=surrogate`, and a `surrogate_score` column.
 
 
+Multi-fidelity proxy gating
+- Enable: `--mf-proxy` to evaluate a cheap Boozer-space proxy before expensive calls.
+- Flags: `--mf-proxy [--mf-threshold <t> | --mf-quantile <q>] [--mf-max-high K] [--mf-proxy-metric metric]`.
+  - Metrics: `metric` defaults to `score`; choose `qs_residual`, `qi_residual`, or `helical_energy` to gate on individual proxies.
+- Behavior: computes proxy metrics for each batch, keeps survivors by threshold/quantile on the selected metric, optionally caps them to `K`, then routes survivors to real/placeholder evaluation.
+- Provenance: proxy rows in `metrics.csv` include `phase=proxy`, the `proxy_metric` name, and the numeric `proxy_score`. Survivors evaluated downstream retain existing fields with `phase=real` when physics is enabled.
+- Caching: proxy evaluations are cached separately with a `:proxy` suffix so they do not collide with real results.
+
  - PCFM correction (examples):
    - Norm equality: constrain helical amplitude to a circle of radius 0.06
      - JSON: `examples/pcfm_norm.json`
@@ -118,17 +126,13 @@ Surrogate screening (proxy gating before evaluator)
   - Edge iota ratio: target helical ratio ≈ 0.1
     - JSON: `examples/pcfm_edge_iota.json`
     - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_edge_iota.json`
+  - QS residual band: clamp `qs_residual` ≤ 0.2 with Boozer proxies
+    - JSON: `examples/pcfm_qs_band.json`
+    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_qs_band.json`
   - Clearance floor: ensure `|R0| - ||m=1|| ≥ 0.95`
     - JSON: `examples/pcfm_clearance.json`
     - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_clearance.json`
   - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8` or via top-level keys in the constraints JSON: `{gn_iters,damping,tol}`
-Multi-fidelity gating
-- Enable a cheap proxy pass before real evaluations to reduce expensive calls:
-  - Flags (agent): `--mf-proxy [--mf-threshold <t> | --mf-quantile <q>] [--mf-max-high K]`
-  - Behavior: compute proxy metrics for a batch, select survivors by score threshold or best-q quantile; cap survivors by `K`; then evaluate survivors with real path (when `--use-physics`).
-- Provenance: results include `phase=proxy|real` and existing `source`/`scoring_version` fields.
-- Caching: proxy results are cached separately under a proxy namespace to avoid collisions with real results.
-
 Artifacts (written under `runs/<timestamp>/`)
 - `config.yaml`: run config, env info, git SHA, package versions
 - `proposals.jsonl`: proposals with seeds and boundaries

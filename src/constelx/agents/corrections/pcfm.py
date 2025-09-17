@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Mapping, Sequence, Tuple, Union, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -77,7 +77,19 @@ class ClearanceMin:
     weight: float = 1.0
 
 
-Constraint = Union[NormEq, RatioEq, ProductEq, ArBand, EdgeIotaEq, ClearanceMin]
+@dataclass(frozen=True)
+class ProxyBand:
+    proxy: str
+    minimum: float | None = None
+    maximum: float | None = None
+    weight: float = 1.0
+    nfp: int | None = None
+
+
+ProxyName = Literal["qs_residual", "qi_residual", "helical_energy"]
+
+
+Constraint = Union[NormEq, RatioEq, ProductEq, ArBand, EdgeIotaEq, ClearanceMin, ProxyBand]
 
 
 @dataclass(frozen=True)
@@ -119,12 +131,22 @@ def _build_residual_and_jac(
     Callable[[NDArray[np.floating[Any]]], NDArray[np.floating[Any]]],
     Callable[[NDArray[np.floating[Any]]], NDArray[np.floating[Any]]],
 ]:
-    # Map variable to index
+    eps = 1e-12
     index: Dict[Tuple[str, int, int], int] = {
         (v.field, int(v.i), int(v.j)): k for k, v in enumerate(variables)
     }
+    m_idx = np.asarray([int(v.i) for v in variables], dtype=int)
+    n_idx = np.asarray([int(v.j) for v in variables], dtype=int)
+    coeff_count = len(variables)
 
-    total_rows = sum(2 if isinstance(con, ArBand) else 1 for con in constraints)
+    def _rows_for_constraint(con: Constraint) -> int:
+        if isinstance(con, ArBand):
+            return 2
+        if isinstance(con, ProxyBand):
+            return int(con.maximum is not None) + int(con.minimum is not None)
+        return 1
+
+    total_rows = sum(_rows_for_constraint(con) for con in constraints)
 
     def _value_at(var: Var, x: NDArray[np.floating[Any]]) -> float:
         return float(x[index[(var.field, int(var.i), int(var.j))]])
@@ -196,8 +218,63 @@ def _build_residual_and_jac(
                 grad[index[(v.field, int(v.i), int(v.j))]] = 0.0
         return clearance, grad
 
+    def _proxy_value_and_grad(
+        proxy: ProxyName,
+        nfp_val: int,
+        coeffs: NDArray[np.floating[Any]],
+    ) -> Tuple[float, NDArray[np.floating[Any]]]:
+        nfp_eff = max(1, int(nfp_val))
+        coeffs_f = np.asarray(coeffs, dtype=float)
+        squares = coeffs_f * coeffs_f
+        total = float(np.sum(squares))
+        base_total = total + eps
+        non_axis_mask = (m_idx > 0).astype(float)
+        helical_mask = (m_idx == 1).astype(float)
+
+        target = m_idx * nfp_eff
+        qs_weights = ((np.abs(n_idx - target)) / (np.abs(n_idx) + np.abs(target) + 1.0)) ** 2
+        penalty_m = np.maximum(0, m_idx - 1).astype(float)
+        penalty_n = np.maximum(0, np.abs(n_idx) - nfp_eff).astype(float)
+        base_penalty = penalty_m + penalty_n
+        qi_weights = (base_penalty / (base_penalty + 1.0)) ** 2
+
+        if proxy == "qs_residual":
+            numerator = float(np.dot(qs_weights, squares))
+            grad = ((2.0 * coeffs_f * qs_weights * base_total) - (numerator * 2.0 * coeffs_f)) / (
+                base_total * base_total
+            )
+            value = float(np.clip(numerator / base_total, 0.0, 1.0))
+            return value, grad
+        if proxy == "qi_residual":
+            numerator = float(np.dot(qi_weights, squares))
+            grad = ((2.0 * coeffs_f * qi_weights * base_total) - (numerator * 2.0 * coeffs_f)) / (
+                base_total * base_total
+            )
+            value = float(np.clip(numerator / base_total, 0.0, 1.0))
+            return value, grad
+        if proxy == "helical_energy":
+            numerator = float(np.dot(helical_mask, squares))
+            non_axis_energy = float(np.dot(non_axis_mask, squares))
+            denom = non_axis_energy + eps
+            grad = (
+                (2.0 * coeffs_f * helical_mask * denom)
+                - (numerator * 2.0 * coeffs_f * non_axis_mask)
+            ) / (denom * denom)
+            value = float(np.clip(numerator / denom, 0.0, 1.0))
+            return value, grad
+        raise ValueError(f"Unsupported proxy metric: {proxy}")
+
     def residual(x: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
         rs: List[float] = []
+        proxy_cache: Dict[Tuple[str, int], Tuple[float, NDArray[np.floating[Any]]]] = {}
+
+        def _get_proxy(con: ProxyBand) -> Tuple[float, NDArray[np.floating[Any]]]:
+            proxy_name = cast(ProxyName, con.proxy)
+            key = (proxy_name, int(con.nfp or 0))
+            if key not in proxy_cache:
+                proxy_cache[key] = _proxy_value_and_grad(proxy_name, int(con.nfp or 1), x)
+            return proxy_cache[key]
+
         for con in constraints:
             if isinstance(con, NormEq):
                 s = 0.0
@@ -223,16 +300,29 @@ def _build_residual_and_jac(
             elif isinstance(con, EdgeIotaEq):
                 iota, _ = _edge_iota_and_grad(con, x)
                 rs.append(con.weight * (iota - float(con.target)))
-            else:  # ClearanceMin
+            elif isinstance(con, ClearanceMin):
                 clearance, _ = _clearance_and_grad(con, x)
                 rs.append(con.weight * max(0.0, float(con.minimum) - clearance))
+            else:  # ProxyBand
+                value, _ = _get_proxy(con)
+                if con.maximum is not None:
+                    rs.append(con.weight * max(0.0, value - float(con.maximum)))
+                if con.minimum is not None:
+                    rs.append(con.weight * max(0.0, float(con.minimum) - value))
         return np.asarray(rs, dtype=float)
 
     def jacobian(x: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
-        m = total_rows
-        n = len(variables)
-        J = np.zeros((m, n), dtype=float)
+        J = np.zeros((total_rows, len(variables)), dtype=float)
         row = 0
+        proxy_cache: Dict[Tuple[str, int], Tuple[float, NDArray[np.floating[Any]]]] = {}
+
+        def _get_proxy(con: ProxyBand) -> Tuple[float, NDArray[np.floating[Any]]]:
+            proxy_name = cast(ProxyName, con.proxy)
+            key = (proxy_name, int(con.nfp or 0))
+            if key not in proxy_cache:
+                proxy_cache[key] = _proxy_value_and_grad(proxy_name, int(con.nfp or 1), x)
+            return proxy_cache[key]
+
         for con in constraints:
             if isinstance(con, NormEq):
                 for t in con.terms:
@@ -267,12 +357,23 @@ def _build_residual_and_jac(
                 for k, g in grad.items():
                     J[row, k] += con.weight * g
                 row += 1
-            else:  # ClearanceMin
+            elif isinstance(con, ClearanceMin):
                 clearance, grad = _clearance_and_grad(con, x)
                 if clearance < float(con.minimum):
                     for k, g in grad.items():
                         J[row, k] += -con.weight * g
                 row += 1
+            else:  # ProxyBand
+                value, grad_vec = _get_proxy(con)
+                grad_vec = np.asarray(grad_vec, dtype=float)
+                if con.maximum is not None:
+                    if value > float(con.maximum):
+                        J[row, :coeff_count] += con.weight * grad_vec
+                    row += 1
+                if con.minimum is not None:
+                    if value < float(con.minimum):
+                        J[row, :coeff_count] += -con.weight * grad_vec
+                    row += 1
         return J
 
     return residual, jacobian
@@ -303,7 +404,9 @@ def make_hook(spec: PcfmSpec) -> Callable[[Mapping[str, Any]], Dict[str, Any]]:
     return hook
 
 
-def build_spec_from_json(data: Sequence[Dict[str, Any]]) -> PcfmSpec:
+def build_spec_from_json(
+    data: Sequence[Dict[str, Any]], *, default_nfp: int | None = None
+) -> PcfmSpec:
     # Collect variables in first-appearance order
     var_index: Dict[Tuple[str, int, int], int] = {}
     variables: List[LinVariable] = []
@@ -381,10 +484,41 @@ def build_spec_from_json(data: Sequence[Dict[str, Any]]) -> PcfmSpec:
             if not helical_seq:
                 raise ValueError("clearance_min constraint requires 'helical' terms")
             helical = tuple(parse_var(d) for d in helical_seq)
-            minimum = float(item["min"])  # required
+            minimum = float(item["min"]) if "min" in item else float(item["minimum"])  # required
             weight = float(item.get("weight", 1.0))
             constraints.append(
                 ClearanceMin(major=major, helical=helical, minimum=minimum, weight=weight)
+            )
+        elif t == "proxy_band":
+            proxy = str(item.get("proxy", "")).lower().strip()
+            if proxy not in {"qs_residual", "qi_residual", "helical_energy"}:
+                raise ValueError(
+                    "proxy_band requires proxy in {'qs_residual','qi_residual','helical_energy'}"
+                )
+            max_val = item.get("max")
+            if max_val is None and "maximum" in item:
+                max_val = item.get("maximum")
+            min_val = item.get("min")
+            if min_val is None and "minimum" in item:
+                min_val = item.get("minimum")
+            if max_val is None and min_val is None:
+                raise ValueError("proxy_band requires 'min'/'max' bounds")
+            vars_hint = item.get("variables")
+            if vars_hint:
+                for vd in vars_hint:
+                    parse_var(vd)
+            nfp_val = item.get("nfp", default_nfp)
+            if nfp_val is None or int(nfp_val) <= 0:
+                raise ValueError("proxy_band requires 'nfp' or default_nfp > 0")
+            weight = float(item.get("weight", 1.0))
+            constraints.append(
+                ProxyBand(
+                    proxy=proxy,
+                    minimum=float(min_val) if min_val is not None else None,
+                    maximum=float(max_val) if max_val is not None else None,
+                    weight=weight,
+                    nfp=int(nfp_val),
+                )
             )
         else:
             raise ValueError("Unsupported PCFM constraint type: " + t)
@@ -401,6 +535,7 @@ __all__ = [
     "ArBand",
     "EdgeIotaEq",
     "ClearanceMin",
+    "ProxyBand",
     "PcfmSpec",
     "make_hook",
     "build_spec_from_json",

@@ -22,7 +22,7 @@ This repository ships with stubs and guardrails so you can iterate quickly. A re
 
 ## Current status (what’s already in place)
 
-- **CLI + agent**: `agent run` writes `config.yaml`, `proposals.jsonl`, `metrics.csv`, `best.json`, `README.md`; supports `--resume`, `--guard-simple`, `--guard-geo`, `--correction {eci_linear,pcfm}`.
+- **CLI + agent**: `agent run` writes `config.yaml`, `proposals.jsonl`, `metrics.csv`, `best.json`, `README.md`; supports `--resume`, `--guard-simple`, `--guard-geo`, `--correction {eci_linear,pcfm}`, and multi-fidelity gating flags (`--mf-proxy`, `--mf-proxy-metric`, thresholds/quantiles).
 - **Scoring/metrics**:
   - Aggregation uses evaluator `score` when present; otherwise computes an `agg_score` (CSV column distinct from `evaluator_score`).
   - `eval.forward`/`forward_many` annotate `elapsed_ms`, `feasible`, and `fail_reason` (defaults supplied on placeholder path).
@@ -90,4 +90,4 @@ Testing anchors (additions beyond the existing suite)
 
 - Placeholder smoke: `constelx agent run --nfp 3 --budget 6 --seed 0 --guard-simple`
 - Physics micro: `CONSTELX_USE_REAL_EVAL=1 constelx agent run --nfp 3 --budget 10 --seed 0 --use-physics --problem p1`
-- PCFM examples: see `examples/pcfm_*.json` and use `--correction pcfm --constraints-file <json>` with optional `--pcfm-gn-iters/--pcfm-damping/--pcfm-tol`.
+- PCFM examples: see `examples/pcfm_*.json` (including `pcfm_qs_band.json` for Boozer-driven QS constraints) and use `--correction pcfm --constraints-file <json>` with optional `--pcfm-gn-iters/--pcfm-damping/--pcfm-tol`.

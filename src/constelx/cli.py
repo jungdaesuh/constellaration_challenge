@@ -509,6 +509,13 @@ def agent_run(
     mf_max_high: Optional[int] = typer.Option(
         None, help="Cap number of real-eval survivors per batch."
     ),
+    mf_proxy_metric: str = typer.Option(
+        "score",
+        help=(
+            "Proxy metric used for gating when --mf-proxy is enabled: "
+            "score|qs_residual|qi_residual|helical_energy."
+        ),
+    ),
     seed_mode: str = typer.Option(
         "random",
         help="Seed generator for new proposals: random|near-axis",
@@ -622,6 +629,7 @@ def agent_run(
             mf_threshold=mf_threshold,
             mf_quantile=mf_quantile,
             mf_max_high=mf_max_high,
+            mf_proxy_metric=mf_proxy_metric,
             seed_mode=seed_mode,
             novelty_skip=novelty_skip,
             novelty_metric=novelty_metric,

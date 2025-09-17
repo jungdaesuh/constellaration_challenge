@@ -1,0 +1,18 @@
+{
+  "constraints": [
+    {
+      "type": "proxy_band",
+      "proxy": "qs_residual",
+      "max": 0.2,
+      "nfp": 3,
+      "variables": [
+        {"field": "r_cos", "i": 1, "j": 5},
+        {"field": "z_sin", "i": 1, "j": 5}
+      ],
+      "weight": 1.0
+    }
+  ],
+  "gn_iters": 5,
+  "damping": 1e-6,
+  "tol": 1e-8
+}

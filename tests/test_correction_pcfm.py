@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import math
 
 from constelx.agents.corrections.eci_linear import Variable as LinVar
@@ -11,8 +12,10 @@ from constelx.agents.corrections.pcfm import (
     PcfmSpec,
     Term,
     Var,
+    build_spec_from_json,
     make_hook,
 )
+from constelx.physics.booz_proxy import compute_proxies
 from constelx.physics.constel_api import example_boundary
 from constelx.physics.constraints import aspect_ratio
 
@@ -105,3 +108,34 @@ def test_pcfm_clearance_minimum_respected() -> None:
     helical = math.sqrt(rc * rc + zs * zs)
     clearance = r0 - helical
     assert clearance >= minimum - 1e-3
+
+
+def test_pcfm_proxy_band_reduces_qs_residual() -> None:
+    b = example_boundary()
+    # Inflate helical coefficients to violate the QS residual bound
+    b["r_cos"][1][5] = -0.25
+    b["z_sin"][1][5] = 0.22
+    spec = build_spec_from_json(
+        [
+            {
+                "type": "proxy_band",
+                "proxy": "qs_residual",
+                "max": 0.002,
+                "nfp": 3,
+                "weight": 200.0,
+                "variables": [
+                    {"field": "r_cos", "i": 1, "j": 5},
+                    {"field": "z_sin", "i": 1, "j": 5},
+                ],
+            }
+        ],
+        default_nfp=3,
+    )
+    spec = dataclasses.replace(spec, gn_iters=20, damping=1e-6)
+    hook = make_hook(spec)
+    before = compute_proxies(b).qs_residual
+    after_boundary = hook(b)
+    after = compute_proxies(after_boundary).qs_residual
+    assert before > 0.002
+    assert after <= 0.002 + 5e-5
+    assert after <= before

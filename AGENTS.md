@@ -25,6 +25,7 @@ These guidelines help contributors build, test, and extend the ConStelX starter 
   - Product eq: `examples/pcfm_product.json`
   - Aspect-ratio band: `examples/pcfm_ar_band.json`
   - Edge iota ratio: `examples/pcfm_edge_iota.json`
+  - QS residual band (Boozer proxy): `examples/pcfm_qs_band.json`
   - Clearance floor: `examples/pcfm_clearance.json`
   - Command: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file <json>`
     - Tuning: CLI flags or JSON top-level `{gn_iters,damping,tol}`
@@ -136,7 +137,7 @@ Required pieces:
 Artifacts fields (clarity and provenance)
 
 - CSV columns include: `nfp`, `evaluator_score` (from official evaluator when present), `agg_score` (our aggregated score), `elapsed_ms` (per‑eval time), `feasible` (bool), `fail_reason` (string), and `source` (`placeholder|real`).
-- When multi‑fidelity gating is enabled, a `phase` column indicates `proxy` or `real` evaluation phase for each row. Proxy results are cached separately from real results.
+- When multi‑fidelity gating is enabled, proxy rows include `phase=proxy`, the gating `proxy_metric`, and a `proxy_score` column in addition to the usual provenance (real evaluations keep `phase=real`). Proxy results are cached separately from real results.
 - `best.json` stores `agg_score` (and a backward‑compatible `score` alias), optional `evaluator_score`, and a `metrics` object without a conflicting `score` key.
 
 Submission packaging
