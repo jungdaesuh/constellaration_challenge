@@ -33,6 +33,7 @@ from math import inf, isnan
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
 
+from ..physics.booz_proxy import compute_proxies
 from ..physics.constel_api import evaluate_boundary
 from .cache import CacheBackend, get_cache_backend
 
@@ -267,6 +268,7 @@ def forward_many(
     mf_threshold: float | None = None,
     mf_quantile: float | None = None,
     mf_max_high: int | None = None,
+    mf_metric: str = "score",
 ) -> List[Dict[str, Any]]:
     items = list(boundaries)
     n = len(items)
@@ -300,12 +302,45 @@ def forward_many(
     proxy_scores: dict[int, float] = {}
     proxy_metrics: dict[int, Dict[str, Any]] = {}
 
+    proxy_value_keys = {"qs_residual", "qi_residual", "helical_energy", "mirror_ratio"}
+
+    def _attach_proxy_fields(
+        idx: int, metrics: Dict[str, Any], phase_override: str | None = None
+    ) -> None:
+        if not mf_proxy:
+            return
+        payload = proxy_metrics.get(idx)
+        if payload:
+            proxy_metric_val = payload.get("proxy_metric")
+            if isinstance(proxy_metric_val, str) and "proxy_metric" not in metrics:
+                metrics["proxy_metric"] = proxy_metric_val
+            proxy_score_val = payload.get("proxy_score")
+            if isinstance(proxy_score_val, (int, float)) and "proxy_score" not in metrics:
+                metrics["proxy_score"] = float(proxy_score_val)
+            for key in proxy_value_keys:
+                if key in payload and key not in metrics:
+                    metrics[key] = payload[key]
+        if phase_override is not None:
+            metrics.setdefault("phase", phase_override)
+
     # Compute missing
     if to_compute:
         # If requested, run a cheap proxy evaluation on all to_compute items to select survivors
         if mf_proxy:
+            metric_key_norm = (mf_metric or "score").strip().lower()
+
+            def _proxy_score_value(metrics: Mapping[str, Any]) -> float:
+                if metric_key_norm == "score":
+                    try:
+                        return float(score(metrics, problem=None))
+                    except Exception:
+                        return float("inf")
+                val = metrics.get(metric_key_norm)
+                if isinstance(val, (int, float)):
+                    return float(val)
+                return float("inf")
+
             for i, b in to_compute:
-                # Proxy cache lookup
                 k = keys[i] or _hash_boundary(b)
                 pm_key = f"{k}:proxy"
                 cached_pm = cache.get(pm_key) if cache is not None else None
@@ -321,7 +356,6 @@ def forward_many(
                     except Exception:
                         pass
                     m["phase"] = "proxy"
-                    # Store proxy cache without timing for determinism
                     if cache is not None:
                         try:
                             to_store = dict(m)
@@ -329,13 +363,18 @@ def forward_many(
                             cache.set(pm_key, to_store)
                         except Exception:
                             pass
-                proxy_metrics[i] = m
                 try:
-                    proxy_scores[i] = float(score(m, problem=None))
+                    proxies = compute_proxies(dict(b))
+                    for key_proxy, val_proxy in proxies.as_dict().items():
+                        m.setdefault(key_proxy, float(val_proxy))
                 except Exception:
-                    proxy_scores[i] = float("inf")
+                    pass
+                score_val = _proxy_score_value(m)
+                m.setdefault("proxy_metric", metric_key_norm)
+                m.setdefault("proxy_score", score_val)
+                proxy_metrics[i] = m
+                proxy_scores[i] = score_val
 
-            # Select survivors by threshold/quantile and optional cap
             idxs = list(proxy_scores.keys())
             survivors: set[int] = set()
             if mf_threshold is not None:
@@ -356,7 +395,6 @@ def forward_many(
                 best = sorted(list(survivors), key=lambda i: proxy_scores[i])[: int(mf_max_high)]
                 survivors = set(best)
 
-            # Assign proxy results to non-survivors now; keep survivors in to_compute
             non_survivors = {i for (i, _b) in to_compute} - survivors
             for i in non_survivors:
                 if out[i] is None and i in proxy_metrics:
@@ -407,6 +445,8 @@ def forward_many(
                                         r.setdefault("scoring_version", sv)
                             if isinstance(r, dict):
                                 r.setdefault("phase", "real")
+                                if mf_proxy:
+                                    _attach_proxy_fields(i, r, phase_override=None)
                             out[i] = r
                         except Exception:
                             out[i] = {
@@ -483,6 +523,8 @@ def forward_many(
                         if sv:
                             metrics_any1.setdefault("scoring_version", sv)
                         metrics_any1.setdefault("phase", "real")
+                        if mf_proxy:
+                            _attach_proxy_fields(i, metrics_any1, phase_override=None)
                         out[i] = metrics_any1
                 except Exception:
                     for i, b in to_compute:
@@ -508,6 +550,8 @@ def forward_many(
                     if sv:
                         metrics_any2.setdefault("scoring_version", sv)
                     metrics_any2.setdefault("phase", "real")
+                    if mf_proxy:
+                        _attach_proxy_fields(i, metrics_any2, phase_override=None)
                     out[i] = metrics_any2
             except Exception:
                 for i, b in to_compute:
@@ -525,7 +569,7 @@ def forward_many(
                 except Exception:
                     pass
                 if mf_proxy:
-                    metrics.setdefault("phase", "proxy")
+                    _attach_proxy_fields(i, metrics, phase_override="proxy")
                 out[i] = metrics
         elif to_compute:
             try:
@@ -537,7 +581,7 @@ def forward_many(
                         if isinstance(r, dict):
                             r.setdefault("source", "placeholder")
                             if mf_proxy:
-                                r.setdefault("phase", "proxy")
+                                _attach_proxy_fields(futs[fut], r, phase_override="proxy")
                         out[i] = r
             except Exception:
                 # Fallback to sequential if process pool is unavailable (e.g., sandboxed env)
@@ -553,7 +597,7 @@ def forward_many(
                     except Exception:
                         pass
                     if mf_proxy:
-                        metrics.setdefault("phase", "proxy")
+                        _attach_proxy_fields(i, metrics, phase_override="proxy")
                     out[i] = metrics
 
     # Strip non-deterministic timing before caching/returning to keep cache equality stable

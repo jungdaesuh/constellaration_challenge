@@ -62,6 +62,7 @@ class AgentConfig:
     mf_threshold: float | None = None
     mf_quantile: float | None = None
     mf_max_high: int | None = None
+    mf_proxy_metric: str = "score"
     # Seed generator: "random" or "near-axis"
     seed_mode: str = "random"
     # Novelty gating
@@ -186,6 +187,7 @@ def _build_eci_linear_hook(constraints: List[Dict[str, Any]]) -> Optional[_Corre
 def _build_pcfm_hook(
     constraints: List[Dict[str, Any]],
     *,
+    default_nfp: int | None = None,
     gn_iters: int | None = None,
     damping: float | None = None,
     tol: float | None = None,
@@ -195,7 +197,7 @@ def _build_pcfm_hook(
     except Exception:
         return None
     try:
-        spec: PcfmSpec = build_spec_from_json(constraints)
+        spec: PcfmSpec = build_spec_from_json(constraints, default_nfp=default_nfp)
     except Exception:
         return None
     # Apply overrides if provided
@@ -592,6 +594,7 @@ def run(config: AgentConfig) -> Path:
     elif config.correction == "pcfm" and config.constraints:
         hook = _build_pcfm_hook(
             config.constraints,
+            default_nfp=config.nfp,
             gn_iters=config.pcfm_gn_iters,
             damping=config.pcfm_damping,
             tol=config.pcfm_tol,
@@ -947,6 +950,7 @@ def run(config: AgentConfig) -> Path:
                     mf_max_high=(
                         int(config.mf_max_high) if config.mf_max_high is not None else None
                     ),
+                    mf_metric=config.mf_proxy_metric,
                 )
                 for j, (b, m) in enumerate(zip(batch, results)):
                     try:

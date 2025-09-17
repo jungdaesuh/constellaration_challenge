@@ -36,6 +36,9 @@ def test_agent_writes_phase_with_mf_proxy(tmp_path: Path) -> None:
     assert rows, "metrics.csv should not be empty"
     assert "phase" in rows[0], "phase column must be present when mf_proxy is enabled"
     assert all(row.get("phase") == "proxy" for row in rows)
+    assert "proxy_metric" in rows[0]
+    assert rows[0]["proxy_metric"] == "score"
+    assert "proxy_score" in rows[0]
 
 
 def test_agent_real_phase_gated(tmp_path: Path) -> None:
@@ -65,3 +68,4 @@ def test_agent_real_phase_gated(tmp_path: Path) -> None:
     assert "phase" in rows[0]
     # At least one real-phase row expected when physics is available
     assert any(row.get("phase") == "real" for row in rows)
+    assert any(row.get("proxy_metric") for row in rows)

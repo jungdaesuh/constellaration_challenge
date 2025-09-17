@@ -91,6 +91,7 @@ def run_ablation(
             mf_threshold=base.mf_threshold,
             mf_quantile=base.mf_quantile,
             mf_max_high=base.mf_max_high,
+            mf_proxy_metric=base.mf_proxy_metric,
             pcfm_gn_iters=base.pcfm_gn_iters,
             pcfm_damping=base.pcfm_damping,
             pcfm_tol=base.pcfm_tol,
@@ -131,6 +132,7 @@ def run_ablation(
             mf_threshold=base.mf_threshold,
             mf_quantile=base.mf_quantile,
             mf_max_high=base.mf_max_high,
+            mf_proxy_metric=base.mf_proxy_metric,
             pcfm_gn_iters=base.pcfm_gn_iters,
             pcfm_damping=base.pcfm_damping,
             pcfm_tol=base.pcfm_tol,
@@ -145,18 +147,24 @@ def run_ablation(
             cfg = AgentConfig(**{**cfg.__dict__, "guard_geom_validate": True})
         elif name.startswith("mf_proxy") or name.startswith("mf-proxy"):
             # Enable proxy with a reasonable keep quantile for quick runs
-            # Support forms: "mf_proxy", "mf_proxy=q:0.5", "mf_proxy=t:0.1"
+            # Support forms: "mf_proxy", "mf_proxy=q:0.5", "mf_proxy=t:0.1",
+            # and "mf_proxy=m:qs_residual" to pick a gating metric.
             mf_threshold: Optional[float] = None
             mf_quantile: Optional[float] = 0.5
+            metric_name = cfg.mf_proxy_metric
             if "=" in name and ":" in name:
                 try:
                     mode, val = name.split("=", 1)[1].split(":", 1)
+                    mode = mode.strip().lower()
+                    val = val.strip()
                     if mode in {"q", "quantile"}:
                         mf_quantile = float(val)
                         mf_threshold = None
                     elif mode in {"t", "thresh", "threshold"}:
                         mf_threshold = float(val)
                         mf_quantile = None
+                    elif mode in {"m", "metric"}:
+                        metric_name = val.lower()
                 except Exception:
                     pass
             cfg = AgentConfig(
@@ -165,6 +173,7 @@ def run_ablation(
                     "mf_proxy": True,
                     "mf_threshold": mf_threshold,
                     "mf_quantile": mf_quantile,
+                    "mf_proxy_metric": metric_name,
                 }
             )
         elif name in {"algo=cmaes", "algo:cmaes", "cmaes"}:

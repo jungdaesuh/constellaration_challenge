@@ -6,6 +6,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from constelx.cli import app
+from constelx.physics.booz_proxy import compute_proxies
 
 
 def test_agent_with_pcfm_norm_constraint_runs_and_applies(tmp_path: Path) -> None:
@@ -43,7 +44,7 @@ def test_agent_with_pcfm_norm_constraint_runs_and_applies(tmp_path: Path) -> Non
             "--constraints-file",
             str(constraints_path),
             "--pcfm-gn-iters",
-            "6",
+            "12",
         ],
     )
     assert result.exit_code == 0
@@ -97,7 +98,7 @@ def test_agent_with_pcfm_ar_band_constraint(tmp_path: Path) -> None:
             "--constraints-file",
             str(constraints_path),
             "--pcfm-gn-iters",
-            "6",
+            "12",
         ],
     )
     assert result.exit_code == 0
@@ -113,3 +114,37 @@ def test_agent_with_pcfm_ar_band_constraint(tmp_path: Path) -> None:
     helical = (rc * rc + zs * zs) ** 0.5
     aspect = r0 / max(helical, 1e-8)
     assert 4.0 - 1e-2 <= aspect <= 8.0 + 1e-2
+
+
+def test_agent_with_pcfm_proxy_band(tmp_path: Path) -> None:
+    runner = CliRunner()
+    runs_dir = tmp_path / "runs"
+    result = runner.invoke(
+        app,
+        [
+            "agent",
+            "run",
+            "--nfp",
+            "3",
+            "--budget",
+            "4",
+            "--seed",
+            "0",
+            "--runs-dir",
+            str(runs_dir),
+            "--correction",
+            "pcfm",
+            "--constraints-file",
+            "examples/pcfm_qs_band.json",
+            "--pcfm-gn-iters",
+            "12",
+        ],
+    )
+    assert result.exit_code == 0
+    run_dirs = [p for p in runs_dir.iterdir() if p.is_dir()]
+    assert run_dirs
+    proposals = (run_dirs[0] / "proposals.jsonl").read_text().splitlines()
+    assert proposals
+    boundary = json.loads(proposals[0])["boundary"]
+    proxies = compute_proxies(boundary)
+    assert proxies.qs_residual <= 0.21

@@ -23,7 +23,7 @@ def test_mf_gating_selects_by_threshold_and_sets_phase() -> None:
     good = _make_boundary(0.02)
     batch = [bad, mid, good]
 
-    # Run with mf_proxy enabled; threshold low enough to keep only the best one
+    # Run with mf_proxy enabled and gate on the QS residual proxy.
     results = forward_many(
         batch,
         max_workers=1,
@@ -32,11 +32,16 @@ def test_mf_gating_selects_by_threshold_and_sets_phase() -> None:
         use_real=False,
         problem="p1",
         mf_proxy=True,
-        mf_threshold=0.1,  # placeholder_metric is used directly by score() on placeholder path
+        mf_threshold=0.2,
         mf_quantile=None,
         mf_max_high=None,
+        mf_metric="qs_residual",
     )
 
+    proxy_scores = [float(r.get("proxy_score", float("nan"))) for r in results]
+    assert all(ps >= 0.0 for ps in proxy_scores)
+    metrics_used = {r.get("proxy_metric") for r in results}
+    assert metrics_used == {"qs_residual"}
     # Expect three results (real for survivors is not used here since use_real=False)
     assert len(results) == 3
     # All rows must carry a phase field when mf_proxy=True on placeholder path
