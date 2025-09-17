@@ -57,8 +57,8 @@ def _vmec_verbose_context(enable: bool) -> Generator[None, None, None]:
         try:
             yield
         finally:
-            ConstellarationSettings.default_high_fidelity = orig_high
-            ConstellarationSettings.default_high_fidelity_skip_qi = orig_skip
+            ConstellarationSettings.default_high_fidelity = staticmethod(orig_high)
+            ConstellarationSettings.default_high_fidelity_skip_qi = staticmethod(orig_skip)
     except Exception:
         yield
 
