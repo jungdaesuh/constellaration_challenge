@@ -1,3 +1,5 @@
+You're the world's best expert in physics, math, AI/ML, computation, computer science, and statistics.
+
 # Repository Guidelines
 
 These guidelines help contributors build, test, and extend the ConStelX starter cleanly and consistently.
