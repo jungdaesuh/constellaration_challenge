@@ -3,9 +3,9 @@
 TL;DR (repo‑aligned)
 - Train simple, fast surrogates on ConStellaration‑style data (MLP baseline available) and optionally add a PBFM‑style conflict‑free residual term during training.
 - Enforce constraints at inference via correction hooks: ECI (linear Ax=b projection) and PCFM (nonlinear Gauss–Newton projection). Both are wired into `constelx agent run` with `--correction eci_linear|pcfm` and JSON specs (see `examples/pcfm_*.json`).
-- Improve throughput with multi‑fidelity proxy gating (`--mf-proxy ...`), novelty gating, and optional surrogate screening before evaluator calls.
-- Optimize with currently implemented baselines (trust‑constr, ALM, CMA‑ES) and the ablation harness; plan feasibility‑first TR‑BO (FuRBO/BoTorch) as a next milestone.
-- Keep runs reproducible and packageable: the agent writes `runs/<ts>/...` and `constelx submit pack` creates the submission zip.
+- Improve throughput with multi‑fidelity proxy gating (`--mf-proxy ...`), novelty gating, and optional surrogate screening before evaluator calls. Use VMEC++ hot‑restart and a neighbor‑reuse cache to reduce per‑candidate cost.
+- Optimize with currently implemented baselines (trust‑constr, ALM, CMA‑ES) and the ablation harness; prioritize feasibility‑first TR‑BO (FuRBO/BoTorch) next. For P3, track hypervolume explicitly via qEHVI or ε‑constraint once feasibility is reliable.
+- Keep runs reproducible and packageable: the agent writes `runs/<ts>/...` and `constelx submit pack` creates the submission zip. Default runs are deterministic; optional LLM planners should interface by emitting ablation specs for `constelx ablate run`.
 
 What’s implemented vs. planned
 - Implemented now
@@ -17,7 +17,11 @@ What’s implemented vs. planned
   - Agent loop: resume, geometry guards, novelty gating, surrogate screening, NFP round‑robin; artifacts and schema verified by tests.
   - Submission packaging: `constelx submit pack` (supports `--top-k`).
 - Planned (next steps)
-  - Feasibility‑first TR‑BO (FuRBO/BoTorch), qEHVI for P3, broader surrogate families.
+  - Feasibility‑first TR‑BO (FuRBO/BoTorch) and NSGA‑II/III harnesses.
+  - qEHVI / ε‑constraint for P3 with explicit hypervolume tracking.
+  - Surrogate portfolio: LightGBM/LightGBM‑LSS + SHAP for interpretability.
+  - VMEC++ hot‑restart token + neighbor‑reuse cache in evaluator path.
+  - Stage‑II coil optimization (SIMSOPT augmented Lagrangian) + coil‑simplicity surrogate.
   - Optional LLM‑assisted planner that emits ablation specs for `constelx ablate run`.
 
 Practical CLI mapping
@@ -26,6 +30,39 @@ Practical CLI mapping
 - Multi‑fidelity: `constelx agent run --mf-proxy --mf-quantile 0.3`
 - Surrogate training: `constelx surrogate train --out-dir outputs/surrogates/mlp --use-pbfm`
 - Baselines: `constelx opt run --baseline trust-constr --use-physics --problem p1`
+- Problems listing: `constelx eval problems` (shows P1–P3 expected metrics)
+- Ablation harness: `constelx ablate run` (toggle components like guards, mf_proxy)
+
+Challenge essentials & baselines (concise)
+- P1 Geometric: minimize max elongation with constraints on aspect ratio A, average triangularity \bar{\delta}, and edge rotational transform per field period \tilde\iota/N_{\rm fp}.
+- P2 Simple‑to‑build QI: minimize e_{L\nabla B} (coil‑simplicity proxy) under bounds on QI residual, mirror ratio \Delta, \tilde\iota/N_{\rm fp}, and elongation.
+- P3 MHD‑stable QI (multi‑objective): improve (−e_{L\nabla B}, A) subject to vacuum well and a turbulence proxy; leaderboard uses hypervolume over feasible points.
+- Baseline (paper): Augmented‑Lagrangian + NGOpt most reliably finds feasibility. We beat it by hard‑constrained generation (ECI/PCFM), multi‑fidelity screening, and feasibility‑first TR‑BO; VMEC++ remains the verifier.
+
+Multi‑fidelity & hot‑restart (throughput)
+- Use low/medium fidelities (reduced mode sets or relaxed tolerances) to gate expensive calls; reserve high fidelity for finalists. Enable with `--mf-proxy` and a quantile cutoff (e.g., `--mf-quantile 0.3`).
+- Reuse VMEC++ restart state for nearby shapes; add a neighbor‑reuse cache keyed by a boundary fingerprint. Always log both proxy and “real” metrics with `phase=proxy|real`.
+
+Runtime toggles (env)
+- `CONSTELX_REAL_TIMEOUT_MS`, `CONSTELX_REAL_RETRIES`, `CONSTELX_REAL_BACKOFF` control real-evaluator timeout/retry/backoff.
+- `CONSTELX_VMEC_VERBOSE=1` enables verbose VMEC++ logs; `CONSTELX_EVAL_LOG_DIR` writes evaluator logs.
+- Physics tests opt‑in: `CONSTELX_RUN_PHYSICS_TESTS=1`.
+
+Playbooks (ready‑to‑run)
+- P1: `constelx agent run --problem p1 --correction pcfm --constraints-file examples/pcfm_norm.json --mf-proxy --surrogate-screen --penalty-highm 1e-3`
+- P2: `constelx agent run --problem p2 --correction pcfm --constraints-file examples/pcfm_ratio.json --mf-proxy --surrogate-screen --penalty-helical 5e-3`
+- P3: `constelx agent run --problem p3 --correction pcfm --constraints-file examples/pcfm_qs_band.json --mf-proxy --surrogate-screen --top-k 8`
+
+Packaging & provenance (recap)
+- Artifacts: `runs/<ts>/config.yaml`, `proposals.jsonl`, `metrics.csv`, `best.json`, plus `README.md` with CLI/env info.
+- CSV columns include `nfp,evaluator_score,agg_score,elapsed_ms,feasible,fail_reason,source`; with MF gating also log `phase=proxy|real`, `proxy_metric`, `proxy_score`. Surrogate‑filtered rows use `phase=surrogate`, include `surrogate_score`, and set `fail_reason=filtered_surrogate`.
+- Submission: `constelx submit pack runs/<ts> --out submissions/<name>.zip --top-k K` writes `boundary.json`, `metadata.json {problem,scoring_version,git_sha,top_k}`, and `boundaries.jsonl` when `--top-k>1`.
+- When novelty gating is enabled, `novelty.jsonl` persists novelty vectors for reuse across runs.
+
+Risks & mitigations
+- Boozer/VMEC metric drift: always VMEC++‑verify before archiving/submission; log proxy vs. real metrics.
+- PCFM stability: cap GN steps/damping via CLI or JSON; start with ECI for linear bands; reject when KKT residual exceeds tolerance.
+- Compute spikes: throttle with `--mf-quantile` and novelty gating; leverage restart tokens and neighbor cache.
 
 This document is the higher-level strategy for ConStelX: it frames the
 challenge, physics heuristics, model/agent portfolio, and a self-improving
@@ -215,6 +252,8 @@ The combination of (i) constraint‑preserving generative sampling (PCFM/PBFM), 
 
 Note on LLM agents (scope)
 - The current codebase does not integrate LLMs. The “agent” is a deterministic pipeline (propose → evaluate → select) with ablations, novelty, MF gating, constraint hooks, and baseline optimizers. LLM‑driven planner/orchestrator roles remain a research direction and should interface by emitting ablation specs consumable by `constelx ablate run`, with caching and reproducibility.
+
+For a detailed LLM model portfolio and role mapping, see `docs/AGENTS_LLM.md`. This strategy keeps LLMs optional; default CLI paths are deterministic and fully reproducible.
 
 Below is a practical, production‑oriented plan to (i) pick LLMs for your agents (with current, verifiable sources), (ii) give your GPT‑5 coding agent a concrete implementation blueprint end‑to‑end, (iii) map that blueprint to your Apple M3 Max vs. cloud, and (iv) turn the whole thing into a self‑improving system that reliably climbs—and stays at the top of—the ConStellaration leaderboard.
 
