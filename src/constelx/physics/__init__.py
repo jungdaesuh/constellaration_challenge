@@ -6,4 +6,5 @@ __all__ = [
     "pcfm",
     "pbfm",
     "booz_proxy",
+    "metrics",
 ]

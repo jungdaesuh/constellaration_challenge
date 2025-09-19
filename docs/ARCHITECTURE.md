@@ -16,6 +16,7 @@ This document maps the conceptual strategy to the actual modules and CLI in this
 - `src/constelx/physics/` — thin adapters and helpers
   - `constel_api.py` — lightweight placeholder evaluator
   - `proxima_eval.py` — adapter to `constellaration` evaluator; VMEC boundary validation; scoring passthrough
+  - `metrics.py` — unified metrics/constraints facade; attaches Boozer proxies and geometry defaults
   - `pcfm.py` — damped Gauss–Newton projector used by correction hook
   - `pbfm.py` — conflict‑free gradient combination for training‑time residuals
 - `src/constelx/optim/` — baselines

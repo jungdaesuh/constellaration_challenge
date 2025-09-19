@@ -243,6 +243,14 @@ def forward(
                 result.setdefault("scoring_version", sv)
     except Exception:
         pass
+    # Enrich with canonical metrics (non-destructive; adds proxies/geometry if missing)
+    try:
+        from ..physics.metrics import enrich as _enrich_metrics
+
+        result = _enrich_metrics(result, boundary)
+    except Exception:
+        pass
+
     if cache is not None:
         try:
             to_store = dict(result)
@@ -447,6 +455,14 @@ def forward_many(
                                 r.setdefault("phase", "real")
                                 if mf_proxy:
                                     _attach_proxy_fields(i, r, phase_override=None)
+                            # Enrich before storing
+                            if isinstance(r, dict):
+                                try:
+                                    from ..physics.metrics import enrich as _enrich_metrics
+
+                                    r = _enrich_metrics(r, items[i])
+                                except Exception:
+                                    pass
                             out[i] = r
                         except Exception:
                             out[i] = {
@@ -482,6 +498,13 @@ def forward_many(
                                     if sv:
                                         r.setdefault("scoring_version", sv)
                                     r.setdefault("phase", "real")
+                                if isinstance(r, dict):
+                                    try:
+                                        from ..physics.metrics import enrich as _enrich_metrics
+
+                                        r = _enrich_metrics(r, items[i])
+                                    except Exception:
+                                        pass
                                 out[i] = r
                             except Exception:
                                 out[i] = {
@@ -525,6 +548,12 @@ def forward_many(
                         metrics_any1.setdefault("phase", "real")
                         if mf_proxy:
                             _attach_proxy_fields(i, metrics_any1, phase_override=None)
+                        try:
+                            from ..physics.metrics import enrich as _enrich_metrics
+
+                            metrics_any1 = _enrich_metrics(metrics_any1, items[i])
+                        except Exception:
+                            pass
                         out[i] = metrics_any1
                 except Exception:
                     for i, b in to_compute:
@@ -552,10 +581,24 @@ def forward_many(
                     metrics_any2.setdefault("phase", "real")
                     if mf_proxy:
                         _attach_proxy_fields(i, metrics_any2, phase_override=None)
+                    try:
+                        from ..physics.metrics import enrich as _enrich_metrics
+
+                        metrics_any2 = _enrich_metrics(metrics_any2, items[i])
+                    except Exception:
+                        pass
                     out[i] = metrics_any2
             except Exception:
                 for i, b in to_compute:
-                    out[i] = evaluate_boundary(dict(b), use_real=False)
+                    r = evaluate_boundary(dict(b), use_real=False)
+                    if isinstance(r, dict):
+                        try:
+                            from ..physics.metrics import enrich as _enrich_metrics
+
+                            r = _enrich_metrics(r, items[i])
+                        except Exception:
+                            pass
+                    out[i] = r
         elif max_workers <= 1 and to_compute:
             for i, b in to_compute:
                 _t0 = time.perf_counter()
@@ -570,6 +613,13 @@ def forward_many(
                     pass
                 if mf_proxy:
                     _attach_proxy_fields(i, metrics, phase_override="proxy")
+                # Enrich results before storing
+                try:
+                    from ..physics.metrics import enrich as _enrich_metrics
+
+                    metrics = _enrich_metrics(metrics, items[i])
+                except Exception:
+                    pass
                 out[i] = metrics
         elif to_compute:
             try:
@@ -582,6 +632,13 @@ def forward_many(
                             r.setdefault("source", "placeholder")
                             if mf_proxy:
                                 _attach_proxy_fields(futs[fut], r, phase_override="proxy")
+                        if isinstance(r, dict):
+                            try:
+                                from ..physics.metrics import enrich as _enrich_metrics
+
+                                r = _enrich_metrics(r, items[i])
+                            except Exception:
+                                pass
                         out[i] = r
             except Exception:
                 # Fallback to sequential if process pool is unavailable (e.g., sandboxed env)
@@ -598,6 +655,13 @@ def forward_many(
                         pass
                     if mf_proxy:
                         _attach_proxy_fields(i, metrics, phase_override="proxy")
+                    # Enrich results before storing
+                    try:
+                        from ..physics.metrics import enrich as _enrich_metrics
+
+                        metrics = _enrich_metrics(metrics, items[i])
+                    except Exception:
+                        pass
                     out[i] = metrics
 
     # Strip non-deterministic timing before caching/returning to keep cache equality stable
