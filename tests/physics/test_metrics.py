@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from constelx.physics.constel_api import evaluate_boundary, example_boundary
-from constelx.physics.metrics import compute, enrich
+from constelx.physics.metrics import _apply_metadata, compute, enrich
 
 
 def test_metrics_compute_placeholder_metadata() -> None:
@@ -32,3 +32,9 @@ def test_metrics_enrich_adds_defaults_and_proxies() -> None:
     for key in ("qs_residual", "qi_residual", "helical_energy", "mirror_ratio"):
         assert key in enriched
         assert 0.0 <= enriched[key] <= 1.0
+
+
+def test_apply_metadata_normalizes_real_source() -> None:
+    payload: dict[str, object] = {}
+    _apply_metadata(payload, {"source": "constellaration"}, default_source="real")
+    assert payload["source"] == "real"
