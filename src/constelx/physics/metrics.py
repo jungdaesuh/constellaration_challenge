@@ -60,6 +60,43 @@ def _attach_boozer_proxies(boundary: Mapping[str, Any], out: MutableMapping[str,
         pass
 
 
+def _apply_metadata(
+    metrics: MutableMapping[str, Any],
+    info: Mapping[str, Any] | None,
+    *,
+    default_source: str,
+) -> None:
+    """Merge evaluator metadata (source/feasible/reason) into metrics."""
+
+    feasible_val: Optional[bool] = None
+    reason_val: Optional[str] = None
+    source_val: Optional[str] = None
+
+    if isinstance(info, Mapping):
+        raw_feasible = info.get("feasible")
+        if raw_feasible is not None:
+            try:
+                feasible_val = bool(raw_feasible)
+            except Exception:
+                feasible_val = None
+        raw_reason = info.get("reason")
+        if isinstance(raw_reason, str):
+            reason_val = raw_reason
+        raw_source = info.get("source")
+        if isinstance(raw_source, str):
+            source_val = raw_source
+
+    metrics.setdefault("feasible", True if feasible_val is None else feasible_val)
+
+    if not metrics.get("feasible", True):
+        if "fail_reason" not in metrics:
+            metrics["fail_reason"] = reason_val or ""
+    else:
+        metrics.setdefault("fail_reason", reason_val or "")
+
+    metrics.setdefault("source", source_val or default_source)
+
+
 def compute(
     boundary: Mapping[str, Any],
     *,
@@ -76,6 +113,7 @@ def compute(
     """
 
     metrics: dict[str, Any]
+    info_payload: Mapping[str, Any] | None = None
 
     # Resolve feature flag lazily
     if use_real is None:
@@ -87,16 +125,23 @@ def compute(
         try:
             from .proxima_eval import forward_metrics as px_forward
 
-            m, _info = px_forward(boundary, problem=problem or "p1")
+            m, info_payload = px_forward(boundary, problem=problem or "p1")
             metrics = dict(m)
+            default_source = "real"
         except Exception:
             from .constel_api import evaluate_boundary
 
             metrics = evaluate_boundary(dict(boundary), use_real=False)
+            default_source = "placeholder"
+            info_payload = None
     else:
         from .constel_api import evaluate_boundary
 
         metrics = evaluate_boundary(dict(boundary), use_real=False)
+        default_source = "placeholder"
+        info_payload = None
+
+    _apply_metadata(metrics, info_payload, default_source=default_source)
 
     # Enrichment (non-destructive)
     _attach_geometry_defaults(boundary, metrics)
