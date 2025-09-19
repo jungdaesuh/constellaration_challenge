@@ -9,9 +9,7 @@
    - Merge PR and document `CONSTELX_CACHE_TTL_SECONDS` + per-run cache dir guidance in README (cross-link CLI `--cache-dir`).
 4. [#50] VMEC resolution ladder and hot-restart toggles
    - Parse/store provenance; ensure cache keys separate by resolution level.
-5. [#51] Unified metrics/constraints module
-   - Single source of truth for geometry/QS proxies to avoid drift across paths.
-6. [#28] ConStellaration evaluator wiring
+5. [#28] ConStellaration evaluator wiring
    - Core landed; track robustness/docs follow-ups here.
 
 Note: [#30] HF dataset helpers and seeds are implemented; keep the issue open for expanded ingestion and examples.
@@ -29,6 +27,7 @@ Note: [#30] HF dataset helpers and seeds are implemented; keep the issue open fo
   (De-dup with Sequential list as work starts.)
 
 ## Completed Recently
+- [#51] Metrics/constraints single source of truth — added unified facade `src/constelx/physics/metrics.py`; `eval.forward`/`forward_many` now enrich results with geometry defaults and bounded Boozer proxies; docs updated (ARCHITECTURE.md); ruff+mypy+pytest green.
 - [#38] PCFM repair pack — aspect-ratio band, edge-iota proxy, and clearance constraint landed with docs/examples.
 - [#73] Agent surrogate screening hook — implemented with CLI/docs.
 - [#60] Evaluator robustness & provenance (timeouts/retries, score inf on failure, cache TTL, deterministic cache) — merged.
