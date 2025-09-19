@@ -28,7 +28,6 @@ import json
 import multiprocessing
 import os
 import time
-import warnings
 from concurrent.futures import ProcessPoolExecutor, TimeoutError, as_completed
 from math import inf, isnan
 from pathlib import Path
@@ -37,26 +36,6 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
 from ..physics.booz_proxy import compute_proxies
 from ..physics.constel_api import evaluate_boundary
 from .cache import CacheBackend, get_cache_backend
-
-# Suppress deprecation warnings emitted by external physics dependencies until upstream fixes land.
-warnings.filterwarnings(
-    "ignore",
-    category=PendingDeprecationWarning,
-    message="Importing from numpy.matlib is deprecated",
-    module="simsopt.util.polarization_project",
-)
-warnings.filterwarnings(
-    "ignore",
-    category=DeprecationWarning,
-    message="Conversion of an array with ndim > 0 to a scalar is deprecated",
-    module="constellaration.forward_model",
-)
-warnings.filterwarnings(
-    "ignore",
-    category=DeprecationWarning,
-    message="Conversion of an array with ndim > 0 to a scalar is deprecated",
-    module="pydantic.main",
-)
 
 # A simple local type alias; keep as Any to avoid leaking third-party types.
 VmecBoundary: TypeAlias = Any
