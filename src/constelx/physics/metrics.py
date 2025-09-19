@@ -60,6 +60,17 @@ def _attach_boozer_proxies(boundary: Mapping[str, Any], out: MutableMapping[str,
         pass
 
 
+def _normalize_source(source: Optional[str], default: str) -> str:
+    if not source:
+        return default
+    value = source.strip().lower()
+    if value in {"constellaration", "real"}:
+        return "real"
+    if value in {"placeholder", "synthetic"}:
+        return "placeholder"
+    return source
+
+
 def _apply_metadata(
     metrics: MutableMapping[str, Any],
     info: Mapping[str, Any] | None,
@@ -94,7 +105,7 @@ def _apply_metadata(
     else:
         metrics.setdefault("fail_reason", reason_val or "")
 
-    metrics.setdefault("source", source_val or default_source)
+    metrics.setdefault("source", _normalize_source(source_val, default_source))
 
 
 def compute(
