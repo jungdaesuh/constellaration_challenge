@@ -1271,8 +1271,6 @@ def run(config: AgentConfig) -> Path:
                     metrics = {}
                     s = float("inf")
                 _t1 = time.perf_counter()
-                    s = float("inf")
-                _t1 = time.perf_counter()
                 if isinstance(metrics, dict):
                     metrics.setdefault("source", source_tag)
                     metrics.setdefault("seed_source", source_tag)
