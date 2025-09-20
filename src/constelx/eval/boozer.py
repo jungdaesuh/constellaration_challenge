@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
@@ -37,8 +37,10 @@ __all__ = ["BoozerProxies", "compute_boozer_proxies"]
 
 _EPS = 1e-12
 
-FloatArray = NDArray[np.float64]
-IntArray = NDArray[np.int_]
+# Use relaxed NumPy dtype bounds to satisfy mypy --strict
+# while keeping intent clear: floating arrays and integer index arrays.
+FloatArray: TypeAlias = NDArray[np.floating[Any]]
+IntArray: TypeAlias = NDArray[np.integer[Any]]
 
 
 def _bounded_ratio(value: float) -> float:
@@ -89,9 +91,7 @@ class BoozerProxies:
 
 
 def _angles_for_sampling(n_theta: int, n_phi: int, nfp: int) -> tuple[FloatArray, FloatArray]:
-    thetas: FloatArray = np.linspace(
-        0.0, 2.0 * math.pi, num=n_theta, endpoint=False, dtype=float
-    )
+    thetas: FloatArray = np.linspace(0.0, 2.0 * math.pi, num=n_theta, endpoint=False, dtype=float)
     # Toroidal angle spans one field period (2π / nfp)
     phis: FloatArray = np.linspace(
         0.0, 2.0 * math.pi / max(1, nfp), num=n_phi, endpoint=False, dtype=float
@@ -187,9 +187,7 @@ def compute_boozer_proxies(
     np.add.at(sums, flat_bins, flat_B)
     np.add.at(counts, flat_bins, 1)
 
-    means: FloatArray = np.divide(
-        sums, counts, out=np.zeros_like(sums), where=counts > 0
-    )
+    means: FloatArray = np.divide(sums, counts, out=np.zeros_like(sums), where=counts > 0)
     centered: FloatArray = flat_B - means[flat_bins]
     qs_rms = math.sqrt(float(np.mean(centered * centered)))
     qs_res_norm = qs_rms / (B_mean + _EPS)
