@@ -552,7 +552,9 @@ def opt_cmaes(
 
 @opt_app.command("run")
 def opt_run(
-    baseline: str = typer.Option("trust-constr", help="Baseline: trust-constr|alm|cmaes"),
+    baseline: str = typer.Option(
+        "trust-constr", help="Baseline: trust-constr|alm|desc-trust|ngopt|cmaes"
+    ),
     nfp: int = typer.Option(3, help="Boundary NFP for boundary-mode optimization."),
     budget: int = typer.Option(50, help="Iteration budget (outer*inner for ALM)."),
     seed: int = typer.Option(0, help="Random seed (reserved for future use)."),
@@ -587,7 +589,7 @@ def opt_run(
         opt_cmaes(nfp=nfp, budget=budget, seed=seed, toy=False)
         return None
 
-    from .optim.baselines import BaselineConfig, run_alm, run_trust_constr
+    from .optim.baselines import BaselineConfig, run_alm, run_ngopt, run_trust_constr
 
     cfg = BaselineConfig(
         nfp=nfp,
@@ -599,13 +601,148 @@ def opt_run(
         vmec_hot_restart=vmec_hot_restart,
         vmec_restart_key=vmec_restart_key,
     )
-    if baseline.lower() in {"trust", "trust-constr", "trust_constr"}:
-        x, val = run_trust_constr(cfg)
-    elif baseline.lower() in {"alm", "augmented-lagrangian"}:
-        x, val = run_alm(cfg)
-    else:
-        raise typer.BadParameter(f"Unknown baseline: {baseline}")
+    baseline_key = baseline.lower()
+
+    try:
+        if baseline_key in {"trust", "trust-constr", "trust_constr"}:
+            x, val = run_trust_constr(cfg)
+        elif baseline_key in {"alm", "augmented-lagrangian"}:
+            x, val = run_alm(cfg)
+        elif baseline_key in {"ngopt", "nevergrad"}:
+            x, val = run_ngopt(cfg)
+        elif baseline_key in {"desc", "desc-tr", "desc-trust", "desc_trust"}:
+            from .optim.desc_trust_region import (
+                DescTrustRegionConfig,
+                run_desc_trust_region,
+            )
+
+            desc_cfg = DescTrustRegionConfig(
+                nfp=nfp,
+                budget=budget,
+                seed=seed,
+                use_physics=use_physics,
+                problem=(problem or "p1"),
+                prefer_vmec_validation=use_physics,
+            )
+            x, val = run_desc_trust_region(desc_cfg)
+        else:
+            raise typer.BadParameter(f"Unknown baseline: {baseline}")
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     console.print(f"Best x: {list(map(float, x))}\nBest score: {val}")
+
+
+@opt_app.command("pareto")
+def opt_pareto(
+    budget: int = typer.Option(12, help="Random candidates sampled for the sweep."),
+    sweeps: int = typer.Option(5, help="Number of weight pairs spanning the frontier."),
+    seed: int = typer.Option(0, help="Random seed for sampling."),
+    nfp: int = typer.Option(3, help="NFP when sampling random boundaries."),
+    method: str = typer.Option(
+        "weighted_chebyshev", help="Scalarization: weighted_chebyshev|weighted_sum"
+    ),
+    json_out: Optional[Path] = typer.Option(
+        None,
+        "--json-out",
+        help="Optional path to write sweep results (objectives + scalar scores).",
+    ),
+    use_physics: bool = typer.Option(
+        False,
+        "--use-physics/--no-use-physics",
+        help="Route metrics through the real evaluator (requires problem id).",
+    ),
+    problem: str = typer.Option(
+        "p3",
+        help="Problem id when using --use-physics (defaults to p3 placeholder).",
+    ),
+) -> None:
+    """Run a lightweight Pareto sweep for the P3 multi-objective placeholder."""
+
+    from .eval import forward as eval_forward_metrics
+    from .eval.boundary_param import sample_random, validate as validate_boundary
+    from .optim.pareto import (
+        DEFAULT_P3_SCALARIZATION,
+        ScalarizationConfig,
+        extract_objectives,
+        linspace_weights,
+        pareto_front,
+        scalarize,
+    )
+
+    rng = random.Random(seed)
+    candidates: list[dict[str, Any]] = []
+    problem_norm = problem.strip() or "p3"
+    if use_physics and not problem_norm:
+        raise typer.BadParameter("--use-physics requires a valid --problem id")
+
+    for _ in range(int(max(1, budget))):
+        boundary = sample_random(nfp=nfp, seed=rng.randint(0, 2**32 - 1))
+        validate_boundary(boundary)
+        metrics = eval_forward_metrics(
+            boundary,
+            problem=problem_norm,
+            use_real=use_physics,
+            prefer_vmec=use_physics,
+        )
+        objs = extract_objectives(metrics)
+        if objs is None:
+            raise typer.BadParameter("Evaluator did not return multi-objective metrics")
+        candidates.append(
+            {
+                "objectives": list(objs),
+            }
+        )
+
+    if not candidates:
+        console.print("No candidates evaluated; nothing to do.")
+        return
+
+    dim = len(candidates[0]["objectives"])
+    weights = linspace_weights(dim, int(max(1, sweeps)))
+
+    method_norm = method.lower().strip()
+    if method_norm not in {"weighted_chebyshev", "weighted_sum"}:
+        raise typer.BadParameter(f"Unknown scalarization method: {method}")
+
+    base_cfg = DEFAULT_P3_SCALARIZATION
+    if method_norm == "weighted_sum":
+        base_cfg = ScalarizationConfig(method="weighted_sum", weights=base_cfg.weights)
+
+    sweep_results: list[dict[str, Any]] = []
+    for w in weights:
+        cfg = ScalarizationConfig(
+            method=base_cfg.method,
+            weights=w,
+            reference_point=base_cfg.reference_point,
+            rho=base_cfg.rho,
+        )
+        best_idx = min(
+            range(len(candidates)),
+            key=lambda idx: scalarize(candidates[idx]["objectives"], cfg),
+        )
+        score = float(scalarize(candidates[best_idx]["objectives"], cfg))
+        sweep_results.append(
+            {
+                "weight": list(w),
+                "objectives": candidates[best_idx]["objectives"],
+                "scalar_score": score,
+            }
+        )
+
+    front = pareto_front(sweep_results, key=lambda rec: rec["objectives"])
+    console.print(
+        f"Evaluated {len(candidates)} candidates across {len(weights)} weight sets; "
+        f"Pareto front size {len(front)}"
+    )
+
+    if json_out is not None:
+        payload = {
+            "sweep": sweep_results,
+            "front": front,
+        }
+        json_out.write_text(json.dumps(payload, indent=2))
+        console.print(f"Wrote Pareto sweep details to: [bold]{json_out}[/bold]")
 
 
 # -------------------- SURROGATE --------------------

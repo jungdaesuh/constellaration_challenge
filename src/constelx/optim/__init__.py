@@ -1,3 +1,5 @@
 from __future__ import annotations
 
-__all__ = ["evolution"]
+from . import evolution, pareto
+
+__all__ = ["evolution", "pareto"]
