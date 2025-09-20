@@ -938,8 +938,8 @@ def run(config: AgentConfig) -> Path:
                                 float("inf"),
                             )
                             completed += 1
-                        idx += 1
-                        continue
+                            idx += 1
+                            continue
                     try:
                         validate_boundary(b)
                         b = maybe_correct(b)
