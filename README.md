@@ -67,6 +67,11 @@ Optimization baselines (trust‑constr / ALM)
   `constelx opt run --baseline trust-constr --nfp 3 --budget 10`
 - Augmented‑Lagrangian (simple penalty outer loop):
   `constelx opt run --baseline alm --nfp 3 --budget 10`
+- DESC trust-region (DESC gradients + resolution ladder):
+  `constelx opt run --baseline desc-trust --nfp 3 --budget 10`
+  Requires `pip install -e ".[desc]"` (or `constelx[desc]`) and runs a two-stage
+  DESC trust-region SQP pass (coarse M=8/N=8 then refined M=12/N=12) before
+  scoring via the shared evaluator.
 - With physics path (requires problem id):
   `constelx opt run --baseline trust-constr --nfp 3 --budget 10 --use-physics --problem p1`
   When `--use-physics` is set, metrics and scoring route through the official evaluator
@@ -214,6 +219,10 @@ To run with the real evaluator dependencies:
 - Windows: recommended via conda-forge:
   - `conda install -c conda-forge netcdf-c netcdf-cxx4 cmake ninja`
   - `pip install -e ".[dev,physics]"`
+- DESC trust-region baseline (gradient inner loop with DESC):
+  - `pip install -e ".[dev,desc]"` or `pip install constelx[desc]`
+  - Includes `desc-opt` and its JAX stack; reuse the NetCDF guidance above when
+    building on macOS or Linux to satisfy DESC’s geometric I/O dependencies.
 
 When physics extras are unavailable, the CLI and tests use lightweight placeholder evaluators that avoid native builds.
 
