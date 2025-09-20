@@ -35,7 +35,7 @@ dev = [
   "python-dotenv>=1.0",
 ]
 bo = ["botorch>=0.12", "gpytorch>=1.13"]
-evolution = ["cma>=3.3"]
+evolution = ["cma>=3.3", "nevergrad>=1.0.0"]
 serve = ["fastapi>=0.110", "uvicorn>=0.29"]
 physics = ["constellaration>=0.1.6", "desc-opt>=0.15.0"]
 desc = ["desc-opt>=0.15.0"]
