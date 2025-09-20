@@ -69,6 +69,10 @@ class AgentConfig:
     mf_proxy_metric: str = "score"
     # Seed generator: "random" or "near-axis"
     seed_mode: str = "random"
+    seed_prior: Path | None = None
+    seed_prior_min_feasibility: float = 0.5
+    seed_prior_batch_size: int = 16
+    seed_prior_max_draw_batches: int = 32
     # Novelty gating
     novelty_skip: bool = False
     novelty_metric: str = "l2"  # l2|cosine|allclose
@@ -271,6 +275,8 @@ def run(config: AgentConfig) -> Path:
             cfg["surrogate_metadata"] = str(cfg["surrogate_metadata"])
         if cfg.get("novelty_db") is not None:
             cfg["novelty_db"] = str(cfg["novelty_db"])
+        if cfg.get("seed_prior") is not None:
+            cfg["seed_prior"] = str(cfg["seed_prior"])
         conf = {
             "run": cfg,
             "env": _gather_env_info(),
@@ -506,6 +512,24 @@ def run(config: AgentConfig) -> Path:
         ):
             return False, feats
         return True, feats
+
+    prior_model = None
+    prior_rng: _np.random.Generator | None = None
+    prior_mode = (config.seed_mode or "random").lower()
+    if prior_mode in {"prior", "data", "data-prior"}:
+        if config.seed_prior is None:
+            raise ValueError("seed_mode='prior' requires seed_prior model path")
+        try:
+            from ..data.seeds_prior import SeedsPriorModel
+        except Exception as exc:  # pragma: no cover - import guard
+            raise RuntimeError(
+                "Seeds prior support requires scikit-learn and sklearn extras"
+            ) from exc
+        try:
+            prior_model = SeedsPriorModel.load(Path(config.seed_prior))
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load seeds prior model: {exc}") from exc
+        prior_rng = _np.random.default_rng(rng_seed + 991)
 
     def log_entry(
         it: int,
@@ -795,16 +819,19 @@ def run(config: AgentConfig) -> Path:
         it = 0
         idx = 0
         batch_size = 8 if config.max_workers > 1 else 1
+        mode = (config.seed_mode or "random").lower()
         while completed < budget:
             # Prepare a batch of proposals
             seeds: List[int] = []
             batch: List[Dict[str, Any]] = []
             batch_features: List[NoveltyFeature] = []
             pending_vectors: dict[int, list[_np.ndarray]] = {}
+            sources: List[str] = []
             for _ in range(min(batch_size, budget - completed)):
                 if seed_boundaries:
                     b = seed_boundaries.pop(0)
                     seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
+                    source_tag = "init"
                     try:
                         b = maybe_guard_geo(b)
                         b = maybe_guard(b)
@@ -856,10 +883,36 @@ def run(config: AgentConfig) -> Path:
                         continue
                 else:
                     seed_val = (rng_seed + it * 10007 + idx * 7919) % (2**31 - 1)
-                    if (config.seed_mode or "random").lower() == "near-axis":
-                        b = sample_near_axis_qs(nfp=_next_nfp(), seed=seed_val)
+                    nfp_target = _next_nfp()
+                    source_tag = "random"
+                    if mode in {"prior", "data", "data-prior"} and prior_model is not None:
+                        sample_seed = (
+                            int(prior_rng.integers(0, 2**32 - 1))
+                            if prior_rng is not None
+                            else seed_val
+                        )
+                        try:
+                            prior_samples = prior_model.sample(
+                                count=1,
+                                nfp=nfp_target,
+                                min_feasibility=float(config.seed_prior_min_feasibility),
+                                batch_size=int(max(1, config.seed_prior_batch_size)),
+                                max_draw_batches=int(max(1, config.seed_prior_max_draw_batches)),
+                                seed=sample_seed,
+                            )
+                        except Exception:
+                            prior_samples = []
+                        if prior_samples:
+                            b = prior_samples[0].boundary
+                            seed_val = sample_seed
+                            source_tag = "prior"
+                        else:
+                            b = sample_random(nfp=nfp_target, seed=seed_val)
+                    elif mode == "near-axis":
+                        b = sample_near_axis_qs(nfp=nfp_target, seed=seed_val)
+                        source_tag = "near-axis"
                     else:
-                        b = sample_random(nfp=_next_nfp(), seed=seed_val)
+                        b = sample_random(nfp=nfp_target, seed=seed_val)
                     b = maybe_guard_geo(b)
                     b = maybe_guard(b)
                     if config.guard_geom_validate:
@@ -914,6 +967,7 @@ def run(config: AgentConfig) -> Path:
                 batch_features.append(feats)
                 _, nfp_cur, vec_cur = feats
                 pending_vectors.setdefault(nfp_cur, []).append(vec_cur)
+                sources.append(source_tag)
                 idx += 1
             if surrogate_scorer is not None and batch:
                 base_idx = idx - len(batch)
@@ -925,6 +979,7 @@ def run(config: AgentConfig) -> Path:
                     indices=idxs,
                 )
                 batch_features = [batch_features[i] for i in survivors_idx]
+                sources = [sources[i] for i in survivors_idx]
                 if completed >= budget:
                     break
                 if not batch:
@@ -983,12 +1038,20 @@ def run(config: AgentConfig) -> Path:
                             ems = float(val_ms)
                     except Exception:
                         ems = None
+                    metrics_payload_multi: Dict[str, Any]
+                    if isinstance(m, dict):
+                        metrics_payload_multi = dict(m)
+                    else:
+                        metrics_payload_multi = {"value": m}
+                    if j < len(sources):
+                        metrics_payload_multi.setdefault("source", sources[j])
+                        metrics_payload_multi.setdefault("seed_source", sources[j])
                     log_entry(
                         it,
                         j,
                         seeds[j],
                         b,
-                        m,
+                        metrics_payload_multi,
                         agg_s,
                         elapsed_ms=ems,
                         persist_novelty=bool(novelty_db),
@@ -1017,12 +1080,20 @@ def run(config: AgentConfig) -> Path:
                         )
                     except Exception:
                         continue
+                    metrics_payload_single: Dict[str, Any]
+                    if isinstance(m, dict):
+                        metrics_payload_single = dict(m)
+                    else:
+                        metrics_payload_single = {"value": m}
+                    if j < len(sources):
+                        metrics_payload_single.setdefault("source", sources[j])
+                        metrics_payload_single.setdefault("seed_source", sources[j])
                     log_entry(
                         it,
                         j,
                         seeds[j],
                         b,
-                        m,
+                        metrics_payload_single,
                         agg_s,
                         elapsed_ms=(_t1 - _t0) * 1000.0,
                         persist_novelty=bool(novelty_db),
@@ -1054,6 +1125,7 @@ def run(config: AgentConfig) -> Path:
         sigma0 = 0.05
         es = cma.CMAEvolutionStrategy(x0, sigma0, {"bounds": [-0.2, 0.2], "seed": rng_seed})
         it = 0
+        mode = (config.seed_mode or "random").lower()
         while completed < budget and not es.stop():
             xs = es.ask()
             xs_eval: List[List[float]] = []
@@ -1068,10 +1140,37 @@ def run(config: AgentConfig) -> Path:
                 if completed >= budget:
                     break
                 seed_val = (rng_seed + it * 10007 + j * 7919) % (2**31 - 1)
-                if (config.seed_mode or "random").lower() == "near-axis":
-                    b = sample_near_axis_qs(nfp=_next_nfp(), seed=seed_val)
+                metrics: Dict[str, Any]
+                nfp_target = _next_nfp()
+                source_tag = "random"
+                if mode in {"prior", "data", "data-prior"} and prior_model is not None:
+                    sample_seed = (
+                        int(prior_rng.integers(0, 2**32 - 1)) if prior_rng is not None else seed_val
+                    )
+                    try:
+                        prior_samples = prior_model.sample(
+                            count=1,
+                            nfp=nfp_target,
+                            min_feasibility=float(config.seed_prior_min_feasibility),
+                            batch_size=int(max(1, config.seed_prior_batch_size)),
+                            max_draw_batches=int(max(1, config.seed_prior_max_draw_batches)),
+                            seed=sample_seed,
+                        )
+                    except Exception:
+                        prior_samples = []
+                    if prior_samples:
+                        b = prior_samples[0].boundary
+                        seed_val = sample_seed
+                        source_tag = "prior"
+                    else:
+                        b = sample_random(nfp=nfp_target, seed=seed_val)
+                elif mode == "near-axis":
+                    b = sample_near_axis_qs(nfp=nfp_target, seed=seed_val)
+                    source_tag = "near-axis"
                 else:
-                    b = sample_random(nfp=_next_nfp(), seed=seed_val)
+                    b = sample_random(nfp=nfp_target, seed=seed_val)
+                # Override two helical coeffs deterministically from CMA-ES params
+                # Override two helical coeffs deterministically from CMA-ES params
                 try:
                     b["r_cos"][1][5] = float(-abs(x[0]))
                     b["z_sin"][1][5] = float(abs(x[1]))
@@ -1090,6 +1189,7 @@ def run(config: AgentConfig) -> Path:
                                 "feasible": False,
                                 "fail_reason": "invalid_geometry",
                                 "source": "placeholder",
+                                "seed_source": source_tag,
                             }
                             log_entry(it, j, seed_val, b, metrics, float("inf"))
                             xs_eval.append(list(x))
@@ -1171,6 +1271,11 @@ def run(config: AgentConfig) -> Path:
                     metrics = {}
                     s = float("inf")
                 _t1 = time.perf_counter()
+                    s = float("inf")
+                _t1 = time.perf_counter()
+                if isinstance(metrics, dict):
+                    metrics.setdefault("source", source_tag)
+                    metrics.setdefault("seed_source", source_tag)
                 log_entry(
                     it,
                     idx_val,

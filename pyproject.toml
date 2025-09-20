@@ -15,6 +15,7 @@ dependencies = [
   "scipy>=1.11",
   "pandas>=2.0",
   "datasets>=2.20",
+  "scikit-learn>=1.5",
   "rich>=13.7",
   "typer>=0.12",
   "pydantic>=2.7",
