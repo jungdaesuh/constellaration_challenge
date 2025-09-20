@@ -938,8 +938,8 @@ def run(config: AgentConfig) -> Path:
                                 float("inf"),
                             )
                             completed += 1
-                        idx += 1
-                        continue
+                            idx += 1
+                            continue
                     try:
                         validate_boundary(b)
                         b = maybe_correct(b)
@@ -1269,8 +1269,6 @@ def run(config: AgentConfig) -> Path:
                         s = eval_score(metrics, problem=problem if config.use_physics else None)
                 except Exception:
                     metrics = {}
-                    s = float("inf")
-                _t1 = time.perf_counter()
                     s = float("inf")
                 _t1 = time.perf_counter()
                 if isinstance(metrics, dict):
