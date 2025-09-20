@@ -33,7 +33,7 @@ from math import inf, isnan
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
 
-from ..physics.booz_proxy import compute_proxies
+from ..physics.booz_proxy import BOOZER_PROXY_KEYS, compute_proxies
 from ..physics.constel_api import evaluate_boundary
 from .cache import CacheBackend, get_cache_backend
 
@@ -54,6 +54,13 @@ _VMEC_LEVEL_ALIASES: Dict[str, str] = {
     "hi": "high",
     "full": "high",
 }
+
+
+MF_PROXY_METRICS: tuple[str, ...] = (
+    "score",
+    "placeholder_metric",
+    *BOOZER_PROXY_KEYS,
+)
 
 
 def _normalize_vmec_level(value: Optional[str]) -> str:
@@ -437,7 +444,7 @@ def forward_many(
     proxy_scores: dict[int, float] = {}
     proxy_metrics: dict[int, Dict[str, Any]] = {}
 
-    proxy_value_keys = {"qs_residual", "qi_residual", "helical_energy", "mirror_ratio"}
+    proxy_value_keys = set(BOOZER_PROXY_KEYS)
 
     def _attach_proxy_fields(
         idx: int, metrics: Dict[str, Any], phase_override: str | None = None
@@ -463,6 +470,10 @@ def forward_many(
         # If requested, run a cheap proxy evaluation on all to_compute items to select survivors
         if mf_proxy:
             metric_key_norm = (mf_metric or "score").strip().lower()
+            allowed_metrics = {m.strip().lower() for m in MF_PROXY_METRICS}
+            if metric_key_norm not in allowed_metrics:
+                supported = ", ".join(sorted(allowed_metrics))
+                raise ValueError("mf_proxy_metric must be one of: " + supported)
 
             def _proxy_score_value(metrics: Mapping[str, Any]) -> float:
                 if metric_key_norm == "score":
@@ -480,37 +491,57 @@ def forward_many(
                 pm_key = f"{k}:proxy"
                 cached_pm = cache.get(pm_key) if cache is not None else None
                 if isinstance(cached_pm, dict):
-                    m = dict(cached_pm)
-                    m["phase"] = "proxy"
+                    m_raw: Mapping[str, Any] | None = dict(cached_pm)
                 else:
                     _t0p = time.perf_counter()
-                    m = _placeholder_eval_task(dict(b), vmec_opts)
-                    _t1p = time.perf_counter()
                     try:
-                        m.setdefault("elapsed_ms", (_t1p - _t0p) * 1000.0)
+                        from ..physics import metrics as _metrics_mod
+
+                        m_raw = _metrics_mod.compute(
+                            dict(b),
+                            use_real=False,
+                            attach_proxies=True,
+                        )
                     except Exception:
-                        pass
-                    m["phase"] = "proxy"
-                if isinstance(m, dict):
-                    m = _annotate_vmec_metadata(m, vmec_opts)
-                    if cache is not None and cached_pm is None:
+                        m_raw = _placeholder_eval_task(dict(b), vmec_opts)
                         try:
-                            to_store = dict(m)
-                            to_store.pop("elapsed_ms", None)
-                            cache.set(pm_key, to_store)
+                            from ..physics.metrics import enrich as _enrich_metrics
+
+                            m_raw = _enrich_metrics(m_raw, b)
                         except Exception:
                             pass
-                try:
-                    proxies = compute_proxies(dict(b))
-                    for key_proxy, val_proxy in proxies.as_dict().items():
-                        m.setdefault(key_proxy, float(val_proxy))
-                except Exception:
-                    pass
+                    _t1p = time.perf_counter()
+                    if isinstance(m_raw, dict) and "elapsed_ms" not in m_raw:
+                        try:
+                            m_raw = dict(m_raw)
+                            m_raw.setdefault("elapsed_ms", (_t1p - _t0p) * 1000.0)
+                        except Exception:
+                            pass
+                m = dict(m_raw) if isinstance(m_raw, Mapping) else {}
+                m.setdefault("feasible", True)
+                m.setdefault("fail_reason", "")
+                m.setdefault("source", "placeholder")
+                m = _annotate_vmec_metadata(m, vmec_opts)
+                m.setdefault("phase", "proxy")
+                if not all(key in m for key in BOOZER_PROXY_KEYS):
+                    try:
+                        proxies = compute_proxies(dict(b))
+                        for key_proxy, val_proxy in proxies.as_dict().items():
+                            m.setdefault(key_proxy, float(val_proxy))
+                    except Exception:
+                        pass
                 score_val = _proxy_score_value(m)
-                m.setdefault("proxy_metric", metric_key_norm)
-                m.setdefault("proxy_score", score_val)
-                proxy_metrics[i] = m
+                m["proxy_metric"] = metric_key_norm
+                m["proxy_score"] = score_val
+                proxy_metrics[i] = dict(m)
                 proxy_scores[i] = score_val
+                if cache is not None:
+                    try:
+                        to_store = dict(m)
+                        to_store.pop("elapsed_ms", None)
+                        cache.set(pm_key, to_store)
+                    except Exception:
+                        pass
 
             idxs = list(proxy_scores.keys())
             survivors: set[int] = set()
@@ -950,3 +981,12 @@ def _placeholder_eval_task(
     if vmec_opts is not None and isinstance(metrics, dict):
         metrics = _annotate_vmec_metadata(metrics, vmec_opts)
     return metrics
+
+
+__all__ = [
+    "boundary_to_vmec",
+    "forward",
+    "forward_many",
+    "score",
+    "MF_PROXY_METRICS",
+]
