@@ -8,7 +8,7 @@ Scoring formalism. Single‑objective problems map to a bounded score s(\Theta)\
 
 What you’re given. The HF dataset contains plasma boundaries (Fourier coefficients), equilibria (“wout”) and metrics; the constellaration Python package (PyPI/GitHub) includes evaluation functions, forward‑model wrappers, and submission helpers. VMEC++ is an open‑source, modernized VMEC with a Python‑first interface. ￼ ￼
 
-Useful physics background: stage‑1 optimizes a Fourier boundary in R(\theta,\phi),Z(\theta,\phi); quasi‑symmetry / quasi‑isodynamic metrics are naturally defined in Boozer coordinates; coil simplicity proxies and MHD/turbulence proxies are standard “stage‑1” surrogates. ￼
+Useful physics background: stage-1 optimizes a Fourier boundary in R(\theta,\phi),Z(\theta,\phi); quasi-symmetry / quasi-isodynamic metrics are naturally defined in Boozer coordinates; coil simplicity proxies and MHD/turbulence proxies are standard “stage-1” surrogates. ￼ Implementation tip: `constelx.eval.boozer.compute_boozer_proxies` exposes bounded QS/QI residuals and mirror-ratio proxies so guardrails can run before paying for full VMEC++ solves.
 
 ⸻
 
