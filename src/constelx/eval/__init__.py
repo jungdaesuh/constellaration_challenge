@@ -41,6 +41,99 @@ from .cache import CacheBackend, get_cache_backend
 VmecBoundary: TypeAlias = Any
 
 
+_VMEC_LEVEL_ALIASES: Dict[str, str] = {
+    "low": "low",
+    "lo": "low",
+    "fast": "low",
+    "medium": "medium",
+    "med": "medium",
+    "mid": "medium",
+    "default": "auto",
+    "auto": "auto",
+    "high": "high",
+    "hi": "high",
+    "full": "high",
+}
+
+
+def _normalize_vmec_level(value: Optional[str]) -> str:
+    if value is None:
+        return "auto"
+    normalized = value.strip().lower()
+    if not normalized:
+        return "auto"
+    return _VMEC_LEVEL_ALIASES.get(
+        normalized, normalized if normalized in {"low", "medium", "high", "auto"} else "auto"
+    )
+
+
+def _env_bool(name: str) -> Optional[bool]:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    text = raw.strip().lower()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "on", "y"}:
+        return True
+    if text in {"0", "false", "no", "off", "n"}:
+        return False
+    return None
+
+
+def _resolve_vmec_opts(
+    vmec_level: Optional[str],
+    vmec_hot_restart: Optional[bool],
+    vmec_restart_key: Optional[str],
+) -> Dict[str, Any]:
+    level = _normalize_vmec_level(vmec_level or os.getenv("CONSTELX_VMEC_LEVEL"))
+    hot_restart = vmec_hot_restart
+    if hot_restart is None:
+        env_val = _env_bool("CONSTELX_VMEC_HOT_RESTART")
+        if env_val is not None:
+            hot_restart = env_val
+    if hot_restart is None:
+        hot_restart = False
+    restart_key = vmec_restart_key or os.getenv("CONSTELX_VMEC_RESTART_KEY")
+    restart_key = (
+        restart_key.strip() if isinstance(restart_key, str) and restart_key.strip() else None
+    )
+    return {
+        "level": level,
+        "hot_restart": bool(hot_restart),
+        "restart_key": restart_key,
+    }
+
+
+def _combine_cache_key(base: str, vmec_opts: Mapping[str, Any]) -> str:
+    parts: List[str] = []
+    level = vmec_opts.get("level")
+    if isinstance(level, str) and level:
+        parts.append(f"lvl={level}")
+    if vmec_opts.get("hot_restart"):
+        parts.append("hot=1")
+    restart_key = vmec_opts.get("restart_key")
+    if isinstance(restart_key, str) and restart_key:
+        parts.append(f"rk={restart_key}")
+    if not parts:
+        return base
+    return f"{base}|{'|'.join(parts)}"
+
+
+def _annotate_vmec_metadata(
+    metrics: Dict[str, Any], vmec_opts: Mapping[str, Any]
+) -> Dict[str, Any]:
+    try:
+        metrics.setdefault("vmec_level", vmec_opts.get("level", "auto"))
+        metrics.setdefault("vmec_hot_restart", bool(vmec_opts.get("hot_restart", False)))
+        restart_key = vmec_opts.get("restart_key")
+        if isinstance(restart_key, str) and restart_key:
+            metrics.setdefault("vmec_restart_key", restart_key)
+    except Exception:
+        pass
+    return metrics
+
+
 def boundary_to_vmec(boundary: Mapping[str, Any]) -> VmecBoundary:
     """Validate and convert a boundary JSON dict to a VMEC boundary object.
 
@@ -139,7 +232,9 @@ def _scoring_version() -> str:
         return ""
 
 
-def _real_eval_with_timeout(boundary: Mapping[str, Any], problem: str) -> Dict[str, Any]:
+def _real_eval_with_timeout(
+    boundary: Mapping[str, Any], problem: str, vmec_opts: Mapping[str, Any]
+) -> Dict[str, Any]:
     """Call the real evaluator in a separate process with timeout/retries.
 
     Returns a metrics dict annotated with elapsed_ms/feasible/fail_reason and provenance.
@@ -153,7 +248,7 @@ def _real_eval_with_timeout(boundary: Mapping[str, Any], problem: str) -> Dict[s
         deadline = timeout_s * (backoff ** (attempt - 1))
         try:
             with ProcessPoolExecutor(max_workers=1) as ex:
-                fut = ex.submit(_real_eval_task, (dict(boundary), problem))
+                fut = ex.submit(_real_eval_task, (dict(boundary), problem, dict(vmec_opts)))
                 metrics = fut.result(timeout=deadline)
                 # Provenance and versioning
                 try:
@@ -163,7 +258,7 @@ def _real_eval_with_timeout(boundary: Mapping[str, Any], problem: str) -> Dict[s
                         metrics.setdefault("scoring_version", sv)
                 except Exception:
                     pass
-                return metrics
+                return _annotate_vmec_metadata(metrics, vmec_opts)
         except TimeoutError:
             last_err = f"timeout_after_{int(deadline * 1000)}ms"
         except Exception as e:  # pragma: no cover - depends on external evaluator
@@ -171,13 +266,14 @@ def _real_eval_with_timeout(boundary: Mapping[str, Any], problem: str) -> Dict[s
         # retry loop continues
     # Failure payload
     t1_all = time.perf_counter()
-    return {
+    failure = {
         "feasible": False,
         "fail_reason": last_err or "timeout",
         "elapsed_ms": (t1_all - t0_all) * 1000.0,
         "source": "real",
         "scoring_version": _scoring_version() or "",
     }
+    return _annotate_vmec_metadata(failure, vmec_opts)
 
 
 def forward(
@@ -187,6 +283,9 @@ def forward(
     prefer_vmec: bool = False,
     use_real: Optional[bool] = None,
     problem: str = "p1",
+    vmec_level: Optional[str] = None,
+    vmec_hot_restart: Optional[bool] = None,
+    vmec_restart_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the forward evaluator for a single boundary.
 
@@ -210,11 +309,20 @@ def forward(
             # Prefer VMEC validation, but fall back if unavailable
             pass
     # Optional cache lookup
+    vmec_opts = _resolve_vmec_opts(vmec_level, vmec_hot_restart, vmec_restart_key)
+
     cache = _cache_backend(cache_dir)
-    cache_key = _hash_boundary(boundary)
+    cache_key = _combine_cache_key(_hash_boundary(boundary), vmec_opts)
     if cache is not None:
         cached = cache.get(cache_key)
+        if isinstance(cached, dict):
+            reason_cached = str(cached.get("fail_reason") or "").strip()
+            feasible_cached = cached.get("feasible")
+            if reason_cached or feasible_cached is False:
+                cached = None
         if cached is not None:
+            if isinstance(cached, dict):
+                return _annotate_vmec_metadata(dict(cached), vmec_opts)
             return cached
     # evaluate using real physics (if requested) or placeholder path
     t0 = time.perf_counter()
@@ -225,7 +333,7 @@ def forward(
         use_real = os.getenv("CONSTELX_USE_REAL_EVAL", "0").lower() in {"1", "true", "yes"}
     if use_real:
         try:
-            result = _real_eval_with_timeout(boundary, problem)
+            result = _real_eval_with_timeout(boundary, problem, vmec_opts)
         except Exception:
             result = evaluate_boundary(dict(boundary), use_real=False)
     else:
@@ -251,15 +359,21 @@ def forward(
     except Exception:
         pass
 
+    result = _annotate_vmec_metadata(result, vmec_opts)
+
     if cache is not None:
-        try:
-            to_store = dict(result)
-            to_store.pop("elapsed_ms", None)
-            cache.set(cache_key, to_store)
-            # Return a result consistent with cached (strip non-deterministic timing)
-            result = to_store
-        except Exception:
-            cache.set(cache_key, result)
+        reason_val = str(result.get("fail_reason") or "").strip()
+        feasible_val = result.get("feasible")
+        should_cache = not reason_val and feasible_val is not False
+        if should_cache:
+            try:
+                to_store = dict(result)
+                to_store.pop("elapsed_ms", None)
+                cache.set(cache_key, to_store)
+                # Return a result consistent with cached (strip non-deterministic timing)
+                result = dict(to_store)
+            except Exception:
+                cache.set(cache_key, result)
     return result
 
 
@@ -277,6 +391,9 @@ def forward_many(
     mf_quantile: float | None = None,
     mf_max_high: int | None = None,
     mf_metric: str = "score",
+    vmec_level: Optional[str] = None,
+    vmec_hot_restart: Optional[bool] = None,
+    vmec_restart_key: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     items = list(boundaries)
     n = len(items)
@@ -284,6 +401,8 @@ def forward_many(
 
     keys: List[Optional[str]] = [None] * n
     to_compute: list[tuple[int, Mapping[str, Any]]] = []
+
+    vmec_opts = _resolve_vmec_opts(vmec_level, vmec_hot_restart, vmec_restart_key)
 
     cache = _cache_backend(cache_dir)
 
@@ -298,11 +417,19 @@ def forward_many(
         if cache is None:
             to_compute.append((i, b))
             continue
-        k = _hash_boundary(b)
+        k = _combine_cache_key(_hash_boundary(b), vmec_opts)
         keys[i] = k
         got = cache.get(k)
+        if isinstance(got, dict):
+            reason_cached = str(got.get("fail_reason") or "").strip()
+            feasible_cached = got.get("feasible")
+            if reason_cached or feasible_cached is False:
+                got = None
         if got is not None:
-            out[i] = got
+            out[i] = _annotate_vmec_metadata(
+                dict(got) if isinstance(got, dict) else got,
+                vmec_opts,
+            )
             continue
         to_compute.append((i, b))
 
@@ -349,7 +476,7 @@ def forward_many(
                 return float("inf")
 
             for i, b in to_compute:
-                k = keys[i] or _hash_boundary(b)
+                k = keys[i] or _combine_cache_key(_hash_boundary(b), vmec_opts)
                 pm_key = f"{k}:proxy"
                 cached_pm = cache.get(pm_key) if cache is not None else None
                 if isinstance(cached_pm, dict):
@@ -357,14 +484,16 @@ def forward_many(
                     m["phase"] = "proxy"
                 else:
                     _t0p = time.perf_counter()
-                    m = _placeholder_eval_task(dict(b))
+                    m = _placeholder_eval_task(dict(b), vmec_opts)
                     _t1p = time.perf_counter()
                     try:
                         m.setdefault("elapsed_ms", (_t1p - _t0p) * 1000.0)
                     except Exception:
                         pass
                     m["phase"] = "proxy"
-                    if cache is not None:
+                if isinstance(m, dict):
+                    m = _annotate_vmec_metadata(m, vmec_opts)
+                    if cache is not None and cached_pm is None:
                         try:
                             to_store = dict(m)
                             to_store.pop("elapsed_ms", None)
@@ -438,7 +567,7 @@ def forward_many(
                     futs = {}
                     timeout_s, _retries, _backoff = _timeout_config()
                     for i, b in to_compute:
-                        fut = ex.submit(_real_eval_task, (dict(b), problem))
+                        fut = ex.submit(_real_eval_task, (dict(b), problem, vmec_opts))
                         futs[fut] = i
                         start_times[i] = time.perf_counter()
                     for fut in as_completed(futs, timeout=None):
@@ -451,12 +580,12 @@ def forward_many(
                                     sv = _scoring_version()
                                     if sv:
                                         r.setdefault("scoring_version", sv)
-                            if isinstance(r, dict):
                                 r.setdefault("phase", "real")
                                 if mf_proxy:
                                     _attach_proxy_fields(i, r, phase_override=None)
-                            # Enrich before storing
+                                r = _annotate_vmec_metadata(r, vmec_opts)
                             if isinstance(r, dict):
+                                # Enrich before storing
                                 try:
                                     from ..physics.metrics import enrich as _enrich_metrics
 
@@ -465,29 +594,34 @@ def forward_many(
                                     pass
                             out[i] = r
                         except Exception:
-                            out[i] = {
-                                "feasible": False,
-                                "fail_reason": "worker_error",
-                                "elapsed_ms": (
-                                    time.perf_counter() - start_times.get(i, time.perf_counter())
-                                )
-                                * 1000.0,
-                                "source": "real",
-                                "scoring_version": _scoring_version() or "",
-                                "phase": "real",
-                            }
+                            out[i] = _annotate_vmec_metadata(
+                                {
+                                    "feasible": False,
+                                    "fail_reason": "worker_error",
+                                    "elapsed_ms": (
+                                        time.perf_counter()
+                                        - start_times.get(i, time.perf_counter())
+                                    )
+                                    * 1000.0,
+                                    "source": "real",
+                                    "scoring_version": _scoring_version() or "",
+                                    "phase": "real",
+                                },
+                                vmec_opts,
+                            )
                     # Mark timed-out futures
                     for fut, i in futs.items():
                         if out[i] is None:
                             elapsed = time.perf_counter() - start_times.get(i, time.perf_counter())
                             if elapsed > timeout_s:
-                                out[i] = {
+                                fail_payload = {
                                     "feasible": False,
                                     "fail_reason": f"timeout_after_{int(timeout_s * 1000)}ms",
                                     "elapsed_ms": elapsed * 1000.0,
                                     "source": "real",
                                     "scoring_version": _scoring_version() or "",
                                 }
+                                out[i] = _annotate_vmec_metadata(fail_payload, vmec_opts)
                     # Fill any remaining by best-effort result() with small timeout to avoid hanging
                     for fut, i in futs.items():
                         if out[i] is None:
@@ -497,7 +631,11 @@ def forward_many(
                                     sv = _scoring_version()
                                     if sv:
                                         r.setdefault("scoring_version", sv)
+                                if isinstance(r, dict):
                                     r.setdefault("phase", "real")
+                                    if mf_proxy:
+                                        _attach_proxy_fields(i, r, phase_override=None)
+                                    r = _annotate_vmec_metadata(r, vmec_opts)
                                 if isinstance(r, dict):
                                     try:
                                         from ..physics.metrics import enrich as _enrich_metrics
@@ -507,18 +645,18 @@ def forward_many(
                                         pass
                                 out[i] = r
                             except Exception:
-                                out[i] = {
+                                elapsed = time.perf_counter() - start_times.get(
+                                    i, time.perf_counter()
+                                )
+                                fail_payload = {
                                     "feasible": False,
                                     "fail_reason": f"timeout_after_{int(timeout_s * 1000)}ms",
-                                    "elapsed_ms": (
-                                        time.perf_counter()
-                                        - start_times.get(i, time.perf_counter())
-                                    )
-                                    * 1000.0,
+                                    "elapsed_ms": elapsed * 1000.0,
                                     "source": "real",
                                     "scoring_version": _scoring_version() or "",
                                     "phase": "real",
                                 }
+                                out[i] = _annotate_vmec_metadata(fail_payload, vmec_opts)
             except Exception:
                 # Fallback to sequential real-eval
                 try:
@@ -526,7 +664,9 @@ def forward_many(
 
                     for i, b in to_compute:
                         _t0 = time.perf_counter()
-                        _metrics_raw, info = px_forward(dict(b), problem=problem)
+                        _metrics_raw, info = px_forward(
+                            dict(b), problem=problem, vmec_opts=vmec_opts
+                        )
                         # Widen type to allow non-float annotations
                         metrics_any1: Dict[str, Any] = dict(_metrics_raw)
                         _t1 = time.perf_counter()
@@ -548,6 +688,7 @@ def forward_many(
                         metrics_any1.setdefault("phase", "real")
                         if mf_proxy:
                             _attach_proxy_fields(i, metrics_any1, phase_override=None)
+                        metrics_any1 = _annotate_vmec_metadata(metrics_any1, vmec_opts)
                         try:
                             from ..physics.metrics import enrich as _enrich_metrics
 
@@ -557,14 +698,17 @@ def forward_many(
                         out[i] = metrics_any1
                 except Exception:
                     for i, b in to_compute:
-                        out[i] = evaluate_boundary(dict(b), use_real=False)
+                        placeholder = evaluate_boundary(dict(b), use_real=False)
+                        if isinstance(placeholder, dict):
+                            placeholder = _annotate_vmec_metadata(placeholder, vmec_opts)
+                        out[i] = placeholder
         elif use_real and to_compute:
             try:
                 from ..physics.proxima_eval import forward_metrics as px_forward
 
                 for i, b in to_compute:
                     _t0 = time.perf_counter()
-                    _metrics_raw, info = px_forward(dict(b), problem=problem)
+                    _metrics_raw, info = px_forward(dict(b), problem=problem, vmec_opts=vmec_opts)
                     metrics_any2: Dict[str, Any] = dict(_metrics_raw)
                     _t1 = time.perf_counter()
                     metrics_any2.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
@@ -581,6 +725,7 @@ def forward_many(
                     metrics_any2.setdefault("phase", "real")
                     if mf_proxy:
                         _attach_proxy_fields(i, metrics_any2, phase_override=None)
+                    metrics_any2 = _annotate_vmec_metadata(metrics_any2, vmec_opts)
                     try:
                         from ..physics.metrics import enrich as _enrich_metrics
 
@@ -598,6 +743,7 @@ def forward_many(
                             r = _enrich_metrics(r, items[i])
                         except Exception:
                             pass
+                        r = _annotate_vmec_metadata(r, vmec_opts)
                     out[i] = r
         elif max_workers <= 1 and to_compute:
             for i, b in to_compute:
@@ -613,6 +759,7 @@ def forward_many(
                     pass
                 if mf_proxy:
                     _attach_proxy_fields(i, metrics, phase_override="proxy")
+                metrics = _annotate_vmec_metadata(metrics, vmec_opts)
                 # Enrich results before storing
                 try:
                     from ..physics.metrics import enrich as _enrich_metrics
@@ -624,7 +771,10 @@ def forward_many(
         elif to_compute:
             try:
                 with ProcessPoolExecutor(max_workers=max_workers) as ex:
-                    futs = {ex.submit(_placeholder_eval_task, dict(b)): i for i, b in to_compute}
+                    futs = {
+                        ex.submit(_placeholder_eval_task, dict(b), vmec_opts): i
+                        for i, b in to_compute
+                    }
                     for fut in as_completed(futs):
                         i = futs[fut]
                         r = fut.result()
@@ -632,6 +782,7 @@ def forward_many(
                             r.setdefault("source", "placeholder")
                             if mf_proxy:
                                 _attach_proxy_fields(futs[fut], r, phase_override="proxy")
+                            r = _annotate_vmec_metadata(r, vmec_opts)
                         if isinstance(r, dict):
                             try:
                                 from ..physics.metrics import enrich as _enrich_metrics
@@ -655,6 +806,7 @@ def forward_many(
                         pass
                     if mf_proxy:
                         _attach_proxy_fields(i, metrics, phase_override="proxy")
+                    metrics = _annotate_vmec_metadata(metrics, vmec_opts)
                     # Enrich results before storing
                     try:
                         from ..physics.metrics import enrich as _enrich_metrics
@@ -670,12 +822,16 @@ def forward_many(
             assert rec is not None
             row = rec
             row.pop("elapsed_ms", None)
-            k = keys[i] or _hash_boundary(items[i])
+            k = keys[i] or _combine_cache_key(_hash_boundary(items[i]), vmec_opts)
             # Separate namespaces for proxy vs real results when MF is enabled
             if row.get("phase") == "proxy":
                 cache.set(f"{k}:proxy", row)
-            else:
-                cache.set(k, row)
+                continue
+            reason_val = str(row.get("fail_reason") or "").strip()
+            feasible_val = row.get("feasible")
+            if reason_val or feasible_val is False:
+                continue
+            cache.set(k, row)
 
     # type narrowing
     # Remove elapsed_ms to make results deterministic for equality checks
@@ -734,17 +890,18 @@ def score(metrics: Mapping[str, Any], problem: Optional[str] = None) -> float:
     return float(total)
 
 
-def _real_eval_task(args: tuple[dict[str, Any], str]) -> dict[str, Any]:
+def _real_eval_task(args: tuple[dict[str, Any], str, Mapping[str, Any]]) -> dict[str, Any]:
     """Helper for parallel real-evaluator calls.
 
     Accepts (boundary, problem) and returns metrics dict.
     """
-    b, prob = args
+    b, prob, vmec_opts_in = args
+    vmec_opts = dict(vmec_opts_in)
     try:
         from ..physics.proxima_eval import forward_metrics as px_forward
 
         _t0 = time.perf_counter()
-        _metrics_raw, info = px_forward(b, problem=prob)
+        _metrics_raw, info = px_forward(b, problem=prob, vmec_opts=vmec_opts)
         metrics: Dict[str, Any] = dict(_metrics_raw)
         _t1 = time.perf_counter()
         metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
@@ -758,7 +915,7 @@ def _real_eval_task(args: tuple[dict[str, Any], str]) -> dict[str, Any]:
         sv = _scoring_version()
         if sv:
             metrics.setdefault("scoring_version", sv)
-        return metrics
+        return _annotate_vmec_metadata(metrics, vmec_opts)
     except Exception:
         # Fallback to placeholder if real path unavailable in worker
         _t0 = time.perf_counter()
@@ -771,10 +928,14 @@ def _real_eval_task(args: tuple[dict[str, Any], str]) -> dict[str, Any]:
             metrics["source"] = "placeholder"
         except Exception:
             pass
+        if isinstance(metrics, dict):
+            metrics = _annotate_vmec_metadata(metrics, vmec_opts)
         return metrics
 
 
-def _placeholder_eval_task(b: dict[str, Any]) -> dict[str, Any]:
+def _placeholder_eval_task(
+    b: dict[str, Any], vmec_opts: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     """Helper for parallel placeholder evaluator calls with timing."""
     _t0 = time.perf_counter()
     metrics = evaluate_boundary(b, use_real=False)
@@ -786,4 +947,6 @@ def _placeholder_eval_task(b: dict[str, Any]) -> dict[str, Any]:
         metrics.setdefault("source", "placeholder")
     except Exception:
         pass
+    if vmec_opts is not None and isinstance(metrics, dict):
+        metrics = _annotate_vmec_metadata(metrics, vmec_opts)
     return metrics

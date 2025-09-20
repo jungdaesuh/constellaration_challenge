@@ -22,6 +22,9 @@ class BaselineConfig:
     use_physics: bool = False
     problem: str = "p1"
     cache_dir: Path = Path(".cache/eval")
+    vmec_level: str | None = None
+    vmec_hot_restart: bool | None = None
+    vmec_restart_key: str | None = None
 
 
 def _make_boundary(x: Sequence[float] | NDArray[np.floating[Any]], nfp: int) -> dict[str, Any]:
@@ -44,6 +47,9 @@ def _objective(x: np.ndarray, cfg: BaselineConfig) -> float:
         use_real=cfg.use_physics,
         cache_dir=cfg.cache_dir,
         problem=cfg.problem,
+        vmec_level=cfg.vmec_level,
+        vmec_hot_restart=cfg.vmec_hot_restart,
+        vmec_restart_key=cfg.vmec_restart_key,
     )
     # Prefer evaluator-provided score when present and problem is known via eval_score
     return float(eval_score(m, problem=cfg.problem if cfg.use_physics else None))
@@ -84,6 +90,9 @@ def run_alm(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
             use_real=cfg.use_physics,
             cache_dir=cfg.cache_dir,
             problem=cfg.problem,
+            vmec_level=cfg.vmec_level,
+            vmec_hot_restart=cfg.vmec_hot_restart,
+            vmec_restart_key=cfg.vmec_restart_key,
         )
         base = float(eval_score(m, problem=cfg.problem if cfg.use_physics else None))
         pen = 0.0
