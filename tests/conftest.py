@@ -30,8 +30,6 @@ def surrogate_modules(torch_module: object) -> tuple[object, type, object, type]
 
 
 def _build_seeds_prior_records(count: int = 96) -> List[Dict[str, Any]]:
-    from constelx.eval.boundary_param import sample_random
-
     records: List[Dict[str, Any]] = []
     for idx in range(count):
         b = sample_random(nfp=3, seed=idx)
