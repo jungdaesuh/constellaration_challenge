@@ -90,12 +90,14 @@ def evaluate_boundary(
 
         r_cos_norm = _norm2(r_cos) if r_cos is not None else 0.0
         z_sin_norm = _norm2(z_sin) if z_sin is not None else 0.0
+    objectives = [r_cos_norm, z_sin_norm]
     metrics = {
         "r_cos_norm": r_cos_norm,
         "z_sin_norm": z_sin_norm,
         "nfp": int(boundary_json.get("n_field_periods", 0)),
         "stellarator_symmetric": bool(boundary_json.get("is_stellarator_symmetric", True)),
         "placeholder_metric": r_cos_norm + z_sin_norm,
+        "objectives": objectives,
     }
     _add_proxy_metrics(boundary_json, metrics)
     return metrics

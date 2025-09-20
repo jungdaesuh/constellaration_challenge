@@ -33,6 +33,7 @@ from math import inf, isnan
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
 
+from ..optim.pareto import DEFAULT_P3_SCALARIZATION, extract_objectives, scalarize
 from ..physics.booz_proxy import BOOZER_PROXY_KEYS, compute_proxies
 from ..physics.constel_api import evaluate_boundary
 from .cache import CacheBackend, get_cache_backend
@@ -906,6 +907,15 @@ def score(metrics: Mapping[str, Any], problem: Optional[str] = None) -> float:
         return inf if isnan(sv) else sv
 
     # Prefer a single combined placeholder metric if available to avoid double-counting
+    prob_key = problem.lower().strip() if isinstance(problem, str) else ""
+    if prob_key in {"p3", "multi", "mhd", "qi_stable"} or "objectives" in metrics:
+        objs = extract_objectives(metrics)
+        if objs is not None:
+            try:
+                return float(scalarize(objs, DEFAULT_P3_SCALARIZATION))
+            except ValueError:
+                pass
+
     if "placeholder_metric" in metrics and isinstance(metrics["placeholder_metric"], (int, float)):
         v = float(metrics["placeholder_metric"])  # may be NaN
         return inf if isnan(v) else v
