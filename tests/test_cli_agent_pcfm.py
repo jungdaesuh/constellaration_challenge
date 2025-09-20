@@ -148,3 +148,26 @@ def test_agent_with_pcfm_proxy_band(tmp_path: Path) -> None:
     boundary = json.loads(proposals[0])["boundary"]
     proxies = compute_proxies(boundary)
     assert proxies.qs_residual <= 0.21
+
+
+def test_agent_cli_rejects_unknown_mf_proxy_metric(tmp_path: Path) -> None:
+    runner = CliRunner()
+    runs_dir = tmp_path / "runs"
+    result = runner.invoke(
+        app,
+        [
+            "agent",
+            "run",
+            "--nfp",
+            "3",
+            "--budget",
+            "2",
+            "--runs-dir",
+            str(runs_dir),
+            "--mf-proxy",
+            "--mf-proxy-metric",
+            "invalid_metric",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "must be one of" in result.output.lower()

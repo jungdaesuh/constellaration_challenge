@@ -106,7 +106,9 @@ Surrogate screening (proxy gating before evaluator)
 
 Multi-fidelity proxy gating
 - Enable: `--mf-proxy` to evaluate a cheap Boozer-space proxy before expensive calls.
-- Flags: `--mf-proxy [--mf-threshold <t> | --mf-quantile <q>] [--mf-max-high K] [--mf-proxy-metric metric]`.
+- Flags: `--mf-proxy [--mf-threshold <t> | --mf-quantile <q>] [--mf-max-high K] [--mf-proxy-metric metric]`
+  with metrics drawn from the unified facade (`score`, `placeholder_metric`, `qs_residual`,
+  `qi_residual`, `helical_energy`, `mirror_ratio`).
   - Metrics: `metric` defaults to `score`; choose `qs_residual`, `qi_residual`, or `helical_energy` to gate on individual proxies.
 - Behavior: computes proxy metrics for each batch, keeps survivors by threshold/quantile on the selected metric, optionally caps them to `K`, then routes survivors to real/placeholder evaluation.
 - Provenance: proxy rows in `metrics.csv` include `phase=proxy`, the `proxy_metric` name, and the numeric `proxy_score`. Survivors evaluated downstream retain existing fields with `phase=real` when physics is enabled.

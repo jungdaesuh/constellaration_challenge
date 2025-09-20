@@ -563,7 +563,7 @@ def agent_run(
         "score",
         help=(
             "Proxy metric used for gating when --mf-proxy is enabled: "
-            "score|qs_residual|qi_residual|helical_energy."
+            "score|placeholder_metric|qs_residual|qi_residual|helical_energy|mirror_ratio."
         ),
     ),
     seed_mode: str = typer.Option(
@@ -645,6 +645,28 @@ def agent_run(
                 "constraints file must contain a list under 'constraints' or be a list"
             )
         constraints = [dict(x) for x in raw]
+
+    if mf_proxy:
+        try:
+            from constelx.eval import MF_PROXY_METRICS
+
+            allowed = {m.strip().lower() for m in MF_PROXY_METRICS}
+        except Exception:
+            allowed = {
+                "score",
+                "placeholder_metric",
+                "qs_residual",
+                "qi_residual",
+                "helical_energy",
+                "mirror_ratio",
+            }
+        metric_norm = (mf_proxy_metric or "score").strip().lower()
+        if metric_norm not in allowed:
+            supported = ", ".join(sorted(allowed))
+            raise typer.BadParameter(
+                f"--mf-proxy-metric must be one of: {supported}",
+                param_hint="--mf-proxy-metric",
+            )
 
     out = run_agent(
         AgentConfig(

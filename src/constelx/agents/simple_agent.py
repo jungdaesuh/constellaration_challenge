@@ -294,9 +294,13 @@ def run(config: AgentConfig) -> Path:
     # When surrogate screening is enabled, make sure metrics.csv always exposes the
     # surrogate-specific bookkeeping columns so resume logic can distinguish proxy
     # rows even if filtering starts after the first evaluation.
-    forced_metric_columns: tuple[str, ...] = ()
+    forced_metric_columns: list[str] = []
+    if config.mf_proxy:
+        forced_metric_columns.extend(["phase", "proxy_metric", "proxy_score"])
     if config.surrogate_screen:
-        forced_metric_columns = ("phase", "surrogate_score")
+        forced_metric_columns.extend(["phase", "surrogate_score"])
+    # Keep stable ordering and remove duplicates
+    forced_metric_columns_tuple: tuple[str, ...] = tuple(dict.fromkeys(forced_metric_columns))
 
     # Resume bookkeeping
     completed = 0
@@ -356,7 +360,7 @@ def run(config: AgentConfig) -> Path:
 
     existing_header: list[str] | None = None
     if metrics_csv_path.exists() and metrics_csv_path.stat().st_size > 0:
-        existing_header = _ensure_metrics_columns(metrics_csv_path, forced_metric_columns)
+        existing_header = _ensure_metrics_columns(metrics_csv_path, forced_metric_columns_tuple)
 
     # Open for append
     proposals_f = proposals_path.open("a")
@@ -552,10 +556,12 @@ def run(config: AgentConfig) -> Path:
             "agg_score": agg_s,
             "elapsed_ms": elapsed_ms,
         }
+        for col in forced_metric_columns_tuple:
+            row.setdefault(col, metrics_no_collision.get(col))
         if metrics_writer is None:
             # Initialize writer with current row's keys and create header
             fieldnames = list(row.keys())
-            for col in forced_metric_columns:
+            for col in forced_metric_columns_tuple:
                 if col not in fieldnames:
                     fieldnames.append(col)
             metrics_writer = csv.DictWriter(metrics_f, fieldnames=fieldnames, extrasaction="ignore")
