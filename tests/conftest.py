@@ -13,6 +13,8 @@ SRC_PATH = PROJECT_ROOT / "src"
 if SRC_PATH.is_dir() and str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
+from constelx.eval.boundary_param import sample_random
+
 
 @pytest.fixture
 def torch_module() -> object:
