@@ -633,6 +633,118 @@ def opt_run(
     console.print(f"Best x: {list(map(float, x))}\nBest score: {val}")
 
 
+@opt_app.command("pareto")
+def opt_pareto(
+    budget: int = typer.Option(12, help="Random candidates sampled for the sweep."),
+    sweeps: int = typer.Option(5, help="Number of weight pairs spanning the frontier."),
+    seed: int = typer.Option(0, help="Random seed for sampling."),
+    nfp: int = typer.Option(3, help="NFP when sampling random boundaries."),
+    method: str = typer.Option(
+        "weighted_chebyshev", help="Scalarization: weighted_chebyshev|weighted_sum"
+    ),
+    json_out: Optional[Path] = typer.Option(
+        None,
+        "--json-out",
+        help="Optional path to write sweep results (objectives + scalar scores).",
+    ),
+    use_physics: bool = typer.Option(
+        False,
+        "--use-physics/--no-use-physics",
+        help="Route metrics through the real evaluator (requires problem id).",
+    ),
+    problem: str = typer.Option(
+        "p3",
+        help="Problem id when using --use-physics (defaults to p3 placeholder).",
+    ),
+) -> None:
+    """Run a lightweight Pareto sweep for the P3 multi-objective placeholder."""
+
+    from .eval import forward as eval_forward_metrics
+    from .eval.boundary_param import sample_random, validate as validate_boundary
+    from .optim.pareto import (
+        DEFAULT_P3_SCALARIZATION,
+        ScalarizationConfig,
+        extract_objectives,
+        linspace_weights,
+        pareto_front,
+        scalarize,
+    )
+
+    rng = random.Random(seed)
+    candidates: list[dict[str, Any]] = []
+    problem_norm = problem.strip() or "p3"
+    if use_physics and not problem_norm:
+        raise typer.BadParameter("--use-physics requires a valid --problem id")
+
+    for _ in range(int(max(1, budget))):
+        boundary = sample_random(nfp=nfp, seed=rng.randint(0, 2**32 - 1))
+        validate_boundary(boundary)
+        metrics = eval_forward_metrics(
+            boundary,
+            problem=problem_norm,
+            use_real=use_physics,
+            prefer_vmec=use_physics,
+        )
+        objs = extract_objectives(metrics)
+        if objs is None:
+            raise typer.BadParameter("Evaluator did not return multi-objective metrics")
+        candidates.append(
+            {
+                "objectives": list(objs),
+            }
+        )
+
+    if not candidates:
+        console.print("No candidates evaluated; nothing to do.")
+        return
+
+    dim = len(candidates[0]["objectives"])
+    weights = linspace_weights(dim, int(max(1, sweeps)))
+
+    method_norm = method.lower().strip()
+    if method_norm not in {"weighted_chebyshev", "weighted_sum"}:
+        raise typer.BadParameter(f"Unknown scalarization method: {method}")
+
+    base_cfg = DEFAULT_P3_SCALARIZATION
+    if method_norm == "weighted_sum":
+        base_cfg = ScalarizationConfig(method="weighted_sum", weights=base_cfg.weights)
+
+    sweep_results: list[dict[str, Any]] = []
+    for w in weights:
+        cfg = ScalarizationConfig(
+            method=base_cfg.method,
+            weights=w,
+            reference_point=base_cfg.reference_point,
+            rho=base_cfg.rho,
+        )
+        best_idx = min(
+            range(len(candidates)),
+            key=lambda idx: scalarize(candidates[idx]["objectives"], cfg),
+        )
+        score = float(scalarize(candidates[best_idx]["objectives"], cfg))
+        sweep_results.append(
+            {
+                "weight": list(w),
+                "objectives": candidates[best_idx]["objectives"],
+                "scalar_score": score,
+            }
+        )
+
+    front = pareto_front(sweep_results, key=lambda rec: rec["objectives"])
+    console.print(
+        f"Evaluated {len(candidates)} candidates across {len(weights)} weight sets; "
+        f"Pareto front size {len(front)}"
+    )
+
+    if json_out is not None:
+        payload = {
+            "sweep": sweep_results,
+            "front": front,
+        }
+        json_out.write_text(json.dumps(payload, indent=2))
+        console.print(f"Wrote Pareto sweep details to: [bold]{json_out}[/bold]")
+
+
 # -------------------- SURROGATE --------------------
 sur_app = typer.Typer(help="Train simple surrogate models")
 app.add_typer(sur_app, name="surrogate")
