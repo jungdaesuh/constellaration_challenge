@@ -60,6 +60,8 @@ Status updates
   - Adds aspect-ratio band, edge-iota proxy, and clearance constraints with new `examples/pcfm_*.json` specs and Gauss–Newton Jacobians.
 - Boozer/QS–QI proxies (#46): Implemented.
   - `constelx.physics.booz_proxy` exposes bounded QS/QI residual heuristics with optional real-evaluator hooks and unit coverage.
+- VMEC resolution ladder + hot-restart toggles (#50): Implemented.
+  - CLI/env knobs: `--vmec-level`, `--vmec-hot-restart`, `--vmec-restart-key` (or env counterparts) now propagate through `eval.forward`, agents, and `opt run`; cache keys and provenance record the chosen level.
 
 —
 

@@ -3,13 +3,11 @@
 ## Sequential Tasks (next up)
 1. [#41] Integrate QS proxies into PCFM constraints and multi-fidelity gating
    - PR #85 closed without merge; redo the wiring atop the new metrics facade and keep `--mf-proxy-metric` provenance consistent when re-landing.
-2. [#50] VMEC resolution ladder and hot-restart toggles
-   - Parse/store provenance; ensure cache keys separate by resolution level.
-3. [#28] ConStellaration evaluator wiring follow-ups
+2. [#28] ConStellaration evaluator wiring follow-ups
    - Core landed via PR #36; finish robustness/docs cleanup from #34 and reflect parity guidance before closing.
-4. [#30] Real dataset ingestion (HF dataset) + Parquet cache
+3. [#30] Real dataset ingestion (HF dataset) + Parquet cache
    - Add `--source hf`, parquet outputs, fixtures/examples, and document the ingestion path.
-5. [#40] BoTorch qNEI baseline (optional extra)
+4. [#40] BoTorch qNEI baseline (optional extra)
    - Import-guarded baseline with feasibility-aware acquisition and CLI/tests/docs.
 
 Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pending #28/#30 and the revised #41 work).
@@ -26,6 +24,7 @@ Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pe
 ## Completed Recently
 - [#51] Metrics/constraints single source of truth — added unified facade `src/constelx/physics/metrics.py`; `eval.forward`/`forward_many` now enrich results with geometry defaults and bounded Boozer proxies; docs updated (ARCHITECTURE.md); ruff+mypy+pytest green.
 - [#32] Baselines and `opt run` CLI — trust-constr/ALM baselines shipped with CLI/docs/tests; issue closed 2025-09-15.
+- [#50] VMEC resolution ladder and hot-restart toggles — CLI/env knobs wired through eval/agent/opt, cache separation and provenance recorded.
 - [#38] PCFM repair pack — aspect-ratio band, edge-iota proxy, and clearance constraint landed with docs/examples.
 - [#73] Agent surrogate screening hook — implemented with CLI/docs.
 - [#74] Novelty gating and README/ROADMAP updates — agent skip logic and CLI flags landed (PR #79).

@@ -30,13 +30,14 @@ This document maps the conceptual strategy to the actual modules and CLI in this
 ## CLI → module mapping
 
 - `constelx data fetch --nfp 3 --limit 128` → `data/dataset.py` or HF loader
-- `constelx eval forward --example|--random|--near-axis` → `eval.forward`
+- `constelx eval forward --example|--random|--near-axis [--vmec-level|--vmec-hot-restart]` → `eval.forward`
 - `constelx eval score --metrics-json|--metrics-file` → `eval.score`; `--problem p1|p2|p3` uses physics scorer when available
 - `constelx opt cmaes|run` → `optim/cmaes.py`, `optim/baselines.py`
 - `constelx surrogate train [--use-pbfm]` → `surrogate/train.py`
 - `constelx agent run` → `agents/simple_agent.py` with options:
   - Correction hooks: `--correction eci_linear|pcfm --constraints-file <json> [--pcfm-gn-iters ...]`
   - Multi‑fidelity: `--mf-proxy [--mf-threshold|--mf-quantile] [--mf-max-high]`
+  - VMEC evaluator knobs: `--vmec-level auto|low|medium|high`, `--vmec-hot-restart`, `--vmec-restart-key`
   - Guards: `--guard-geom-validate [--guard-r0-min|--guard-r0-max|--guard-helical-ratio-max]`
   - Novelty: `--novelty-skip ...` (window + optional persisted DB). When a
     `--novelty-db` path is provided we now reuse the stored embeddings on later

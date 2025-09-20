@@ -149,6 +149,19 @@ def eval_forward(
     ),
     problem: str = typer.Option("p1", help="Problem id for scoring/metrics (e.g., p1/p2/p3)."),
     json_out: bool = typer.Option(False, "--json", help="Emit raw JSON metrics."),
+    vmec_level: Optional[str] = typer.Option(
+        None,
+        help="VMEC resolution level (auto|low|medium|high). Defaults to env/auto.",
+    ),
+    vmec_hot_restart: Optional[bool] = typer.Option(
+        None,
+        "--vmec-hot-restart/--no-vmec-hot-restart",
+        help="Enable VMEC hot restart when available (defaults via env).",
+    ),
+    vmec_restart_key: Optional[str] = typer.Option(
+        None,
+        help="Optional VMEC hot-restart key to reuse cached states.",
+    ),
 ) -> None:
     if sum([bool(example), boundary_json is not None, bool(random_boundary), bool(near_axis)]) != 1:
         raise typer.BadParameter(
@@ -180,7 +193,15 @@ def eval_forward(
 
     from .eval import forward as eval_forward_metrics
 
-    result = eval_forward_metrics(b, cache_dir=cache_dir, use_real=use_physics, problem=problem)
+    result = eval_forward_metrics(
+        b,
+        cache_dir=cache_dir,
+        use_real=use_physics,
+        problem=problem,
+        vmec_level=vmec_level,
+        vmec_hot_restart=vmec_hot_restart,
+        vmec_restart_key=vmec_restart_key,
+    )
     if json_out:
         console.print_json(data=result)
         return
@@ -369,6 +390,19 @@ def opt_run(
     problem: Optional[str] = typer.Option(
         None, help="Problem id when using --use-physics (p1|p2|p3)."
     ),
+    vmec_level: Optional[str] = typer.Option(
+        None,
+        help="VMEC resolution level for physics evals (auto|low|medium|high).",
+    ),
+    vmec_hot_restart: Optional[bool] = typer.Option(
+        None,
+        "--vmec-hot-restart/--no-vmec-hot-restart",
+        help="Enable VMEC hot restart when available (defaults via env).",
+    ),
+    vmec_restart_key: Optional[str] = typer.Option(
+        None,
+        help="Optional VMEC hot-restart key for shared state.",
+    ),
 ) -> None:
     """Run an optimization baseline in boundary mode (2D helical coefficients)."""
     if use_physics and not problem:
@@ -389,6 +423,9 @@ def opt_run(
         seed=seed,
         use_physics=use_physics,
         problem=(problem or "p1"),
+        vmec_level=vmec_level,
+        vmec_hot_restart=vmec_hot_restart,
+        vmec_restart_key=vmec_restart_key,
     )
     if baseline.lower() in {"trust", "trust-constr", "trust_constr"}:
         x, val = run_trust_constr(cfg)
@@ -454,6 +491,19 @@ def agent_run(
     ),
     problem: Optional[str] = typer.Option(
         None, help="Problem id when using --use-physics (p1|p2|p3)."
+    ),
+    vmec_level: Optional[str] = typer.Option(
+        None,
+        help="VMEC resolution (auto|low|medium|high) when physics is enabled.",
+    ),
+    vmec_hot_restart: Optional[bool] = typer.Option(
+        None,
+        "--vmec-hot-restart/--no-vmec-hot-restart",
+        help="Enable VMEC hot restart when available (defaults via env).",
+    ),
+    vmec_restart_key: Optional[str] = typer.Option(
+        None,
+        help="Optional VMEC restart key shared across evaluations.",
     ),
     init_seeds: Optional[Path] = typer.Option(
         None, help="JSONL of initial boundary seeds to evaluate first."
@@ -615,6 +665,9 @@ def agent_run(
             constraints=constraints,
             use_physics=use_physics,
             problem=problem,
+            vmec_level=vmec_level,
+            vmec_hot_restart=vmec_hot_restart,
+            vmec_restart_key=vmec_restart_key,
             init_seeds=init_seeds,
             guard_simple=guard_simple,
             guard_geo=guard_geo,
