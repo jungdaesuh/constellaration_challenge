@@ -174,7 +174,7 @@ class BoundaryVectorizer:
         for fname in self.fields:
             sl = self._offsets[fname]
             arr = vec[sl].reshape((self.m_dim, self.n_dim))
-            arr = np.clip(arr, -coeff_abs_max, coeff_abs_max)
+            np.clip(arr, -coeff_abs_max, coeff_abs_max, out=arr)
             if fname == "r_cos":
                 arr[0, base_idx] = float(max(base_radius_min, arr[0, base_idx]))
             result[fname] = arr.tolist()
