@@ -63,6 +63,94 @@ def _vmec_verbose_context(enable: bool) -> Generator[None, None, None]:
         yield
 
 
+def _apply_vmec_hot_settings(settings: Any, hot_restart: bool, restart_key: str | None) -> Any:
+    if settings is None:
+        return settings
+    try:
+        preset = getattr(settings, "vmec_preset_settings", None)
+        if preset is not None:
+            if hot_restart:
+                try:
+                    if hasattr(preset, "enable_hot_restart"):
+                        setattr(preset, "enable_hot_restart", True)
+                except Exception:
+                    pass
+                hr = getattr(preset, "hot_restart", None)
+                if hr is not None:
+                    try:
+                        setattr(hr, "enabled", True)
+                    except Exception:
+                        pass
+                    if restart_key is not None:
+                        try:
+                            setattr(hr, "restart_key", restart_key)
+                        except Exception:
+                            pass
+            else:
+                hr = getattr(preset, "hot_restart", None)
+                if hr is not None:
+                    try:
+                        setattr(hr, "enabled", False)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    if restart_key is not None and hasattr(settings, "restart_key"):
+        try:
+            setattr(settings, "restart_key", restart_key)
+        except Exception:
+            pass
+    return settings
+
+
+@contextmanager
+def _vmec_settings_context(
+    level: str,
+    hot_restart: bool,
+    restart_key: str | None,
+    verbose_flag: bool,
+    log_flag: bool,
+) -> Generator[None, None, None]:
+    with _vmec_verbose_context(verbose_flag or log_flag):
+        try:
+            from constellaration.forward_model import ConstellarationSettings
+
+            level_map = {
+                "low": "default_low_fidelity",
+                "medium": "default_medium_fidelity",
+                "high": "default_high_fidelity",
+            }
+            attr = level_map.get(level)
+            base_factory: Callable[..., Any]
+            if attr and hasattr(ConstellarationSettings, attr):
+                base_factory = getattr(ConstellarationSettings, attr)
+            else:
+                base_factory = ConstellarationSettings.default_high_fidelity
+
+            orig_high = ConstellarationSettings.default_high_fidelity
+            orig_skip = ConstellarationSettings.default_high_fidelity_skip_qi
+
+            def _wrap(factory: Callable[..., Any]) -> Callable[..., Any]:
+                def wrapper(*args: Any, **kwargs: Any) -> Any:
+                    settings = factory(*args, **kwargs)
+                    return _apply_vmec_hot_settings(settings, hot_restart, restart_key)
+
+                return wrapper
+
+            wrapped = _wrap(base_factory)
+            ConstellarationSettings.default_high_fidelity = staticmethod(wrapped)
+            ConstellarationSettings.default_high_fidelity_skip_qi = staticmethod(wrapped)
+        except Exception:
+            yield
+            return
+
+        try:
+            yield
+        finally:
+            ConstellarationSettings.default_high_fidelity = staticmethod(orig_high)
+            ConstellarationSettings.default_high_fidelity_skip_qi = staticmethod(orig_skip)
+
+
 def forward_metrics(
     boundary: Mapping[str, Any], *, problem: str, vmec_opts: dict[str, Any] | None = None
 ) -> Tuple[dict[str, Any], dict[str, Any]]:
@@ -71,6 +159,16 @@ def forward_metrics(
     Returns (metrics, info). Falls back to starter placeholder metrics if the
     physics stack is unavailable so that callers can degrade gracefully.
     """
+    opts = vmec_opts or {}
+    level_raw = str(opts.get("level") or "auto").lower()
+    level = level_raw if level_raw in {"low", "medium", "high"} else "auto"
+    hot_restart = bool(opts.get("hot_restart", False))
+    restart_key = opts.get("restart_key")
+    if isinstance(restart_key, str) and not restart_key.strip():
+        restart_key = None
+
+    prob_key = problem.lower().strip()
+
     try:
         # Prefer problem-driven evaluation path compatible with constellaration>=0.2.x
         from constellaration.geometry import surface_rz_fourier as srf
@@ -87,9 +185,8 @@ def forward_metrics(
         }
         log_flag = bool(os.getenv("CONSTELX_EVAL_LOG_DIR"))
 
-        with _vmec_verbose_context(verbose_flag or log_flag):
+        with _vmec_settings_context(level, hot_restart, restart_key, verbose_flag, log_flag):
             b = srf.SurfaceRZFourier.model_validate(dict(boundary))
-            prob_key = problem.lower().strip()
             if prob_key in {"p1", "geom", "geometric", "geometrical"}:
                 ev = GeometricalProblem().evaluate(b)
             elif prob_key in {"p2", "simple", "qi_simple", "simple_qi"}:
@@ -119,7 +216,16 @@ def forward_metrics(
             for k, val in enumerate(objs):
                 if isinstance(val, (int, float)):
                     metrics[f"objective_{k}"] = float(val)
-        return metrics, {"problem": problem, "feasible": True, "source": "constellaration"}
+        info = {
+            "problem": problem,
+            "feasible": True,
+            "source": "constellaration",
+            "vmec_level": level,
+            "vmec_hot_restart": hot_restart,
+        }
+        if restart_key is not None:
+            info["vmec_restart_key"] = restart_key
+        return metrics, info
     except Exception:
         m = _fallback_metrics(boundary)
         # Best-effort cast to float values for compatibility
@@ -140,7 +246,16 @@ def forward_metrics(
             z = float(m.get("z_sin_norm", 0.0))
             metrics_f["objectives"] = [r, z]
         # Mark provenance correctly as placeholder
-        return metrics_f, {"problem": problem, "feasible": True, "source": "placeholder"}
+        info_placeholder = {
+            "problem": problem,
+            "feasible": True,
+            "source": "placeholder",
+            "vmec_level": level,
+            "vmec_hot_restart": hot_restart,
+        }
+        if restart_key is not None:
+            info_placeholder["vmec_restart_key"] = restart_key
+        return metrics_f, info_placeholder
 
 
 def score(problem: str, metrics: Mapping[str, Any]) -> float:

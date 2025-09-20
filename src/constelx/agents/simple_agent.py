@@ -45,6 +45,10 @@ class AgentConfig:
     pcfm_tol: float | None = None
     # Optional problem id for real physics ('p1'|'p2'|'p3')
     problem: str | None = None
+    # VMEC evaluator toggles
+    vmec_level: str | None = None
+    vmec_hot_restart: bool | None = None
+    vmec_restart_key: str | None = None
     # Optional initial seeds JSONL path containing boundaries
     init_seeds: Path | None = None
     # Optional simple guard to clamp base radius and helical amplitudes
@@ -951,6 +955,9 @@ def run(config: AgentConfig) -> Path:
                         int(config.mf_max_high) if config.mf_max_high is not None else None
                     ),
                     mf_metric=config.mf_proxy_metric,
+                    vmec_level=config.vmec_level,
+                    vmec_hot_restart=config.vmec_hot_restart,
+                    vmec_restart_key=config.vmec_restart_key,
                 )
                 for j, (b, m) in enumerate(zip(batch, results)):
                     try:
@@ -992,6 +999,9 @@ def run(config: AgentConfig) -> Path:
                             prefer_vmec=config.use_physics,
                             use_real=config.use_physics,
                             problem=problem,
+                            vmec_level=config.vmec_level,
+                            vmec_hot_restart=config.vmec_hot_restart,
+                            vmec_restart_key=config.vmec_restart_key,
                         )
                         _t1 = time.perf_counter()
                         agg_s = (
@@ -1142,6 +1152,9 @@ def run(config: AgentConfig) -> Path:
                         prefer_vmec=config.use_physics,
                         use_real=config.use_physics,
                         problem=problem,
+                        vmec_level=config.vmec_level,
+                        vmec_hot_restart=config.vmec_hot_restart,
+                        vmec_restart_key=config.vmec_restart_key,
                     )
                     raw_score = metrics.get("score")
                     if isinstance(raw_score, (int, float)):

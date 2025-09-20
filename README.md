@@ -78,6 +78,8 @@ Agent
 - Multi-start NFP exploration (round-robin across values):
   `constelx agent run --nfp-list "3,4,5" --budget 12 --seed 0`
   The budget is shared across NFPs and proposals are allocated in a round-robin fashion. Artifacts include an `nfp` field in `proposals.jsonl`, `metrics.csv`, and in `boundaries.jsonl` (when packing submissions with `--top-k`).
+- Physics knobs: `constelx agent run --use-physics --problem p1 --vmec-level medium --vmec-hot-restart --vmec-restart-key run001`
+  (`--vmec-level`, `--vmec-hot-restart`, and `--vmec-restart-key` also work with `constelx eval forward` and `constelx opt run`).
 - Geometry guard: `--guard-geom-validate` pre-screens invalid shapes and logs
   `fail_reason=invalid_geometry` without spending evaluator calls.
    - Thresholds can be tuned: `--guard-r0-min`, `--guard-r0-max`, and
@@ -218,9 +220,12 @@ The CLI and evaluator auto-load a local `.env` if `python-dotenv` is installed (
 - `CONSTELX_REAL_TIMEOUT_MS`: per-call timeout in milliseconds (default `20000`).
 - `CONSTELX_REAL_RETRIES`: number of retries on timeout/error (default `1`).
 - `CONSTELX_REAL_BACKOFF`: multiplicative backoff factor between retries (default `1.5`).
- - `CONSTELX_CACHE_TTL_SECONDS`: optional TTL (in seconds) for evaluator cache entries when
-   `diskcache` is available (install with `.[cache]`). After TTL, cached results expire and will be
-   recomputed. JSON fallback ignores TTL.
+- `CONSTELX_CACHE_TTL_SECONDS`: optional TTL (in seconds) for evaluator cache entries when
+  `diskcache` is available (install with `.[cache]`). After TTL, cached results expire and will be
+  recomputed. JSON fallback ignores TTL.
+- `CONSTELX_VMEC_LEVEL`: choose VMEC resolution ladder (`auto|low|medium|high`).
+- `CONSTELX_VMEC_HOT_RESTART`: `1|true` to enable VMEC hot restart when supported.
+- `CONSTELX_VMEC_RESTART_KEY`: identifier used to reuse VMEC restart states across calls.
 
 Caching
 - Evaluator results are cached to speed up repeated calls. Default cache dir is `.cache/eval/`.
