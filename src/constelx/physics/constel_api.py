@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import Any, Dict, Optional, cast
 
 
 def _try_import_surface_rz_fourier() -> Optional[Any]:
@@ -63,7 +63,9 @@ def evaluate_boundary(
             if srf is not None:
                 boundary = srf.SurfaceRZFourier.model_validate(boundary_json)
                 vmecpp_wout = vmec_utils.minimal_wout_from_boundary(boundary)
-                return cast(dict[str, Any], scoring.geom_metrics(boundary, vmecpp_wout))
+                metrics = cast(dict[str, Any], scoring.geom_metrics(boundary, vmecpp_wout))
+                _add_proxy_metrics(boundary_json, metrics)
+                return metrics
         except Exception:
             # fall back to placeholder below
             pass
@@ -88,10 +90,36 @@ def evaluate_boundary(
 
         r_cos_norm = _norm2(r_cos) if r_cos is not None else 0.0
         z_sin_norm = _norm2(z_sin) if z_sin is not None else 0.0
-    return {
+    metrics = {
         "r_cos_norm": r_cos_norm,
         "z_sin_norm": z_sin_norm,
         "nfp": int(boundary_json.get("n_field_periods", 0)),
         "stellarator_symmetric": bool(boundary_json.get("is_stellarator_symmetric", True)),
         "placeholder_metric": r_cos_norm + z_sin_norm,
     }
+    _add_proxy_metrics(boundary_json, metrics)
+    return metrics
+
+
+def _add_proxy_metrics(boundary_json: dict[str, Any], metrics: Dict[str, Any]) -> None:
+    """Attach Boozer proxy metrics when computable without raising."""
+
+    try:
+        from ..eval.boozer import compute_boozer_proxies
+
+        proxies = compute_boozer_proxies(boundary_json)
+    except Exception:
+        return
+
+    proxy_values = proxies.to_dict()
+    mapping = {
+        "proxy_boozer_b_mean": proxy_values["b_mean"],
+        "proxy_boozer_b_std_fraction": proxy_values["b_std_fraction"],
+        "proxy_boozer_mirror_ratio": proxy_values["mirror_ratio"],
+        "proxy_qs_residual": proxy_values["qs_residual"],
+        "proxy_qs_quality": proxy_values["qs_quality"],
+        "proxy_qi_residual": proxy_values["qi_residual"],
+        "proxy_qi_quality": proxy_values["qi_quality"],
+    }
+    for key, value in mapping.items():
+        metrics.setdefault(key, value)
