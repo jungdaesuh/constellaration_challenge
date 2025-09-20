@@ -960,7 +960,7 @@ def submit_pack(
     - best.json (if present in the run folder)
     - metadata.json (includes problem, scoring_version, git_sha, top_k)
     - boundaries.jsonl (only when --top-k > 1): one JSON per line with
-      {iteration,index,agg_score,evaluator_score,feasible,fail_reason,
+      {iteration,index,agg_score,evaluator_score,fail_reason,
        source,scoring_version,boundary}.
     """
     from .submit.pack import pack_run
