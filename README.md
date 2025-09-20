@@ -22,6 +22,8 @@ constelx --help
 constelx data fetch --nfp 3 --limit 32
 constelx eval forward --example  # runs an example boundary through metrics
 constelx eval forward --random --nfp 3 --seed 0
+constelx data prior-train data/dataset.jsonl --out models/seeds_prior.joblib
+constelx data prior-sample models/seeds_prior.joblib --count 16 --nfp 3 --min-feasibility 0.3
 ```
 
 Notes:
@@ -73,6 +75,7 @@ Optimization baselines (trust‑constr / ALM)
 Agent
 - Random search: `constelx agent run --nfp 3 --budget 6 --seed 0 --runs-dir runs`
 - Near-axis seeding: `constelx agent run --nfp 3 --budget 6 --seed-mode near-axis`
+- Data prior seeding: `constelx agent run --nfp 3 --budget 10 --seed-mode prior --seed-prior models/seeds_prior.joblib`
 - CMA-ES (falls back to random if cma missing):
   `constelx agent run --nfp 3 --budget 20 --algo cmaes --seed 0`
 - Resume a run: `constelx agent run --nfp 3 --budget 10 --resume runs/<ts>`

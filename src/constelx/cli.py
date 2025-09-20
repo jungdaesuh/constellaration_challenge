@@ -117,6 +117,178 @@ def data_seeds(
     console.print(f"Wrote seeds to: [bold]{out}[/bold]")
 
 
+@data_app.command("prior-train")
+def data_prior_train(
+    dataset_path: Path = typer.Argument(..., help="JSONL or Parquet dataset with boundary rows."),
+    out_model: Path = typer.Option(
+        Path("data/seeds_prior.joblib"),
+        "--out",
+        "--out-model",
+        help="Output path for the trained seeds prior model.",
+    ),
+    nfp: Optional[int] = typer.Option(None, help="Filter dataset by number of field periods."),
+    limit: Optional[int] = typer.Option(
+        None, help="Limit number of records for quick experiments."
+    ),
+    feasible_field: Optional[str] = typer.Option(
+        "metrics.feasible",
+        help="Boolean field (dotted path) for feasibility labels.",
+    ),
+    feasible_metric: Optional[str] = typer.Option(
+        None,
+        help="Metric field (dotted path) used when feasibility field is missing.",
+    ),
+    feasible_threshold: Optional[float] = typer.Option(
+        None,
+        help="Threshold applied to metric when deriving feasibility.",
+    ),
+    feasible_sense: str = typer.Option(
+        "lt",
+        help="Metric comparison: lt (<= threshold) or gt (>= threshold).",
+    ),
+    generator: str = typer.Option(
+        "gmm",
+        help="Generative model for feasible latent space: gmm|flow",
+    ),
+    pca_components: int = typer.Option(8, help="Number of PCA components."),
+    gmm_components: int = typer.Option(6, help="Number of mixture components for GMM."),
+    quantile_bins: int = typer.Option(
+        256,
+        help="Quantile bins when using the flow generator.",
+    ),
+    min_feasible: int = typer.Option(
+        8,
+        help="Minimum feasible examples required to fit the generative model.",
+    ),
+    seed: int = typer.Option(0, help="Random seed for PCA/classifier/generator."),
+) -> None:
+    try:
+        from .data.seeds_prior import (
+            FeasibilitySpec,
+            SeedsPriorConfig,
+            load_jsonl,
+            train_prior,
+        )
+    except Exception as exc:  # pragma: no cover - import guard
+        raise typer.BadParameter(f"Seeds prior dependencies unavailable: {exc}") from exc
+
+    path = Path(dataset_path)
+    suffix = path.suffix.lower()
+    if suffix == ".jsonl":
+        records = load_jsonl(path)
+    elif suffix == ".parquet":
+        import pandas as pd
+
+        df = pd.read_parquet(path)
+        records = df.to_dict(orient="records")
+    else:
+        raise typer.BadParameter("Dataset must be a .jsonl or .parquet file")
+
+    if limit is not None:
+        records = records[: int(limit)]
+    if not records:
+        raise typer.BadParameter("Dataset is empty after applying limit/filters")
+
+    gen = generator.lower()
+    if gen not in {"gmm", "flow"}:
+        raise typer.BadParameter("--generator must be 'gmm' or 'flow'")
+    sense_norm = feasible_sense.lower()
+    if sense_norm not in {"lt", "gt"}:
+        raise typer.BadParameter("--feasible-sense must be 'lt' or 'gt'")
+
+    config = SeedsPriorConfig(
+        pca_components=int(pca_components),
+        generator=gen,
+        gmm_components=int(gmm_components),
+        quantile_bins=int(quantile_bins),
+        random_state=int(seed),
+    )
+    spec = FeasibilitySpec(
+        field=feasible_field,
+        metric=feasible_metric,
+        threshold=feasible_threshold,
+        sense=sense_norm,
+    )
+    try:
+        model = train_prior(
+            records,
+            config,
+            spec,
+            nfp=int(nfp) if nfp is not None else None,
+            min_feasible=int(min_feasible),
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    saved_path = model.save(out_model)
+    console.print(
+        "Trained seeds prior with generator={gen} on {count} records → {path}".format(
+            gen=config.generator,
+            count=len(records),
+            path=str(saved_path),
+        )
+    )
+
+
+@data_app.command("prior-sample")
+def data_prior_sample(
+    model_path: Path = typer.Argument(..., help="Path to trained seeds prior model (.joblib)."),
+    out_path: Path = typer.Option(
+        Path("data/prior_seeds.jsonl"),
+        "--out",
+        "--out-path",
+        help="Output JSONL path for sampled boundaries.",
+    ),
+    count: int = typer.Option(32, help="Number of seeds to sample."),
+    nfp: int = typer.Option(3, help="Target number of field periods for the samples."),
+    min_feasibility: float = typer.Option(
+        0.5,
+        help="Minimum feasibility probability for accepted samples.",
+        show_default=True,
+    ),
+    batch_size: int = typer.Option(
+        32,
+        help="Latent batch size when sampling from the prior.",
+        show_default=True,
+    ),
+    max_draw_batches: int = typer.Option(
+        32,
+        help="Maximum latent batches to draw when searching for feasible samples.",
+        show_default=True,
+    ),
+    seed: int = typer.Option(0, help="Random seed for sampling."),
+) -> None:
+    try:
+        from .data.seeds_prior import SeedsPriorModel
+    except Exception as exc:  # pragma: no cover - import guard
+        raise typer.BadParameter(f"Seeds prior dependencies unavailable: {exc}") from exc
+
+    model = SeedsPriorModel.load(model_path)
+    samples = model.sample(
+        count=int(count),
+        nfp=int(nfp),
+        min_feasibility=float(min_feasibility),
+        batch_size=int(max(1, batch_size)),
+        max_draw_batches=int(max(1, max_draw_batches)),
+        seed=int(seed),
+    )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w") as f:
+        for item in samples:
+            payload = {
+                "boundary": item.boundary,
+                "feasibility_score": float(item.feasibility_score),
+            }
+            f.write(json.dumps(payload) + "\n")
+    console.print(
+        "Sampled {count} seeds (requested {req}) to {path}".format(
+            count=len(samples),
+            req=int(count),
+            path=str(out_path),
+        )
+    )
+
+
 # -------------------- EVAL --------------------
 eval_app = typer.Typer(help="Run physics/evaluator metrics via constellaration")
 app.add_typer(eval_app, name="eval")
@@ -568,8 +740,27 @@ def agent_run(
     ),
     seed_mode: str = typer.Option(
         "random",
-        help="Seed generator for new proposals: random|near-axis",
+        help="Seed generator for new proposals: random|near-axis|prior",
         case_sensitive=False,
+    ),
+    seed_prior: Optional[Path] = typer.Option(
+        None,
+        help="Path to a trained seeds prior model (required when seed_mode=prior).",
+    ),
+    seed_prior_min_prob: float = typer.Option(
+        0.5,
+        help="Minimum feasibility probability when sampling from the prior.",
+        show_default=True,
+    ),
+    seed_prior_batch: int = typer.Option(
+        32,
+        help="Latent batch size when sampling the prior.",
+        show_default=True,
+    ),
+    seed_prior_draw_batches: int = typer.Option(
+        32,
+        help="Maximum latent batches to draw when sampling from the prior.",
+        show_default=True,
     ),
     # Novelty gating
     novelty_skip: bool = typer.Option(
@@ -706,6 +897,10 @@ def agent_run(
             mf_max_high=mf_max_high,
             mf_proxy_metric=mf_proxy_metric,
             seed_mode=seed_mode,
+            seed_prior=seed_prior,
+            seed_prior_min_feasibility=seed_prior_min_prob,
+            seed_prior_batch_size=seed_prior_batch,
+            seed_prior_max_draw_batches=seed_prior_draw_batches,
             novelty_skip=novelty_skip,
             novelty_metric=novelty_metric,
             novelty_eps=novelty_eps,

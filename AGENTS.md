@@ -160,11 +160,14 @@ Physics test opt‑in
 ## CLI behavior to implement
 
 - `constelx data fetch --nfp 3 --limit 128`
+- `constelx data prior-train data/cache/subset.jsonl --out models/seeds_prior.joblib`
+- `constelx data prior-sample models/seeds_prior.joblib --count 16 --nfp 3`
 - `constelx eval forward --boundary-file examples/boundary.json`
 - `constelx eval score --metrics-file runs/<ts>/metrics.csv`
 - `constelx opt cmaes --nfp 3 --budget 50 [--seed 0]`
 - `constelx opt run --baseline trust-constr|alm|cmaes --nfp 3 --budget 50 [--seed 0] [--use-physics --problem p1]`
 - `constelx agent run --nfp 3 --budget 50 [--seed 0] [--resume PATH]`
+- Prior seeding: `constelx agent run --nfp 3 --budget 20 --seed-mode prior --seed-prior models/seeds_prior.joblib`
 
 ### New helper flags (already available)
 
