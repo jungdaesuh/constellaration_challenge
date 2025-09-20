@@ -33,6 +33,7 @@ Notes:
 
 - **CLI (`constelx`)**: `data` (fetch/filter/csv), `eval` (forward metrics, scoring), `opt` (baselines), `surrogate` (train/serve simple models), `agent` (multi-step propose→simulate→select loop).
 - **Physics wrappers**: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects, plus bounded Boozer-space QS/QI proxies (`constelx.physics.booz_proxy`).
+- **Proxy metrics**: Boozer-space quasi-symmetry/isodynamic proxies with bounded residuals (`constelx.eval.boozer`). Placeholder + real evaluator paths populate `proxy_qs_*` / `proxy_qi_*` fields for early-stage guards.
 - **Optimization**: CMA-ES and (optional) BoTorch Bayesian optimization stubs.
 - **Models**: simple MLP baseline + placeholders for FNO/transformers.
 - **Hard-constraint tooling**: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
