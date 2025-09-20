@@ -1262,14 +1262,15 @@ def run(config: AgentConfig) -> Path:
                         vmec_hot_restart=config.vmec_hot_restart,
                         vmec_restart_key=config.vmec_restart_key,
                     )
+                except Exception:
+                    metrics = {}
+                    s = float("inf")
+                else:
                     raw_score = metrics.get("score")
                     if isinstance(raw_score, (int, float)):
                         s = float(raw_score)
                     else:
                         s = eval_score(metrics, problem=problem if config.use_physics else None)
-                except Exception:
-                    metrics = {}
-                    s = float("inf")
                 _t1 = time.perf_counter()
                 if isinstance(metrics, dict):
                     metrics.setdefault("source", source_tag)
