@@ -3,7 +3,11 @@
 TL;DR (repo‑aligned)
 - Train simple, fast surrogates on ConStellaration‑style data (MLP baseline available) and optionally add a PBFM‑style conflict‑free residual term during training.
 - Enforce constraints at inference via correction hooks: ECI (linear Ax=b projection) and PCFM (nonlinear Gauss–Newton projection). Both are wired into `constelx agent run` with `--correction eci_linear|pcfm` and JSON specs (see `examples/pcfm_*.json`).
-- Improve throughput with multi‑fidelity proxy gating (`--mf-proxy ...`), novelty gating, and optional surrogate screening before evaluator calls. Use VMEC++ hot‑restart and a neighbor‑reuse cache to reduce per‑candidate cost.
+- Improve throughput with multi‑fidelity proxy gating (`--mf-proxy ...`) using Boozer proxy
+  residuals (`qs_residual`, `qi_residual`, `helical_energy`, `mirror_ratio`) or placeholder
+  metrics via the unified facade, novelty gating, and optional surrogate screening before
+  evaluator calls. Use VMEC++ hot‑restart and a neighbor‑reuse cache to reduce per‑candidate
+  cost.
 - Optimize with currently implemented baselines (trust‑constr, ALM, CMA‑ES) and the ablation harness; prioritize feasibility‑first TR‑BO (FuRBO/BoTorch) next. For P3, track hypervolume explicitly via qEHVI or ε‑constraint once feasibility is reliable.
 - Keep runs reproducible and packageable: the agent writes `runs/<ts>/...` and `constelx submit pack` creates the submission zip. Default runs are deterministic; optional LLM planners should interface by emitting ablation specs for `constelx ablate run`.
 

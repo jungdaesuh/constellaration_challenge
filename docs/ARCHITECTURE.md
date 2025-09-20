@@ -10,7 +10,8 @@ This document maps the conceptual strategy to the actual modules and CLI in this
   - `corrections/eci_linear.py` — linear (Ax=b) projection hook
   - `corrections/pcfm.py` — nonlinear (Gauss–Newton) projection hook with norm/ratio/product examples
 - `src/constelx/eval/` — Forward evaluation and scoring
-  - `__init__.py` — `forward`, `forward_many`, `score`, caching, MF proxy gating (`phase` field)
+  - `__init__.py` — `forward`, `forward_many`, `score`, caching, MF proxy gating (`phase` field,
+    `MF_PROXY_METRICS` guards for proxy selection)
   - `boundary_param.py`, `boundary_fourier.py` — boundary sampling/validation utilities
   - `geometry.py` — quick geometry guards (`invalid_r0`, `helical_exceeds_ratio`)
 - `src/constelx/physics/` — thin adapters and helpers
@@ -37,6 +38,8 @@ This document maps the conceptual strategy to the actual modules and CLI in this
 - `constelx agent run` → `agents/simple_agent.py` with options:
   - Correction hooks: `--correction eci_linear|pcfm --constraints-file <json> [--pcfm-gn-iters ...]`
   - Multi‑fidelity: `--mf-proxy [--mf-threshold|--mf-quantile] [--mf-max-high]`
+    with validated proxy metrics (`score`, `placeholder_metric`, `qs_residual`, `qi_residual`,
+    `helical_energy`, `mirror_ratio`).
   - VMEC evaluator knobs: `--vmec-level auto|low|medium|high`, `--vmec-hot-restart`, `--vmec-restart-key`
   - Guards: `--guard-geom-validate [--guard-r0-min|--guard-r0-max|--guard-helical-ratio-max]`
   - Novelty: `--novelty-skip ...` (window + optional persisted DB). When a
@@ -53,6 +56,7 @@ Agent writes `runs/<ts>/`:
 - `config.yaml` — run config + env + git SHA + package versions
 - `proposals.jsonl` — `{iteration,index,seed,nfp,boundary}`
 - `metrics.csv` — columns include `nfp`, `evaluator_score`, `agg_score`, `elapsed_ms`, `feasible`, `fail_reason`, `source`; when MF/surrogate is enabled a `phase` column is present (`proxy|real|surrogate`)
+  together with `proxy_metric`/`proxy_score` for multi‑fidelity gating.
 - `best.json` — `agg_score` (and `score` alias), optional `evaluator_score`, `metrics`, `boundary`, `nfp`
 - `README.md` — CLI used and environment info
 

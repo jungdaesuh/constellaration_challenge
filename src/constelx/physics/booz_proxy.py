@@ -201,4 +201,12 @@ def compute_proxies(
     return _heuristic_proxies(boundary)
 
 
-__all__ = ["BoozerProxy", "compute_proxies"]
+BOOZER_PROXY_KEYS: tuple[str, ...] = (
+    "qs_residual",
+    "qi_residual",
+    "helical_energy",
+    "mirror_ratio",
+)
+
+
+__all__ = ["BoozerProxy", "BOOZER_PROXY_KEYS", "compute_proxies"]
