@@ -21,16 +21,23 @@ These guidelines help contributors build, test, and extend the ConStelX starter 
 - CLI help: `constelx --help`
   - Quick smoke: `constelx data fetch --nfp 3 --limit 8`
 - E2E (small): `constelx agent run --nfp 3 --budget 5 --seed 0`
-  - With PCFM correction:
-  - Norm eq: `examples/pcfm_norm.json`
-  - Ratio eq: `examples/pcfm_ratio.json`
-  - Product eq: `examples/pcfm_product.json`
-  - Aspect-ratio band: `examples/pcfm_ar_band.json`
-  - Edge iota ratio: `examples/pcfm_edge_iota.json`
-  - QS residual band (Boozer proxy): `examples/pcfm_qs_band.json`
-  - Clearance floor: `examples/pcfm_clearance.json`
-  - Command: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file <json>`
-    - Tuning: CLI flags or JSON top-level `{gn_iters,damping,tol}`
+  - With PCFM correction (Gauss–Newton projection with clamped steps + geometry revalidation):
+    ```json
+    [
+      {
+        "type": "norm_eq",
+        "radius": 0.06,
+        "terms": [
+          {"field": "r_cos", "i": 1, "j": 5, "w": 1.0},
+          {"field": "z_sin", "i": 1, "j": 5, "w": 1.0}
+        ]
+      }
+    ]
+    ```
+    - Launch: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_norm.json`
+    - Ready-to-use specs live in `examples/pcfm_*.json` (norm, ratio, product, aspect-ratio band, edge iota ratio, QS residual band, clearance floor).
+    - Tuning: CLI flags `--pcfm-gn-iters/--pcfm-damping/--pcfm-tol` or JSON top-level `{gn_iters,damping,tol}`.
+    - See [README.md#pcfm-correction-gaussnewton-projection](README.md#pcfm-correction-gaussnewton-projection) for additional context and safety guidance.
 
 ## Pre-commit Hooks
 
