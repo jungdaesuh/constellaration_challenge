@@ -2,7 +2,7 @@
 
 **Goal:** provide a clean, extensible Python codebase for ML + physics-based optimization of stellarator plasma boundaries using the [ConStellaration dataset] and the [`constellaration`] evaluation tools.
 
-> This is a *skeleton* repo: modules and CLIs are stubbed with TODOs and simple working examples so you can plug in your models and agents immediately.
+> This is a skeleton repo: modules and CLIs are stubbed with TODOs and simple working examples so you can plug in your models and agents immediately.
 
 ## Quick start (macOS)
 
@@ -33,12 +33,12 @@ Notes:
 
 ## What’s inside
 
-- **CLI (`constelx`)**: `data` (fetch/filter/csv), `eval` (forward metrics, scoring), `opt` (baselines), `surrogate` (train/serve simple models), `agent` (multi-step propose→simulate→select loop).
-- **Physics wrappers**: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects, plus bounded Boozer-space QS/QI proxies (`constelx.physics.booz_proxy`).
-- **Proxy metrics**: Boozer-space quasi-symmetry/isodynamic proxies with bounded residuals (`constelx.eval.boozer`). Placeholder + real evaluator paths populate `proxy_qs_*` / `proxy_qi_*` fields for early-stage guards.
-- **Optimization**: CMA-ES and (optional) BoTorch Bayesian optimization stubs.
-- **Models**: simple MLP baseline + placeholders for FNO/transformers.
-- **Hard-constraint tooling**: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
+- CLI (`constelx`): `data` (fetch/filter/csv), `eval` (forward metrics, scoring), `opt` (baselines), `surrogate` (train/serve simple models), `agent` (multi-step propose→simulate→select loop).
+- Physics wrappers: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects, plus bounded Boozer-space QS/QI proxies (`constelx.physics.booz_proxy`).
+- Proxy metrics: Boozer-space quasi-symmetry/isodynamic proxies with bounded residuals (`constelx.eval.boozer`). Placeholder + real evaluator paths populate `proxy_qs_*` / `proxy_qi_*` fields for early-stage guards.
+- Optimization: CMA-ES and (optional) BoTorch Bayesian optimization stubs.
+- Models: simple MLP baseline + placeholders for FNO/transformers.
+- Hard-constraint tooling: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
 
 See `docs/ROADMAP.md` (engineering roadmap) and `docs/STRATEGY.md`
 (research/agent strategy) for the suggested path and background.
