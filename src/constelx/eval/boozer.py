@@ -26,15 +26,21 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, TypeAlias
 
 import numpy as np
+from numpy.typing import NDArray
 
 from .boundary_fourier import BoundaryFourier
 
 __all__ = ["BoozerProxies", "compute_boozer_proxies"]
 
 _EPS = 1e-12
+
+# Use relaxed NumPy dtype bounds to satisfy mypy --strict
+# while keeping intent clear: floating arrays and integer index arrays.
+FloatArray: TypeAlias = NDArray[np.floating[Any]]
+IntArray: TypeAlias = NDArray[np.integer[Any]]
 
 
 def _bounded_ratio(value: float) -> float:
@@ -84,20 +90,24 @@ class BoozerProxies:
         return data
 
 
-def _angles_for_sampling(n_theta: int, n_phi: int, nfp: int) -> tuple[np.ndarray, np.ndarray]:
-    thetas = np.linspace(0.0, 2.0 * math.pi, num=n_theta, endpoint=False, dtype=float)
+def _angles_for_sampling(n_theta: int, n_phi: int, nfp: int) -> tuple[FloatArray, FloatArray]:
+    thetas: FloatArray = np.linspace(0.0, 2.0 * math.pi, num=n_theta, endpoint=False, dtype=float)
     # Toroidal angle spans one field period (2π / nfp)
-    phis = np.linspace(0.0, 2.0 * math.pi / max(1, nfp), num=n_phi, endpoint=False, dtype=float)
+    phis: FloatArray = np.linspace(
+        0.0, 2.0 * math.pi / max(1, nfp), num=n_phi, endpoint=False, dtype=float
+    )
     return thetas, phis
 
 
 def _sample_surface_arrays(
-    bf: BoundaryFourier, thetas: np.ndarray, phis: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
+    bf: BoundaryFourier, thetas: FloatArray, phis: FloatArray
+) -> tuple[FloatArray, FloatArray]:
     """Return (R, Z) arrays sampled on the theta/phi grid."""
+    theta_grid: FloatArray
+    phi_grid: FloatArray
     theta_grid, phi_grid = np.meshgrid(thetas, phis, indexing="ij")
-    R = np.zeros_like(theta_grid, dtype=float)
-    Z = np.zeros_like(theta_grid, dtype=float)
+    R: FloatArray = np.zeros_like(theta_grid, dtype=float)
+    Z: FloatArray = np.zeros_like(theta_grid, dtype=float)
 
     for m in range(bf.m_dim):
         m_theta = m * theta_grid
@@ -164,21 +174,21 @@ def compute_boozer_proxies(
         helicity = int(boundary.get("n_field_periods", bf.nfp))
     helicity = int(helicity)
     theta_grid, phi_grid = np.meshgrid(thetas, phis, indexing="ij")
-    alpha = (theta_grid - helicity * phi_grid) % (2.0 * math.pi)
+    alpha: FloatArray = (theta_grid - helicity * phi_grid) % (2.0 * math.pi)
     n_bins = max(8, int(n_phi))
-    bin_idx = np.floor(alpha / (2.0 * math.pi) * n_bins).astype(int)
+    bin_idx: IntArray = np.floor(alpha / (2.0 * math.pi) * n_bins).astype(int)
     bin_idx = np.mod(bin_idx, n_bins)
 
-    flat_bins = bin_idx.ravel()
-    flat_B = B.ravel()
+    flat_bins: IntArray = bin_idx.ravel()
+    flat_B: FloatArray = B.ravel()
 
-    sums = np.zeros(n_bins, dtype=float)
-    counts = np.zeros(n_bins, dtype=int)
+    sums: FloatArray = np.zeros(n_bins, dtype=float)
+    counts: IntArray = np.zeros(n_bins, dtype=int)
     np.add.at(sums, flat_bins, flat_B)
     np.add.at(counts, flat_bins, 1)
 
-    means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts > 0)
-    centered = flat_B - means[flat_bins]
+    means: FloatArray = np.divide(sums, counts, out=np.zeros_like(sums), where=counts > 0)
+    centered: FloatArray = flat_B - means[flat_bins]
     qs_rms = math.sqrt(float(np.mean(centered * centered)))
     qs_res_norm = qs_rms / (B_mean + _EPS)
     qs_residual = _bounded_ratio(qs_res_norm)

@@ -254,7 +254,8 @@ class _GmmGenerator(_LatentGenerator):
             xs, _ = self.model.sample(n)
         finally:
             self.model.random_state = original_state
-        return xs.astype(np.float64, copy=False)
+        xs_arr: NDArray[np.float64] = np.asarray(xs, dtype=np.float64)
+        return xs_arr
 
     def save(self) -> Any:
         return self.model
@@ -266,10 +267,13 @@ class _QuantileFlowGenerator(_LatentGenerator):
 
     def sample(self, n: int, rng: np.random.Generator) -> NDArray[np.float64]:
         dim = self.transformer.n_features_in_
-        normals = rng.standard_normal((n, dim))
-        uniforms = norm.cdf(normals)
+        normals: NDArray[np.float64] = rng.standard_normal((n, dim))
+        uniforms: NDArray[np.float64] = norm.cdf(normals)
         uniforms = np.clip(uniforms, 1e-6, 1 - 1e-6)
-        return self.transformer.inverse_transform(uniforms)
+        samples: NDArray[np.float64] = np.asarray(
+            self.transformer.inverse_transform(uniforms), dtype=np.float64
+        )
+        return samples
 
     def save(self) -> Any:
         return self.transformer
