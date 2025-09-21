@@ -49,7 +49,9 @@ Multi‑fidelity & hot‑restart (throughput)
 
 Runtime toggles (env)
 - `CONSTELX_REAL_TIMEOUT_MS`, `CONSTELX_REAL_RETRIES`, `CONSTELX_REAL_BACKOFF` control real-evaluator timeout/retry/backoff.
-- `CONSTELX_VMEC_VERBOSE=1` enables verbose VMEC++ logs; `CONSTELX_EVAL_LOG_DIR` writes evaluator logs.
+- `CONSTELX_VMEC_VERBOSE=1` enables verbose VMEC++ logs; `CONSTELX_EVAL_LOG_DIR=/path/to/logs`
+  writes one JSON per evaluation (boundary hash, metrics, VMEC knobs) for parity and
+  regression debugging.
 - Physics tests opt‑in: `CONSTELX_RUN_PHYSICS_TESTS=1`.
 
 Playbooks (ready‑to‑run)

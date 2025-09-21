@@ -28,8 +28,9 @@ import json
 import multiprocessing
 import os
 import time
+import uuid
 from concurrent.futures import ProcessPoolExecutor, TimeoutError, as_completed
-from math import inf, isnan
+from math import inf, isinf, isnan
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
 
@@ -194,6 +195,76 @@ def _hash_boundary(boundary: Mapping[str, Any]) -> str:
     norm = _normalize(boundary)
     s = json.dumps(norm, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(s.encode()).hexdigest()
+
+
+def _json_ready(obj: Any) -> Any:
+    """Return a JSON-serializable representation with stable ordering.
+
+    Converts numpy scalars/arrays via `_normalize` and replaces NaN/inf floats
+    with string sentinels to keep log files valid JSON.
+    """
+
+    def _sanitize(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {k: _sanitize(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [_sanitize(v) for v in value]
+        if isinstance(value, float):
+            if isnan(value):
+                return "NaN"
+            if isinf(value):
+                return "Infinity" if value > 0 else "-Infinity"
+        return value
+
+    return _sanitize(_normalize(obj))
+
+
+def _log_eval_event(
+    boundary: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+    *,
+    problem: Optional[str],
+    vmec_opts: Mapping[str, Any],
+    cache_hit: bool,
+) -> None:
+    """Persist a JSON log of evaluator inputs/outputs when enabled."""
+
+    log_dir_raw = os.getenv("CONSTELX_EVAL_LOG_DIR")
+    if not log_dir_raw or cache_hit:
+        return
+
+    try:
+        log_dir = Path(log_dir_raw).expanduser()
+        log_dir.mkdir(parents=True, exist_ok=True)
+        problem_label = (problem or "unknown").strip().lower() or "unknown"
+        phase = metrics.get("phase") if isinstance(metrics, Mapping) else None
+        phase_label = str(phase) if isinstance(phase, str) and phase else None
+        boundary_fingerprint = _hash_boundary(boundary)
+        timestamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+        suffix_parts: List[str] = []
+        if phase_label:
+            suffix_parts.append(phase_label)
+        suffix_parts.append("eval")
+        suffix = "_".join(suffix_parts)
+        filename = (
+            f"{problem_label}_{suffix}_{timestamp}_{boundary_fingerprint[:12]}_"
+            f"{uuid.uuid4().hex[:8]}.json"
+        )
+        payload = {
+            "timestamp": time.time(),
+            "problem": problem,
+            "cache_hit": cache_hit,
+            "phase": phase_label,
+            "vmec_opts": _json_ready(dict(vmec_opts)),
+            "boundary_hash": boundary_fingerprint,
+            "boundary": _json_ready(dict(boundary)),
+            "metrics": _json_ready(dict(metrics)),
+        }
+        path = log_dir / filename
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except Exception:
+        # Logging should never interrupt evaluation; swallow best-effort failures.
+        pass
 
 
 def _cache_backend(cache_dir: Optional[Path]) -> Optional[CacheBackend]:
@@ -369,6 +440,8 @@ def forward(
 
     result = _annotate_vmec_metadata(result, vmec_opts)
 
+    _log_eval_event(boundary, result, problem=problem, vmec_opts=vmec_opts, cache_hit=False)
+
     if cache is not None:
         reason_val = str(result.get("fail_reason") or "").strip()
         feasible_val = result.get("feasible")
@@ -406,6 +479,7 @@ def forward_many(
     items = list(boundaries)
     n = len(items)
     out: List[Optional[Dict[str, Any]]] = [None] * n
+    cache_hits: List[bool] = [False] * n
 
     keys: List[Optional[str]] = [None] * n
     to_compute: list[tuple[int, Mapping[str, Any]]] = []
@@ -438,12 +512,14 @@ def forward_many(
                 dict(got) if isinstance(got, dict) else got,
                 vmec_opts,
             )
+            cache_hits[i] = True
             continue
         to_compute.append((i, b))
 
     # Optional multi-fidelity proxy pass setup
     proxy_scores: dict[int, float] = {}
     proxy_metrics: dict[int, Dict[str, Any]] = {}
+    proxy_cache_hits: set[int] = set()
 
     proxy_value_keys = set(BOOZER_PROXY_KEYS)
 
@@ -493,6 +569,7 @@ def forward_many(
                 cached_pm = cache.get(pm_key) if cache is not None else None
                 if isinstance(cached_pm, dict):
                     m_raw: Mapping[str, Any] | None = dict(cached_pm)
+                    proxy_cache_hits.add(i)
                 else:
                     _t0p = time.perf_counter()
                     try:
@@ -568,6 +645,8 @@ def forward_many(
             for i in non_survivors:
                 if out[i] is None and i in proxy_metrics:
                     out[i] = proxy_metrics[i]
+                    if i in proxy_cache_hits:
+                        cache_hits[i] = True
             to_compute = [(i, b) for (i, b) in to_compute if i in survivors]
 
         allow_parallel = os.getenv("CONSTELX_ALLOW_PARALLEL_REAL", "0").lower() in {
@@ -847,6 +926,22 @@ def forward_many(
                     except Exception:
                         pass
                     out[i] = metrics
+
+    # Persist logs (best-effort) before mutating metrics for cache storage
+    for i, rec in enumerate(out):
+        if rec is None:
+            continue
+        try:
+            boundary_payload = items[i]
+        except IndexError:
+            boundary_payload = {}
+        _log_eval_event(
+            boundary_payload,
+            dict(rec),
+            problem=problem,
+            vmec_opts=vmec_opts,
+            cache_hit=cache_hits[i],
+        )
 
     # Strip non-deterministic timing before caching/returning to keep cache equality stable
     if cache is not None:
