@@ -2,18 +2,14 @@
 
 ## Sequential Tasks (next up)
 
-- [ ] Tracking [#27] — keep open until the PR-01…06 checklist is fully cleared.
-  - [x] PR-01: Wire to ConStellaration evaluator + official scoring (closed via PR #36 / issue #28).
-  - [x] PR-02: Correct Fourier boundary grid + indexing (m,n) with negative-n support (resolved by PR #61 / issue #29).
-  - [x] PR-03: Real dataset ingestion (HF dataset) + Parquet cache (completed in PR #96 / issue #30).
-  - [x] PR-04: Benchmark problems P1–P3 specs + CLI `--problem` (closed by issue #31).
-  - [x] PR-05: Baselines (ALM/trust-constr) + `opt run` CLI (closed by issue #32).
-  - [x] PR-06: Scoring parity tests (goldens, physics-gated) (closed by issue #33).
-  - [ ] Follow up with maintainers to close [#27] now that all PR gates are satisfied.
+- [ ] Shepherd PR #100 to merge and close [#27]; confirm maintainers are satisfied once the checklist lands on main.
+- [ ] [#45] Data-driven seeds prior polish — rerun against HF ingestion, evaluate the flow-based variant, wire CLI/agent plumbing, and refresh docs/tests before closing.
+- [ ] [#44] Pareto sweep QA — capture a physics-enabled Pareto example, update artifacts/docs, and close the issue.
+- [ ] [#43] Nevergrad NGOpt baseline — finish import guards, CLI/docs/tests, and verify ALM parity prior to closing.
+- [ ] [#42] DESC gradient trust-region baseline — complete the resolution ladder + DESC integration, document usage, and close the issue.
 
 ## Parallelizable Tasks
-- [#45] Data-driven seeds prior polish — rerun against HF ingestion once #30 lands, evaluate the flow-based variant, and fold the findings into docs before closing the issue.
-- [#44] Pareto sweep QA — capture a physics-enabled Pareto example and thread artifacts/docs updates before shutting the issue.
+- [ ] Backlog grooming — review the open issues monthly to keep Sequential and Completed lists honest.
 
   (De-dup with Sequential list as work starts.)
 
@@ -24,8 +20,6 @@
 - [#20] PCFM correction docs — README/AGENTS now ship norm JSON snippet, command example, and Gauss–Newton safety notes (PR #98).
 - [#30] Real dataset ingestion (HF dataset) + Parquet cache — added `--source hf`, robust Parquet export with nested→flat conversion, examples, README/docs, and tests (PR #96).
 - [#46] Boozer/QS–QI evaluator bridge — dedicated evaluator wiring now threads proxy metrics through CLI physics toggles and documentation (PR #89).
-- [#45] Data-driven seeds prior pipeline — training/sampling CLI added, agent seeding wired, and regression tests shipped (PR #90); polish tracked above before closing.
-- [#44] P3 scalarization and Pareto sweep — scalarizers, CLI sweep tooling, and companion docs/tests landed (PR #93); capture physics-enabled artifacts next.
 - [#41] QS proxies in PCFM correction and multi-fidelity gating — metrics-facade wiring logs phase/proxy provenance, docs refreshed, and agent smoke tests added (PR #88).
 - [#51] Metrics/constraints single source of truth — added unified facade `src/constelx/physics/metrics.py`; `eval.forward`/`forward_many` now enrich results with geometry defaults and bounded Boozer proxies; docs updated (ARCHITECTURE.md); ruff+mypy+pytest green.
 - [#32] Baselines and `opt run` CLI — trust-constr/ALM baselines shipped with CLI/docs/tests; issue closed 2025-09-15.
@@ -39,12 +33,10 @@
 - [#53] Ablation harness CLI (`constelx ablate run`) — toggle/spec planner merged (PR #76).
 - [#52] Multi-start NFP exploration with provenance — round-robin `--nfp-list` support shipped (PR #75).
 - [#47] Near-axis seeding for QS/QI-friendly starts — deterministic seed mode and CLI flags available (PR #77).
-- [#42] DESC gradient trust-region baseline + resolution ladder — implemented (PR #91) with resolution ladder hooks and agent wiring.
 - [#60] Evaluator robustness & provenance (timeouts/retries, score inf on failure, cache TTL, deterministic cache) — merged.
 - [#61] Fourier helper, geometry guard thresholds, submit pack with top‑K — merged and documented.
 - [#33] Scoring parity tests for P1–P3 (physics-gated) — implemented and documented (PR #62).
 - [#39] Multi-fidelity gating with proxy→selection→real and provenance — implemented (PR #63) with single-worker phase fix (PR #65).
-- [#43] Nevergrad NGOpt baseline (ALM parity with challenge) — implemented (PR #92) with ALM parity tests and CLI docs.
 - [#54] Results DB + novelty checks — implemented (PR #69) and wired into the agent resume/novelty path.
 - Docs roadmap added (PR #68).
 - Dataset/surrogate speedups (PR #70).
