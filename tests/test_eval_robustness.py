@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any, Dict
@@ -91,3 +92,17 @@ def test_cache_ttl_env_is_accepted(tmp_path: Path) -> None:
         _ = forward_many([b], cache_dir=tmp_path, use_real=False, max_workers=1)
     finally:
         os.environ.pop("CONSTELX_CACHE_TTL_SECONDS", None)
+
+
+def test_forward_logging_when_env_enabled(tmp_path: Path, monkeypatch) -> None:
+    log_dir = tmp_path / "logs"
+    monkeypatch.setenv("CONSTELX_EVAL_LOG_DIR", str(log_dir))
+    b = example_boundary()
+    result = forward(b, use_real=False, problem="p1")
+
+    logs = list(log_dir.glob("*.json"))
+    assert logs, "expected evaluator log output"
+    payload = json.loads(logs[0].read_text())
+    assert payload["problem"] == "p1"
+    assert payload["cache_hit"] is False
+    assert payload["metrics"]["source"] == result.get("source")

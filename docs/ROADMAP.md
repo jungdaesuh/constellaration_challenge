@@ -37,8 +37,10 @@ This repository ships with stubs and guardrails so you can iterate quickly. A re
 ## Near‑term milestones (recommended next steps)
 
 - **Evaluator robustness (#34)**
-  - Add per‑call timeouts, retries with exponential backoff, and deterministic failure recording (`feasible=False`, `fail_reason`, `agg_score=inf`).
+  - Add per-call timeouts, retries with exponential backoff, and deterministic failure recording (`feasible=False`, `fail_reason`, `agg_score=inf`).
   - Record provenance (`source=placeholder|real`) and `scoring_version` in CSV/JSON.
+  - When `CONSTELX_EVAL_LOG_DIR` is set, persist evaluator inputs/outputs as JSON logs for
+    parity/regression triage.
 - **Physics parity & problems (#31, #33)**
   - Extend parity tests to P2/P3 with tiny fixtures; add Fourier indexing/negative‑n corrections and problem specs P1–P3.
 - **Baselines (#32)**

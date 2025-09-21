@@ -1,30 +1,29 @@
 # TODOs
 
 ## Sequential Tasks (next up)
-1. [#41] Integrate QS proxies into PCFM constraints and multi-fidelity gating
-   - PR #85 closed without merge; redo the wiring atop the new metrics facade and keep `--mf-proxy-metric` provenance consistent when re-landing.
-2. [#28] ConStellaration evaluator wiring follow-ups
+1. [#28] ConStellaration evaluator wiring follow-ups
    - Core landed via PR #36; finish robustness/docs cleanup from #34 and reflect parity guidance before closing.
-3. [#30] Real dataset ingestion (HF dataset) + Parquet cache
+2. [#30] Real dataset ingestion (HF dataset) + Parquet cache
    - Add `--source hf`, parquet outputs, fixtures/examples, and document the ingestion path.
-4. [#40] BoTorch qNEI baseline (optional extra)
+3. [#40] BoTorch qNEI baseline (optional extra)
    - Import-guarded baseline with feasibility-aware acquisition and CLI/tests/docs.
 
-Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pending #28/#30 and the revised #41 work).
+Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pending #28/#30 and the qNEI baseline in #40).
 
 ## Parallelizable Tasks
-- [#46] Boozer/QS–QI proxy library — heuristics landed in PR #84; polish docs/range guidance and close once #41 merges.
-- [#45] Data-driven seeds prior (PCA + RF feasibility + GMM/flow models).
-- [#44] P3 scalarization and Pareto sweep.
-- [#41] Integrate QS proxies into PCFM constraints and multi-fidelity gating.
-- [#40] BoTorch qNEI baseline (optional extra).
+- [#45] Data-driven seeds prior polish — rerun against HF ingestion once #30 lands, evaluate the flow-based variant, and fold the findings into docs before closing the issue.
+- [#44] Pareto sweep QA — capture a physics-enabled Pareto example and thread artifacts/docs updates before shutting the issue.
 
   (De-dup with Sequential list as work starts.)
 
 ## Completed Recently
+- [#46] Boozer/QS–QI evaluator bridge — dedicated evaluator wiring now threads proxy metrics through CLI physics toggles and documentation (PR #89).
+- [#45] Data-driven seeds prior pipeline — training/sampling CLI added, agent seeding wired, and regression tests shipped (PR #90); polish tracked above before closing.
+- [#44] P3 scalarization and Pareto sweep — scalarizers, CLI sweep tooling, and companion docs/tests landed (PR #93); capture physics-enabled artifacts next.
+- [#41] QS proxies in PCFM correction and multi-fidelity gating — metrics-facade wiring logs phase/proxy provenance, docs refreshed, and agent smoke tests added (PR #88).
 - [#51] Metrics/constraints single source of truth — added unified facade `src/constelx/physics/metrics.py`; `eval.forward`/`forward_many` now enrich results with geometry defaults and bounded Boozer proxies; docs updated (ARCHITECTURE.md); ruff+mypy+pytest green.
 - [#32] Baselines and `opt run` CLI — trust-constr/ALM baselines shipped with CLI/docs/tests; issue closed 2025-09-15.
-- [#50] VMEC resolution ladder and hot-restart toggles — CLI/env knobs wired through eval/agent/opt, cache separation and provenance recorded.
+- [#50] VMEC resolution ladder and evaluator cache robustness — CLI/env knobs enable hot restarts while failed evaluations no longer populate the cache; VMEC metadata now threads through adapters.
 - [#38] PCFM repair pack — aspect-ratio band, edge-iota proxy, and clearance constraint landed with docs/examples.
 - [#73] Agent surrogate screening hook — implemented with CLI/docs.
 - [#74] Novelty gating and README/ROADMAP updates — agent skip logic and CLI flags landed (PR #79).
