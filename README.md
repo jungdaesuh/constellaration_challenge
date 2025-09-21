@@ -141,29 +141,43 @@ Multi-fidelity proxy gating
 - Provenance: proxy rows in `metrics.csv` include `phase=proxy`, the `proxy_metric` name, and the numeric `proxy_score`. Survivors evaluated downstream retain existing fields with `phase=real` when physics is enabled.
 - Caching: proxy evaluations are cached separately with a `:proxy` suffix so they do not collide with real results.
 
- - PCFM correction (examples):
-   - Norm equality: constrain helical amplitude to a circle of radius 0.06
-     - JSON: `examples/pcfm_norm.json`
-     - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_norm.json`
-  - Ratio equality: enforce `z_sin[1][5] / r_cos[1][5] = -1.25`
-     - JSON: `examples/pcfm_ratio.json`
-     - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_ratio.json`
-  - Product equality: enforce `r_cos[1][5] * z_sin[1][5] = 0.003`
-    - JSON: `examples/pcfm_product.json`
-    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_product.json`
-  - Aspect-ratio band: keep `R0/a` within `[4, 8]`
-    - JSON: `examples/pcfm_ar_band.json`
-    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_ar_band.json`
-  - Edge iota ratio: target helical ratio ≈ 0.1
-    - JSON: `examples/pcfm_edge_iota.json`
-    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_edge_iota.json`
-  - QS residual band: clamp `qs_residual` ≤ 0.2 with Boozer proxies
-    - JSON: `examples/pcfm_qs_band.json`
-    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_qs_band.json`
-  - Clearance floor: ensure `|R0| - ||m=1|| ≥ 0.95`
-    - JSON: `examples/pcfm_clearance.json`
-    - Run: `constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_clearance.json`
-  - Tuning: `--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8` or via top-level keys in the constraints JSON: `{gn_iters,damping,tol}`
+### PCFM correction (Gauss–Newton projection)
+
+Projects boundaries onto the constraint manifold before evaluation using a damped Gauss–Newton
+step with clamped updates and geometry revalidation at every iteration. This keeps proposals
+feasible without diverging when the Jacobian is ill conditioned.
+
+**Example spec**
+
+```json
+[
+  {
+    "type": "norm_eq",
+    "radius": 0.06,
+    "terms": [
+      {"field": "r_cos", "i": 1, "j": 5, "w": 1.0},
+      {"field": "z_sin", "i": 1, "j": 5, "w": 1.0}
+    ]
+  }
+]
+```
+
+Launch with:
+
+`constelx agent run --nfp 3 --budget 4 --correction pcfm --constraints-file examples/pcfm_norm.json`
+
+**Ready-to-use specs**
+
+- Norm equality: constrain helical amplitude to a circle of radius 0.06 -> `examples/pcfm_norm.json`
+- Ratio equality: enforce `z_sin[1][5] / r_cos[1][5] = -1.25` -> `examples/pcfm_ratio.json`
+- Product equality: enforce `r_cos[1][5] * z_sin[1][5] = 0.003` -> `examples/pcfm_product.json`
+- Aspect-ratio band: keep `R0/a` within `[4, 8]` -> `examples/pcfm_ar_band.json`
+- Edge iota ratio: target helical ratio ~= 0.1 -> `examples/pcfm_edge_iota.json`
+- QS residual band: clamp `qs_residual` <= 0.2 with Boozer proxies -> `examples/pcfm_qs_band.json`
+- Clearance floor: ensure `|R0| - ||m=1|| >= 0.95` -> `examples/pcfm_clearance.json`
+
+Tuning via CLI flags (`--pcfm-gn-iters 3 --pcfm-damping 1e-6 --pcfm-tol 1e-8`) or top-level JSON
+keys `{gn_iters,damping,tol}`.
 Artifacts (written under `runs/<timestamp>/`)
 - `config.yaml`: run config, env info, git SHA, package versions
 - `proposals.jsonl`: proposals with seeds and boundaries
