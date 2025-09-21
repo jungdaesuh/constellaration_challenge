@@ -17,7 +17,12 @@ Imports of internal subpackages are deferred to command bodies to avoid
 import-time coupling and keep simple commands lightweight.
 """
 
-app = typer.Typer(help="ConstelX CLI — ConStellaration starter tools")
+app = typer.Typer(
+    help=(
+        "ConstelX CLI — ConStellaration starter tools\n\n"
+        "Data: 'data fetch --source hf' mirrors a thin Parquet slice to 'cache_dir/subset.parquet'."
+    )
+)
 console = Console()
 
 # Load environment variables from a .env file if python-dotenv is available.

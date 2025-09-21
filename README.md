@@ -20,6 +20,7 @@ pip install -e ".[dev,bo,evolution]"
 # (4) sanity check
 constelx --help
 constelx data fetch --nfp 3 --limit 32
+constelx data fetch --source hf --nfp 3 --limit 128  # real dataset → Parquet cache
 constelx eval forward --example  # runs an example boundary through metrics
 constelx eval forward --random --nfp 3 --seed 0
 constelx data prior-train data/dataset.jsonl --out models/seeds_prior.joblib
@@ -280,3 +281,9 @@ Artifacts now include clear scoring and provenance fields:
 - VMEC++ docs: https://proximafusion.github.io/vmecpp/
 
 License: MIT
+Data ingestion
+- Synthetic (fast, no network): `constelx data fetch --nfp 3 --limit 32`
+- Real HF dataset (requires network): `constelx data fetch --source hf --nfp 3 --limit 128`
+  - Writes a thin Parquet slice to `data/cache/subset.parquet` by default (configurable via `--cache-dir`).
+  - The Parquet flattens nested structures into dot-separated columns (e.g., `boundary.r_cos.1.5`).
+- Seeds JSONL from HF dataset: `constelx data seeds --nfp 3 --k 64 --out data/seeds.jsonl`
