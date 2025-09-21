@@ -58,6 +58,18 @@ Evaluation
 - Near-axis QS/QI-friendly seed: `constelx eval forward --near-axis --nfp 3 --seed 0`
 - `constelx eval score --metrics-json examples/metrics_small.json`
 
+Evaluator knobs & parity
+- `constelx eval problems` lists each challenge problem together with the metrics the
+  evaluator expects so you can sanity-check parity before long runs.
+- Timeout/backoff knobs: `CONSTELX_REAL_TIMEOUT_MS`, `CONSTELX_REAL_RETRIES`, and
+  `CONSTELX_REAL_BACKOFF` tune the real evaluator timeout loop.
+- Logging: set `CONSTELX_EVAL_LOG_DIR=/path/to/logs` to capture one JSON file per
+  evaluation (boundary fingerprints, metrics, VMEC knobs). Combine with
+  `CONSTELX_VMEC_VERBOSE=1` when you need verbose VMEC++ traces.
+- Physics parity: install the `physics` extras, export
+  `CONSTELX_RUN_PHYSICS_TESTS=1`, then run `pytest -q -k scoring_parity` to confirm the
+  local scorer matches the official ConStellaration aggregation.
+
 Optimization
 - Toy sphere: `constelx opt cmaes --toy --budget 20 --seed 0`
 - Boundary mode: `constelx opt cmaes --nfp 3 --budget 50 --seed 0`
