@@ -168,4 +168,201 @@ def run_ngopt(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
     return best_x, best_score
 
 
-__all__ = ["BaselineConfig", "run_trust_constr", "run_alm", "run_ngopt"]
+__all__ = [
+    "BaselineConfig",
+    "run_trust_constr",
+    "run_alm",
+    "run_ngopt",
+    "run_botorch_qnei",
+]
+
+
+def run_botorch_qnei(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
+    """BoTorch qNEI baseline with feasibility-aware acquisition.
+
+    The search space matches the other baselines (two helical coefficients bounded
+    in ``[-0.2, 0.2]``) and uses the shared evaluator helpers for score + penalty.
+    """
+
+    try:
+        import torch
+        from botorch import settings as botorch_settings
+        from botorch.acquisition import qNoisyExpectedImprovement
+        from botorch.acquisition.objective import ConstrainedMCObjective
+        from botorch.fit import fit_gpytorch_mll
+        from botorch.models import ModelListGP, SingleTaskGP
+        from botorch.models.transforms import Normalize, Standardize
+        from botorch.optim import optimize_acqf
+        from botorch.sampling import SobolQMCNormalSampler
+        from gpytorch.mlls import SumMarginalLogLikelihood
+
+        try:
+            from botorch.acquisition import (
+                qLogNoisyExpectedImprovement as _qLogNoisyExpectedImprovement,
+            )
+
+            qLogNoisyExpectedImprovement = _qLogNoisyExpectedImprovement
+        except ImportError:  # pragma: no cover - older BoTorch fallback
+            qLogNoisyExpectedImprovement = None
+    except Exception as exc:  # pragma: no cover - optional dependency path
+        raise RuntimeError(
+            "BoTorch is required for the qNEI baseline; install 'constelx[bo]'"
+        ) from exc
+
+    torch.manual_seed(int(cfg.seed))
+    device = torch.device("cpu")
+    dtype = torch.double
+
+    bounds = torch.tensor([[-0.2, -0.2], [0.2, 0.2]], dtype=dtype, device=device)
+    dim = bounds.shape[1]
+
+    def evaluate_candidate(x_arr: NDArray[np.float64]) -> tuple[float, float]:
+        score, penalty = _score_and_penalty(x_arr, cfg)
+        if not np.isfinite(score):
+            score = float(1e6)
+        if not np.isfinite(penalty):
+            penalty = float(1e2)
+        return float(score), float(penalty)
+
+    def sample_sobol(num: int) -> list[NDArray[np.float64]]:
+        if num <= 0:
+            return []
+        engine = torch.quasirandom.SobolEngine(dimension=dim, scramble=True, seed=int(cfg.seed))
+        sobol_raw = engine.draw(num).to(dtype=dtype, device=device)
+        sobol_scaled = bounds[0] + (bounds[1] - bounds[0]) * sobol_raw
+        return [row.cpu().numpy().astype(np.float64, copy=True) for row in sobol_scaled]
+
+    initial_points: list[NDArray[np.float64]] = [np.asarray([0.05, 0.05], dtype=np.float64)]
+    remaining = max(0, min(max(4, dim + 1), int(cfg.budget)) - len(initial_points))
+    initial_points.extend(sample_sobol(remaining))
+    if not initial_points:
+        # Budget was zero; nothing to optimize.
+        return np.zeros(2, dtype=float), float("inf")
+
+    train_x_list: list[NDArray[np.float64]] = []
+    obj_vals: list[float] = []
+    pen_vals: list[float] = []
+
+    best_x = np.asarray(initial_points[0], dtype=float)
+    best_score = float("inf")
+    best_penalty = float("inf")
+
+    def update_best(x_val: NDArray[np.float64], score: float, penalty: float) -> None:
+        nonlocal best_x, best_score, best_penalty
+        feasible = penalty <= 0.0
+        if feasible:
+            if best_penalty > 0.0 or score < best_score:
+                best_x = np.asarray(x_val, dtype=float)
+                best_score = float(score)
+                best_penalty = float(penalty)
+        elif best_penalty > 0.0 and penalty < best_penalty:
+            best_x = np.asarray(x_val, dtype=float)
+            best_score = float(score)
+            best_penalty = float(penalty)
+
+    for pt in initial_points:
+        score, penalty = evaluate_candidate(pt)
+        train_x_list.append(np.asarray(pt, dtype=np.float64))
+        obj_vals.append(float(score))
+        pen_vals.append(float(penalty))
+        update_best(pt, score, penalty)
+        if len(train_x_list) >= cfg.budget:
+            return np.asarray(best_x, dtype=float), float(best_score)
+
+    sobol_fallback = torch.quasirandom.SobolEngine(
+        dimension=dim, scramble=True, seed=int(cfg.seed) + 7919
+    )
+
+    def next_random() -> np.ndarray:
+        random_draw = sobol_fallback.draw(1).to(dtype=dtype, device=device)[0]
+        candidate = bounds[0] + (bounds[1] - bounds[0]) * random_draw
+        return candidate.cpu().numpy().astype(np.float64, copy=True)
+
+    try:
+        sampler = SobolQMCNormalSampler(num_samples=256)
+    except TypeError:
+        sampler = SobolQMCNormalSampler(sample_shape=torch.Size((256,)))
+
+    while len(train_x_list) < cfg.budget:
+        train_x = torch.as_tensor(np.stack(train_x_list, axis=0), dtype=dtype, device=device)
+
+        obj_arr = np.asarray(obj_vals, dtype=np.float64)
+        obj_mean = float(obj_arr.mean())
+        obj_std = float(obj_arr.std())
+        if not np.isfinite(obj_std) or obj_std < 1e-12:
+            obj_std = 1.0
+        obj_norm = (obj_arr - obj_mean) / obj_std
+
+        pen_arr = np.asarray(pen_vals, dtype=np.float64)
+        pen_mean = float(pen_arr.mean())
+        pen_std = float(pen_arr.std())
+        if not np.isfinite(pen_std) or pen_std < 1e-12:
+            pen_std = 1.0
+        pen_norm = (pen_arr - pen_mean) / pen_std
+
+        train_obj = torch.as_tensor(obj_norm[:, None], dtype=dtype, device=device)
+        train_con = torch.as_tensor(pen_norm[:, None], dtype=dtype, device=device)
+
+        with botorch_settings.validate_input_scaling(False):
+            obj_model = SingleTaskGP(
+                train_x,
+                train_obj,
+                input_transform=Normalize(d=dim),
+                outcome_transform=Standardize(m=1),
+            )
+            con_model = SingleTaskGP(
+                train_x,
+                train_con,
+                input_transform=Normalize(d=dim),
+            )
+        model = ModelListGP(obj_model, con_model)
+        mll = SumMarginalLogLikelihood(model.likelihood, model)
+        fit_gpytorch_mll(mll)
+
+        def objective(samples: torch.Tensor) -> torch.Tensor:
+            # Map back to the original scale and minimize the aggregate score.
+            unscaled = samples[..., 0] * obj_std + obj_mean
+            return -unscaled
+
+        def constraint(samples: torch.Tensor) -> torch.Tensor:
+            # Penalty <= 0 is feasible; >0 is violation (original scale).
+            return samples[..., 1] * pen_std + pen_mean
+
+        constrained_obj = ConstrainedMCObjective(
+            objective=objective,
+            constraints=[constraint],
+            infeasible_cost=-1e6,
+        )
+
+        try:
+            acq_cls = (
+                qLogNoisyExpectedImprovement
+                if qLogNoisyExpectedImprovement is not None
+                else qNoisyExpectedImprovement
+            )
+            candidate, _ = optimize_acqf(
+                acq_cls(
+                    model=model,
+                    X_baseline=train_x,
+                    sampler=sampler,
+                    objective=constrained_obj,
+                ),
+                bounds=bounds,
+                q=1,
+                num_restarts=8,
+                raw_samples=64,
+            )
+            candidate_np = candidate.detach().cpu().numpy()[0].astype(np.float64)
+        except Exception:
+            candidate_np = next_random()
+
+        if any(np.allclose(candidate_np, prev, atol=1e-6) for prev in train_x_list):
+            candidate_np = next_random()
+
+        score, penalty = evaluate_candidate(candidate_np)
+        train_x_list.append(candidate_np)
+        obj_vals.append(float(score))
+        pen_vals.append(float(penalty))
+        update_best(candidate_np, score, penalty)
+
+    return np.asarray(best_x, dtype=float), float(best_score)
