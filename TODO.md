@@ -3,10 +3,10 @@
 ## Sequential Tasks (next up)
 
 - [ ] Shepherd PR #100 to merge and close [#27]; confirm maintainers are satisfied once the checklist lands on main.
-- [ ] [#45] Data-driven seeds prior polish — rerun against HF ingestion, evaluate the flow-based variant, wire CLI/agent plumbing, and refresh docs/tests before closing.
-- [ ] [#44] Pareto sweep QA — capture a physics-enabled Pareto example, update artifacts/docs, and close the issue.
-- [ ] [#43] Nevergrad NGOpt baseline — finish import guards, CLI/docs/tests, and verify ALM parity prior to closing.
-- [ ] [#42] DESC gradient trust-region baseline — complete the resolution ladder + DESC integration, document usage, and close the issue.
+- [ ] [#45] Data-driven seeds prior polish — rerun the prior against the HF Parquet cache, compare GMM vs flow outputs, wire the HF seeds into `agent run --seed-mode prior`, and update README/AGENTS with the findings.
+- [ ] [#44] Pareto sweep QA — produce a physics-enabled Pareto sweep (JSON + plot), archive it under `examples/` (or `runs/`) and document the workflow/results.
+- [ ] [#43] Nevergrad NGOpt baseline — run parity vs the challenge ALM baseline using the official evaluator, capture the metrics, and document the comparison.
+- [ ] [#42] DESC gradient trust-region baseline — execute a real DESC ladder with VMEC validation enabled, log the outcomes, and extend the docs with usage guidance and caveats.
 
 ## Parallelizable Tasks
 - [ ] Backlog grooming — review the open issues monthly to keep Sequential and Completed lists honest.
