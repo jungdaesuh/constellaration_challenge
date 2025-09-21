@@ -82,7 +82,7 @@ This repo’s work is organized into phases with tracked issues. Use these to pl
   - #46 (Boozer/QS–QI proxy library ✅), #41 (Integrate QS proxies – depends on #46), #51 (Metrics/constraints consolidation), #45 (Data‑driven seeds prior), #47 (Near‑axis seeding)
 
 - Phase 4 — Advanced + Ops
-  - #42 (DESC gradient TR baseline), #52 (Multi‑start NFP), #53 (Ablation harness), #54 (Results DB + novelty), #49 (Submission packer)
+  - #42 (DESC gradient TR baseline) — done, #52 (Multi‑start NFP), #53 (Ablation harness), #54 (Results DB + novelty), #49 (Submission packer)
 
 Testing anchors (additions beyond the existing suite)
 - Phase 0: CLI gating for `--use-physics/--problem`; `opt run` smoke; cache invariants and timeout fallback; metrics.csv schema columns present.

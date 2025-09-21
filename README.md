@@ -15,7 +15,7 @@ python3 -m venv .venv && source .venv/bin/activate
 brew install netcdf
 
 # (3) install the package (editable) + extras for baselines
-pip install -e ".[dev,bo]"
+pip install -e ".[dev,bo,evolution]"
 
 # (4) sanity check
 constelx --help
@@ -62,15 +62,23 @@ Optimization
 - Toy sphere: `constelx opt cmaes --toy --budget 20 --seed 0`
 - Boundary mode: `constelx opt cmaes --nfp 3 --budget 50 --seed 0`
 
-Optimization baselines (trust‑constr / ALM)
+Optimization baselines (trust‑constr / ALM / NGOpt)
 - Trust‑constr (2D helical coefficients):
   `constelx opt run --baseline trust-constr --nfp 3 --budget 10`
 - Augmented‑Lagrangian (simple penalty outer loop):
   `constelx opt run --baseline alm --nfp 3 --budget 10`
+- DESC trust-region (DESC gradients + resolution ladder):
+  `constelx opt run --baseline desc-trust --nfp 3 --budget 10`
+  Requires `pip install -e ".[desc]"` (or `constelx[desc]`) and runs a two-stage
+  DESC trust-region SQP pass (coarse M=8/N=8 then refined M=12/N=12) before
+  scoring via the shared evaluator.
+- Nevergrad NGOpt (augmented-Lagrangian polisher):
+  `constelx opt run --baseline ngopt --nfp 3 --budget 10`
 - With physics path (requires problem id):
   `constelx opt run --baseline trust-constr --nfp 3 --budget 10 --use-physics --problem p1`
   When `--use-physics` is set, metrics and scoring route through the official evaluator
   if available; otherwise the command falls back to the placeholder path.
+  (Install the `evolution` extra to enable CMA-ES and NGOpt: `pip install -e ".[evolution]"`.)
 
 Agent
 - Random search: `constelx agent run --nfp 3 --budget 6 --seed 0 --runs-dir runs`
@@ -214,6 +222,10 @@ To run with the real evaluator dependencies:
 - Windows: recommended via conda-forge:
   - `conda install -c conda-forge netcdf-c netcdf-cxx4 cmake ninja`
   - `pip install -e ".[dev,physics]"`
+- DESC trust-region baseline (gradient inner loop with DESC):
+  - `pip install -e ".[dev,desc]"` or `pip install constelx[desc]`
+  - Includes `desc-opt` and its JAX stack; reuse the NetCDF guidance above when
+    building on macOS or Linux to satisfy DESC’s geometric I/O dependencies.
 
 When physics extras are unavailable, the CLI and tests use lightweight placeholder evaluators that avoid native builds.
 
