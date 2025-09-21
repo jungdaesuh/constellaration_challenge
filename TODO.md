@@ -15,6 +15,7 @@ Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pe
   (De-dup with Sequential list as work starts.)
 
 ## Completed Recently
+- [#20] PCFM correction docs — README/AGENTS now ship norm JSON snippet, command example, and Gauss–Newton safety notes (PR #98).
 - [#30] Real dataset ingestion (HF dataset) + Parquet cache — added `--source hf`, robust Parquet export with nested→flat conversion, examples, README/docs, and tests (PR #96).
 - [#46] Boozer/QS–QI evaluator bridge — dedicated evaluator wiring now threads proxy metrics through CLI physics toggles and documentation (PR #89).
 - [#45] Data-driven seeds prior pipeline — training/sampling CLI added, agent seeding wired, and regression tests shipped (PR #90); polish tracked above before closing.
