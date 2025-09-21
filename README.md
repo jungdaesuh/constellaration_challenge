@@ -62,6 +62,10 @@ Evaluation
 Evaluator knobs & parity
 - `constelx eval problems` lists each challenge problem together with the metrics the
   evaluator expects so you can sanity-check parity before long runs.
+- Real evaluator path: append `--use-physics --use-real --problem p1` (or export
+  `CONSTELX_USE_REAL_EVAL=1`) on `constelx eval forward`, `opt run`, or `agent run` to
+  route calls through the official ConStellaration evaluator. Example:
+  `constelx eval forward --boundary-json examples/boundary.json --use-real --use-physics --problem p1`.
 - Timeout/backoff knobs: `CONSTELX_REAL_TIMEOUT_MS`, `CONSTELX_REAL_RETRIES`, and
   `CONSTELX_REAL_BACKOFF` tune the real evaluator timeout loop.
 - Logging: set `CONSTELX_EVAL_LOG_DIR=/path/to/logs` to capture one JSON file per

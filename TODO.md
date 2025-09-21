@@ -1,12 +1,10 @@
 # TODOs
 
 ## Sequential Tasks (next up)
-1. [#28] ConStellaration evaluator wiring follow-ups
-   - Core landed via PR #36; finish robustness/docs cleanup from #34 and reflect parity guidance before closing.
-2. [#40] BoTorch qNEI baseline (optional extra)
+1. [#40] BoTorch qNEI baseline (optional extra)
    - Import-guarded baseline with feasibility-aware acquisition and CLI/tests/docs.
 
-Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pending #28/#30 and the qNEI baseline in #40).
+Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pending #30 and the qNEI baseline in #40).
 
 ## Parallelizable Tasks
 - [#45] Data-driven seeds prior polish — rerun against HF ingestion once #30 lands, evaluate the flow-based variant, and fold the findings into docs before closing the issue.
@@ -15,6 +13,8 @@ Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pe
   (De-dup with Sequential list as work starts.)
 
 ## Completed Recently
+- [#28] ConStellaration evaluator wiring follow-ups — README/AGENTS now document `--use-real`
+  usage, parity workflow, and environment knobs (PR #98 follow-up).
 - [#20] PCFM correction docs — README/AGENTS now ship norm JSON snippet, command example, and Gauss–Newton safety notes (PR #98).
 - [#30] Real dataset ingestion (HF dataset) + Parquet cache — added `--source hf`, robust Parquet export with nested→flat conversion, examples, README/docs, and tests (PR #96).
 - [#46] Boozer/QS–QI evaluator bridge — dedicated evaluator wiring now threads proxy metrics through CLI physics toggles and documentation (PR #89).
