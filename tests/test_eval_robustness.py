@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from constelx.eval import forward, forward_many
+from constelx.eval import _log_eval_event, forward, forward_many
 from constelx.eval import score as eval_score
 from constelx.physics import proxima_eval
 from constelx.physics.constel_api import example_boundary
@@ -106,3 +106,25 @@ def test_forward_logging_when_env_enabled(tmp_path: Path, monkeypatch) -> None:
     assert payload["problem"] == "p1"
     assert payload["cache_hit"] is False
     assert payload["metrics"]["source"] == result.get("source")
+
+
+def test_logging_sanitizes_labels(tmp_path: Path, monkeypatch) -> None:
+    log_dir = tmp_path / "logs"
+    monkeypatch.setenv("CONSTELX_EVAL_LOG_DIR", str(log_dir))
+    b = example_boundary()
+
+    # Problem label with traversal characters should be sanitized in filename.
+    _ = forward(b, use_real=False, problem="../../tmp/pwn??")
+
+    # Manual logging with a malicious phase value to ensure both labels are sanitized.
+    metrics = {"source": "placeholder", "phase": "../phase\\../"}
+    _log_eval_event(b, metrics, problem="../../bad", vmec_opts={}, cache_hit=False)
+
+    logs = list(log_dir.glob("*.json"))
+    assert logs, "logs should be emitted"
+    for path in logs:
+        assert path.parent == log_dir
+        name = path.name
+        assert ".." not in name
+        assert "/" not in name
+        assert "\\" not in name

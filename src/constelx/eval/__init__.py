@@ -27,6 +27,7 @@ import hashlib
 import json
 import multiprocessing
 import os
+import re
 import time
 import uuid
 from concurrent.futures import ProcessPoolExecutor, TimeoutError, as_completed
@@ -197,6 +198,9 @@ def _hash_boundary(boundary: Mapping[str, Any]) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
 
+_LABEL_SANITIZE_RE = re.compile(r"[^a-z0-9]+")
+
+
 def _json_ready(obj: Any) -> Any:
     """Return a JSON-serializable representation with stable ordering.
 
@@ -219,6 +223,18 @@ def _json_ready(obj: Any) -> Any:
     return _sanitize(_normalize(obj))
 
 
+def _sanitize_label(value: Optional[str], fallback: str = "") -> str:
+    """Return a filesystem-safe label consisting of lowercase [a-z0-9-]."""
+
+    if not isinstance(value, str):
+        return fallback
+    lowered = value.strip().lower()
+    if not lowered:
+        return fallback
+    cleaned = _LABEL_SANITIZE_RE.sub("-", lowered).strip("-")
+    return cleaned or fallback
+
+
 def _log_eval_event(
     boundary: Mapping[str, Any],
     metrics: Mapping[str, Any],
@@ -236,9 +252,10 @@ def _log_eval_event(
     try:
         log_dir = Path(log_dir_raw).expanduser()
         log_dir.mkdir(parents=True, exist_ok=True)
-        problem_label = (problem or "unknown").strip().lower() or "unknown"
-        phase = metrics.get("phase") if isinstance(metrics, Mapping) else None
-        phase_label = str(phase) if isinstance(phase, str) and phase else None
+        problem_label = _sanitize_label(problem, fallback="unknown")
+        phase_value = metrics.get("phase") if isinstance(metrics, Mapping) else None
+        phase_label_raw = str(phase_value) if isinstance(phase_value, str) and phase_value else None
+        phase_label = _sanitize_label(phase_label_raw, fallback="")
         boundary_fingerprint = _hash_boundary(boundary)
         timestamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
         suffix_parts: List[str] = []
@@ -250,6 +267,16 @@ def _log_eval_event(
             f"{problem_label}_{suffix}_{timestamp}_{boundary_fingerprint[:12]}_"
             f"{uuid.uuid4().hex[:8]}.json"
         )
+        target_path = log_dir / filename
+        resolved_dir = log_dir.resolve()
+        resolved_target = target_path.resolve()
+        try:
+            if not resolved_target.is_relative_to(resolved_dir):
+                return
+        except AttributeError:  # Python <3.9 fallback (not expected but defensive)
+            target_str = str(resolved_target)
+            if not target_str.startswith(str(resolved_dir)):
+                return
         payload = {
             "timestamp": time.time(),
             "problem": problem,
