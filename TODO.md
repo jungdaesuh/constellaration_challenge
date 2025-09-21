@@ -16,8 +16,6 @@ Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pe
 - [#46] Boozer/QS–QI proxy library — heuristics landed in PR #84; polish docs/range guidance and close once #41 merges.
 - [#45] Data-driven seeds prior (PCA + RF feasibility + GMM/flow models).
 - [#44] P3 scalarization and Pareto sweep.
-- [#43] Nevergrad NGOpt baseline (ALM parity with challenge).
-- [#42] DESC integration: gradient trust-region baseline and resolution ladder.
 - [#41] Integrate QS proxies into PCFM constraints and multi-fidelity gating.
 - [#40] BoTorch qNEI baseline (optional extra).
 
@@ -36,12 +34,12 @@ Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pe
 - [#53] Ablation harness CLI (`constelx ablate run`) — toggle/spec planner merged (PR #76).
 - [#52] Multi-start NFP exploration with provenance — round-robin `--nfp-list` support shipped (PR #75).
 - [#47] Near-axis seeding for QS/QI-friendly starts — deterministic seed mode and CLI flags available (PR #77).
-- [#42] DESC gradient trust-region baseline + resolution ladder — implemented (this PR).
+- [#42] DESC gradient trust-region baseline + resolution ladder — implemented (PR #91) with resolution ladder hooks and agent wiring.
 - [#60] Evaluator robustness & provenance (timeouts/retries, score inf on failure, cache TTL, deterministic cache) — merged.
 - [#61] Fourier helper, geometry guard thresholds, submit pack with top‑K — merged and documented.
 - [#33] Scoring parity tests for P1–P3 (physics-gated) — implemented and documented (PR #62).
 - [#39] Multi-fidelity gating with proxy→selection→real and provenance — implemented (PR #63) with single-worker phase fix (PR #65).
-- [#43] Nevergrad NGOpt baseline (ALM parity with challenge) — implemented (pending review).
+- [#43] Nevergrad NGOpt baseline (ALM parity with challenge) — implemented (PR #92) with ALM parity tests and CLI docs.
 - [#54] Results DB + novelty checks — implemented (PR #69) and wired into the agent resume/novelty path.
 - Docs roadmap added (PR #68).
 - Dataset/surrogate speedups (PR #70).
