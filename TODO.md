@@ -2,7 +2,7 @@
 
 ## Sequential Tasks (next up)
 1. [#28] ConStellaration evaluator wiring follow-ups
-   - Core landed via PR #36; finish robustness/docs cleanup from #34 and reflect parity guidance before closing.
+   - Core landed via PR #36; parity/logging hardening addressed in upcoming PR (branch `feat/eval-log-sanitization`).
 2. [#30] Real dataset ingestion (HF dataset) + Parquet cache
    - Add `--source hf`, parquet outputs, fixtures/examples, and document the ingestion path.
 3. [#40] BoTorch qNEI baseline (optional extra)
