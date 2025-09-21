@@ -2,7 +2,14 @@
 
 ## Sequential Tasks (next up)
 
-Tracking: [#27] remains open until the PR-01…06 checklist is fully cleared (pending #30).
+- [ ] Tracking [#27] — keep open until the PR-01…06 checklist is fully cleared.
+  - [x] PR-01: Wire to ConStellaration evaluator + official scoring (closed via PR #36 / issue #28).
+  - [x] PR-02: Correct Fourier boundary grid + indexing (m,n) with negative-n support (resolved by PR #61 / issue #29).
+  - [x] PR-03: Real dataset ingestion (HF dataset) + Parquet cache (completed in PR #96 / issue #30).
+  - [x] PR-04: Benchmark problems P1–P3 specs + CLI `--problem` (closed by issue #31).
+  - [x] PR-05: Baselines (ALM/trust-constr) + `opt run` CLI (closed by issue #32).
+  - [x] PR-06: Scoring parity tests (goldens, physics-gated) (closed by issue #33).
+  - [ ] Follow up with maintainers to close [#27] now that all PR gates are satisfied.
 
 ## Parallelizable Tasks
 - [#45] Data-driven seeds prior polish — rerun against HF ingestion once #30 lands, evaluate the flow-based variant, and fold the findings into docs before closing the issue.
