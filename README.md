@@ -76,6 +76,8 @@ Optimization baselines (trust‑constr / ALM / NGOpt)
   `constelx opt run --baseline ngopt --nfp 3 --budget 10`
 - With physics path (requires problem id):
   `constelx opt run --baseline trust-constr --nfp 3 --budget 10 --use-physics --problem p1`
+- Pareto sweep (Problem 3 placeholder):
+  `constelx opt pareto --budget 16 --sweeps 5 --seed 0 --json-out pareto.json`
   When `--use-physics` is set, metrics and scoring route through the official evaluator
   if available; otherwise the command falls back to the placeholder path.
   (Install the `evolution` extra to enable CMA-ES and NGOpt: `pip install -e ".[evolution]"`.)
