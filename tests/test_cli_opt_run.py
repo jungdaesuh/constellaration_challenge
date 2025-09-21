@@ -64,6 +64,26 @@ def test_opt_run_ngopt_smoke() -> None:
     assert "Best x:" in result.stdout
 
 
+def test_opt_run_qnei_smoke() -> None:
+    pytest.importorskip("botorch")
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "opt",
+            "run",
+            "--baseline",
+            "qnei",
+            "--nfp",
+            "3",
+            "--budget",
+            "5",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Best x:" in result.stdout
+
+
 def test_opt_run_unknown_baseline_errors() -> None:
     runner = CliRunner()
     result = runner.invoke(
@@ -121,3 +141,23 @@ def test_opt_run_ngopt_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> No
     )
     assert result.exit_code != 0
     assert "Nevergrad is required" in result.stdout or "Nevergrad is required" in result.stderr
+
+
+def test_opt_run_qnei_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError("BoTorch is required for the qNEI baseline; install 'constelx[bo]'")
+
+    monkeypatch.setattr("constelx.optim.baselines.run_botorch_qnei", _raise)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "opt",
+            "run",
+            "--baseline",
+            "qnei",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "BoTorch is required" in result.stdout or "BoTorch is required" in result.stderr
