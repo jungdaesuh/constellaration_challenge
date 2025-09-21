@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import pandas as pd
 from datasets import Dataset, load_dataset
@@ -13,8 +13,53 @@ def load(split: str = "train") -> Dataset:
 
 def select_columns(ds: Dataset) -> Dataset:
     # Keep only boundary.* and metrics.* columns for seeds/training
-    cols = [c for c in ds.column_names if c.startswith("boundary.") or c.startswith("metrics.")]
+    cols = [
+        c
+        for c in ds.column_names
+        if c in {"boundary", "metrics"} or c.startswith("boundary.") or c.startswith("metrics.")
+    ]
     return ds.remove_columns([c for c in ds.column_names if c not in cols])
+
+
+def _flatten_to_dots(prefix: str, value: Any) -> dict[str, Any]:
+    """Flatten nested structures under a prefix into dot-separated keys.
+
+    - Dicts: recurse with ``{prefix}.{key}``
+    - Lists/tuples: index with integer segments ``{prefix}.{i}`` (and recurse)
+    - Scalars: emit ``{prefix}: value``
+    """
+    out: dict[str, Any] = {}
+    if isinstance(value, Mapping):
+        for k, v in value.items():
+            out.update(_flatten_to_dots(f"{prefix}.{k}", v))
+    elif isinstance(value, (list, tuple)):
+        for i, v in enumerate(value):
+            out.update(_flatten_to_dots(f"{prefix}.{i}", v))
+    else:
+        out[prefix] = value
+    return out
+
+
+def _flatten_record(rec: Mapping[str, Any]) -> dict[str, Any]:
+    """Flatten a record keeping only boundary.* and metrics.* as dot keys.
+
+    This handles both dataset layouts:
+    - nested objects: ``{"boundary": {...}, "metrics": {...}}``
+    - already-flat: ``{"boundary.r_cos.1.5": 0.1, ...}``
+    """
+    out: dict[str, Any] = {}
+    # Prefer nested objects when present
+    b = rec.get("boundary")
+    m = rec.get("metrics")
+    if isinstance(b, Mapping):
+        out.update(_flatten_to_dots("boundary", b))
+    if isinstance(m, Mapping):
+        out.update(_flatten_to_dots("metrics", m))
+    # Also keep any already-flat boundary.* or metrics.* keys
+    for k, v in rec.items():
+        if isinstance(k, str) and (k.startswith("boundary.") or k.startswith("metrics.")):
+            out[k] = v
+    return out
 
 
 def _safe_nfp(rec: dict[str, Any]) -> int:
@@ -37,7 +82,21 @@ def filter_nfp(ds: Dataset, nfp: int) -> Dataset:
 
 
 def to_parquet(ds: Dataset, out: Path) -> Path:
-    df = pd.DataFrame(ds.to_list())
+    """Write a thin ML slice of the HF dataset to Parquet.
+
+    - Keeps only ``boundary.*`` and ``metrics.*`` columns
+    - Flattens nested objects into dot-separated keys so downstream code can
+      select columns by prefix (e.g., ``boundary.r_cos``)
+    """
+    # Select relevant columns when the dataset is already columnar
+    try:
+        ds = select_columns(ds)
+    except Exception:
+        # If selection fails (e.g., nested schema), proceed and flatten per-record
+        pass
+
+    records = [_flatten_record(x) for x in ds.to_list()]
+    df = pd.DataFrame.from_records(records)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out, index=False)
