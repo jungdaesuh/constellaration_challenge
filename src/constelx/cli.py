@@ -552,7 +552,9 @@ def opt_cmaes(
 
 @opt_app.command("run")
 def opt_run(
-    baseline: str = typer.Option("trust-constr", help="Baseline: trust-constr|alm|cmaes|desc-trust"),
+    baseline: str = typer.Option(
+        "trust-constr", help="Baseline: trust-constr|alm|desc-trust|ngopt|cmaes"
+    ),
     nfp: int = typer.Option(3, help="Boundary NFP for boundary-mode optimization."),
     budget: int = typer.Option(50, help="Iteration budget (outer*inner for ALM)."),
     seed: int = typer.Option(0, help="Random seed (reserved for future use)."),
@@ -587,7 +589,7 @@ def opt_run(
         opt_cmaes(nfp=nfp, budget=budget, seed=seed, toy=False)
         return None
 
-    from .optim.baselines import BaselineConfig, run_alm, run_trust_constr
+    from .optim.baselines import BaselineConfig, run_alm, run_ngopt, run_trust_constr
 
     cfg = BaselineConfig(
         nfp=nfp,
@@ -599,27 +601,35 @@ def opt_run(
         vmec_hot_restart=vmec_hot_restart,
         vmec_restart_key=vmec_restart_key,
     )
-    if baseline.lower() in {"trust", "trust-constr", "trust_constr"}:
-        x, val = run_trust_constr(cfg)
-    elif baseline.lower() in {"alm", "augmented-lagrangian"}:
-        x, val = run_alm(cfg)
-    elif baseline.lower() in {"desc", "desc-tr", "desc-trust", "desc_trust"}:
-        from .optim.desc_trust_region import (
-            DescTrustRegionConfig,
-            run_desc_trust_region,
-        )
+    baseline_key = baseline.lower()
 
-        desc_cfg = DescTrustRegionConfig(
-            nfp=nfp,
-            budget=budget,
-            seed=seed,
-            use_physics=use_physics,
-            problem=(problem or "p1"),
-            prefer_vmec_validation=use_physics,
-        )
-        x, val = run_desc_trust_region(desc_cfg)
-    else:
-        raise typer.BadParameter(f"Unknown baseline: {baseline}")
+    try:
+        if baseline_key in {"trust", "trust-constr", "trust_constr"}:
+            x, val = run_trust_constr(cfg)
+        elif baseline_key in {"alm", "augmented-lagrangian"}:
+            x, val = run_alm(cfg)
+        elif baseline_key in {"ngopt", "nevergrad"}:
+            x, val = run_ngopt(cfg)
+        elif baseline_key in {"desc", "desc-tr", "desc-trust", "desc_trust"}:
+            from .optim.desc_trust_region import (
+                DescTrustRegionConfig,
+                run_desc_trust_region,
+            )
+
+            desc_cfg = DescTrustRegionConfig(
+                nfp=nfp,
+                budget=budget,
+                seed=seed,
+                use_physics=use_physics,
+                problem=(problem or "p1"),
+                prefer_vmec_validation=use_physics,
+            )
+            x, val = run_desc_trust_region(desc_cfg)
+        else:
+            raise typer.BadParameter(f"Unknown baseline: {baseline}")
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     console.print(f"Best x: {list(map(float, x))}\nBest score: {val}")
 
 
