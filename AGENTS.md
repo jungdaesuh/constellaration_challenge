@@ -38,6 +38,12 @@ These guidelines help contributors build, test, and extend the ConStelX starter 
     - Ready-to-use specs live in `examples/pcfm_*.json` (norm, ratio, product, aspect-ratio band, edge iota ratio, QS residual band, clearance floor).
     - Tuning: CLI flags `--pcfm-gn-iters/--pcfm-damping/--pcfm-tol` or JSON top-level `{gn_iters,damping,tol}`.
     - See [README.md#pcfm-correction-gaussnewton-projection](README.md#pcfm-correction-gaussnewton-projection) for additional context and safety guidance.
+- ConStellaration parity:
+  - Forward metrics via official evaluator: `constelx eval forward --boundary-json examples/boundary.json --use-real --use-physics --problem p1` (set `CONSTELX_USE_REAL_EVAL=1` to make this the default).
+  - Score aggregation check: `constelx eval score --metrics-json examples/metrics_small.json --problem p1` (or
+    `--metrics-file runs/<ts>/metrics.csv --problem p1`).
+  - Run gated parity tests (requires `pip install -e ".[physics]"` and the evaluator deps):
+    `CONSTELX_RUN_PHYSICS_TESTS=1 pytest -q -k scoring_parity`.
 
 ## Pre-commit Hooks
 
