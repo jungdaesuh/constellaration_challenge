@@ -558,7 +558,7 @@ def opt_cmaes(
 @opt_app.command("run")
 def opt_run(
     baseline: str = typer.Option(
-        "trust-constr", help="Baseline: trust-constr|alm|desc-trust|ngopt|cmaes"
+        "trust-constr", help="Baseline: trust-constr|alm|desc-trust|ngopt|qnei|cmaes"
     ),
     nfp: int = typer.Option(3, help="Boundary NFP for boundary-mode optimization."),
     budget: int = typer.Option(50, help="Iteration budget (outer*inner for ALM)."),
@@ -594,7 +594,13 @@ def opt_run(
         opt_cmaes(nfp=nfp, budget=budget, seed=seed, toy=False)
         return None
 
-    from .optim.baselines import BaselineConfig, run_alm, run_ngopt, run_trust_constr
+    from .optim.baselines import (
+        BaselineConfig,
+        run_alm,
+        run_botorch_qnei,
+        run_ngopt,
+        run_trust_constr,
+    )
 
     cfg = BaselineConfig(
         nfp=nfp,
@@ -615,6 +621,8 @@ def opt_run(
             x, val = run_alm(cfg)
         elif baseline_key in {"ngopt", "nevergrad"}:
             x, val = run_ngopt(cfg)
+        elif baseline_key in {"qnei", "botorch", "bo", "botorch-qnei"}:
+            x, val = run_botorch_qnei(cfg)
         elif baseline_key in {"desc", "desc-tr", "desc-trust", "desc_trust"}:
             from .optim.desc_trust_region import (
                 DescTrustRegionConfig,

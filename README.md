@@ -79,7 +79,7 @@ Optimization
 - Toy sphere: `constelx opt cmaes --toy --budget 20 --seed 0`
 - Boundary mode: `constelx opt cmaes --nfp 3 --budget 50 --seed 0`
 
-Optimization baselines (trust‑constr / ALM / NGOpt)
+Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
 - Trust‑constr (2D helical coefficients):
   `constelx opt run --baseline trust-constr --nfp 3 --budget 10`
 - Augmented‑Lagrangian (simple penalty outer loop):
@@ -91,13 +91,18 @@ Optimization baselines (trust‑constr / ALM / NGOpt)
   scoring via the shared evaluator.
 - Nevergrad NGOpt (augmented-Lagrangian polisher):
   `constelx opt run --baseline ngopt --nfp 3 --budget 10`
+- BoTorch qNEI (feasibility-aware acquisition):
+  `constelx opt run --baseline qnei --nfp 3 --budget 10`
+  Requires `pip install -e ".[bo]"` (or `constelx[bo]`) and optimizes the same
+  two-dimensional helical parameterization using a constraint-aware qNEI loop.
 - With physics path (requires problem id):
   `constelx opt run --baseline trust-constr --nfp 3 --budget 10 --use-physics --problem p1`
 - Pareto sweep (Problem 3 placeholder):
   `constelx opt pareto --budget 16 --sweeps 5 --seed 0 --json-out pareto.json`
   When `--use-physics` is set, metrics and scoring route through the official evaluator
   if available; otherwise the command falls back to the placeholder path.
-  (Install the `evolution` extra to enable CMA-ES and NGOpt: `pip install -e ".[evolution]"`.)
+  (Install the `evolution` extra to enable CMA-ES and NGOpt: `pip install -e ".[evolution]"`.
+  Install the `bo` extra to enable the BoTorch qNEI baseline: `pip install -e ".[bo]"`.)
 
 Agent
 - Random search: `constelx agent run --nfp 3 --budget 6 --seed 0 --runs-dir runs`
