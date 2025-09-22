@@ -571,7 +571,7 @@ Minimal first run (suggested sequence) 1. Fetch a slice
 
 constelx data fetch --nfp 3 --limit 1000
 
-    2.	Forward test on a synthetic boundary
+    2.	Forward test on a synthetic boundary (guarded dev-only fixture under `examples/dev/`)
 
 constelx eval forward --example
 
@@ -763,7 +763,7 @@ Required pieces:
 ## CLI behavior to implement
 
 - `constelx data fetch --nfp 3 --limit 128`
-- `constelx eval forward --boundary-file examples/boundary.json`
+- `constelx eval forward --boundary-file examples/dev/boundary.json`
 - `constelx eval score --metrics-file runs/<ts>/metrics.csv`
 - `constelx opt cmaes --nfp 3 --budget 50 [--seed 0]`
 - `constelx agent run --nfp 3 --budget 50 [--seed 0] [--resume PATH]`

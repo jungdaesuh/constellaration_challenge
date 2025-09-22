@@ -46,7 +46,8 @@ The repository ships production-ready pathways with lightweight fallbacks for lo
 - **Baselines (#32)**
   - Implement ALM + Nevergrad and trust‑constr baselines as an `opt run` CLI path with coefficient whitening and trust region.
 - **Data ingestion (#30)**
-  - Add HF dataset loader (real dataset) with Parquet cache; keep synthetic as CI default.
+  - Add HF dataset loader (real dataset) with Parquet cache; synthetic fixtures are now
+    isolated under `examples/dev/` for guarded CI/dev usage only.
 - **Multi‑fidelity VMEC**
   - Expose low‑fidelity search vs high‑fidelity scoring toggles; hot‑restart and convergence gating.
 - **Surrogate in the loop**

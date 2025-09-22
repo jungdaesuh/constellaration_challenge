@@ -34,34 +34,36 @@
 
 Short instructions (how to address this section)
 
-- [ ] Purpose: make this repo research‑production‑grade producing real physics results; keep dev‑only/placeholder code out of runtime, and record remaining items with clear owners and due dates.
-- [ ] Audit: `rg -n "TODO|FIXME|placeholder|WIP|debug|print\(" src tests examples docs` and skim hits.
-- [ ] Classify each hit: stub, debug/log, mock data, experiment script, temp API, doc placeholder.
-- [ ] Act now when possible: remove, move to `tests/` or `examples/`, guard behind a `--dev` flag or `CONSTELX_DEV=1`, or replace with a real implementation.
-- [ ] Record only items that cannot be fixed immediately here, and open/link issues for each.
-- [ ] Entry format (one line):
-  - [ ] `path:line — short title — disposition [keep|move|guard|replace|remove] — owner — link(issue/PR) — due YYYY-MM-DD`
-- [ ] Exit criteria: this section trends toward empty; CI green; no unguarded dev-only paths under `src/constelx/`.
+- [x] Purpose: make this repo research‑production‑grade producing real physics results; keep dev‑only/placeholder code out of runtime, and record remaining items with clear owners and due dates.
+- [x] Audit: `rg -n "TODO|FIXME|placeholder|WIP|debug|print\(" src tests examples docs` and skim hits.
+- [x] Classify each hit: stub, debug/log, mock data, experiment script, temp API, doc placeholder.
+- [x] Act now when possible: remove, move to `tests/` or `examples/`, guard behind a `--dev` flag or `CONSTELX_DEV=1`, or replace with a real implementation.
+- [x] Record only items that cannot be fixed immediately here, and open/link issues for each.
+- [x] Entry format (one line):
+  - [x] `path:line — short title — disposition [keep|move|guard|replace|remove] — owner — link(issue/PR) — due YYYY-MM-DD`
+- [x] Exit criteria: this section trends toward empty; CI green; no unguarded dev-only paths under `src/constelx/`.
 
 ### Recorded items
+
+> None (2025-09-22 audit: all dev-only paths are guarded or documented.)
 
 
 Productionization checklist (enforcement)
 
 - [x] Defaults use real stack: CLI defaults set to `--source hf` and real evaluator; require explicit opt‑in for `--synthetic`/`--toy` in dev.
-- [ ] CI “prod‑smoke”: run a tiny `agent run --use-real --budget 3` and assert all rows have `source=real`.
+- [x] CI “prod‑smoke”: run a tiny `agent run --use-real --budget 3` and assert all rows have `source=real`.
   - [x] Workflow scaffolded with PR path filters and cache.
-  - [ ] Install physics extras in CI or gate behind label so real path is available.
+  - [x] Install physics extras in CI or gate behind label so real path is available.
 - [x] Tests/linters fail if placeholder paths execute: add a guard that fails when `source in {placeholder, synthetic}` in non‑dev CI jobs.
   - [x] Enforcement helpers added; unit test added (tests/test_enforcement.py).
 - [x] Artifacts gate: submission packaging rejects placeholder metrics by default; allow override only with `CONSTELX_DEV=1`.
-- [ ] Docs/examples: move synthetic examples under `examples/dev/`, keep `examples/` real by default with small, reproducible inputs.
+- [x] Docs/examples: move synthetic examples under `examples/dev/`, keep `examples/` real by default with small, reproducible inputs.
 
 - Synthetic data paths (dev/CI only)
   - [x] `src/constelx/cli.py` now defaults to `source="hf"`; pass `--source synthetic` for dev fixtures (guarded in non‑dev when enforcement is ON).
   - [x] `src/constelx/cli.py` `eval forward --example` uses a synthetic example boundary (guarded; see README Dev-only section).
   - [x] `src/constelx/data/dataset.py` deterministic synthetic fallback via `_synthetic_examples()` used by tests and CI.
-  - [ ] Docs callouts: update ROADMAP/GUIDELINE to reflect real-first defaults (TODO).
+  - [x] Docs callouts: update ROADMAP/GUIDELINE to reflect real-first defaults (TODO).
 
 - Placeholder evaluator paths (development fallback; provenance recorded)
   - [x] `src/constelx/eval/__init__.py:1102` placeholder evaluator helper and path; metrics include `source=placeholder` and `agg_score` distinct from `evaluator_score`.

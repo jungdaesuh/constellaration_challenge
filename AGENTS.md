@@ -39,8 +39,8 @@ These guidelines help contributors build, test, and extend the ConStelX research
     - Tuning: CLI flags `--pcfm-gn-iters/--pcfm-damping/--pcfm-tol` or JSON top-level `{gn_iters,damping,tol}`.
     - See [README.md#pcfm-correction-gaussnewton-projection](README.md#pcfm-correction-gaussnewton-projection) for additional context and safety guidance.
 - ConStellaration parity:
-  - Forward metrics via official evaluator: `constelx eval forward --boundary-json examples/boundary.json --use-real --use-physics --problem p1` (set `CONSTELX_USE_REAL_EVAL=1` to make this the default).
-  - Score aggregation check: `constelx eval score --metrics-json examples/metrics_small.json --problem p1` (or
+  - Forward metrics via official evaluator: `constelx eval forward --near-axis --use-physics --problem p1 --json` (set `CONSTELX_USE_REAL_EVAL=1` to make this the default).
+  - Score aggregation check (dev fixture): `constelx eval score --metrics-json examples/dev/metrics_small.json --problem p1` (or
     `--metrics-file runs/<ts>/metrics.csv --problem p1`).
   - Run gated parity tests (requires `pip install -e ".[physics]"` and the evaluator deps):
     `CONSTELX_RUN_PHYSICS_TESTS=1 pytest -q -k scoring_parity`.
@@ -175,7 +175,7 @@ Physics test opt‑in
 - `constelx data fetch --nfp 3 --limit 128`
 - `constelx data prior-train data/cache/subset.jsonl --out models/seeds_prior.joblib`
 - `constelx data prior-sample models/seeds_prior.joblib --count 16 --nfp 3`
-- `constelx eval forward --boundary-file examples/boundary.json`
+- `constelx eval forward --boundary-file examples/dev/boundary.json`
 - `constelx eval score --metrics-file runs/<ts>/metrics.csv`
 - `constelx opt cmaes --nfp 3 --budget 50 [--seed 0]`
 - `constelx opt run --baseline trust-constr|alm|cmaes --nfp 3 --budget 50 [--seed 0] [--use-physics --problem p1]`

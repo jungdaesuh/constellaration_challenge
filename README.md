@@ -55,14 +55,16 @@ See `docs/ROADMAP.md` (engineering roadmap) and `docs/STRATEGY.md`
 Evaluation (real by default)
 - `constelx eval forward --random --nfp 3 --seed 0`
 - Near-axis QS/QI-friendly seed: `constelx eval forward --near-axis --nfp 3 --seed 0`
-- `constelx eval score --metrics-json examples/metrics_small.json`
+- Real quickstart reference (see `examples/real_quickstart/README.md`):
+  `constelx eval forward --near-axis --use-physics --problem p1 --json`
+- Dev fixture scoring (guarded): `constelx eval score --metrics-json examples/dev/metrics_small.json`
 
 Evaluator knobs & parity
 - `constelx eval problems` lists each challenge problem together with the metrics the
   evaluator expects so you can sanity-check parity before long runs.
 - Real evaluator path is default for `eval forward`, `opt run`, and `agent run`. To force
   placeholder/dev paths, use `--no-use-physics` or set `CONSTELX_USE_REAL_EVAL=0`.
-  Example real run: `constelx eval forward --boundary-json examples/boundary.json --problem p1`.
+  Example real run: `constelx eval forward --near-axis --use-physics --problem p1 --json`.
 - Timeout/backoff knobs: `CONSTELX_REAL_TIMEOUT_MS`, `CONSTELX_REAL_RETRIES`, and
   `CONSTELX_REAL_BACKOFF` tune the real evaluator timeout loop.
 - Logging: set `CONSTELX_EVAL_LOG_DIR=/path/to/logs` to capture one JSON file per
@@ -117,6 +119,10 @@ Agent
   `fail_reason=invalid_geometry` without spending evaluator calls.
    - Thresholds can be tuned: `--guard-r0-min`, `--guard-r0-max`, and
      `--guard-helical-ratio-max`.
+
+> **Dev fixtures**: synthetic boundaries and metrics used by tests now live under
+> `examples/dev/`. Commands that rely on those paths require `CONSTELX_DEV=1` or an
+> explicit `--no-use-physics` flag.
 
 Novelty gating (skip near-duplicates)
 - Enable skip: `--novelty-skip` to avoid spending evaluator calls on proposals too close to recent ones.
