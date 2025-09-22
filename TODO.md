@@ -40,13 +40,11 @@ Short instructions (how to address this section)
 - [ ] Act now when possible: remove, move to `tests/` or `examples/`, guard behind a `--dev` flag or `CONSTELX_DEV=1`, or replace with a real implementation.
 - [ ] Record only items that cannot be fixed immediately here, and open/link issues for each.
 - [ ] Entry format (one line):
-  - `path:line — short title — disposition [keep|move|guard|replace|remove] — owner — link(issue/PR) — due YYYY-MM-DD`
+  - [ ] `path:line — short title — disposition [keep|move|guard|replace|remove] — owner — link(issue/PR) — due YYYY-MM-DD`
 - [ ] Exit criteria: this section trends toward empty; CI green; no unguarded dev-only paths under `src/constelx/`.
 
 ### Recorded items
 
-- src/constelx/physics/constel_api.py:73 — Replace placeholder metric fallback with fully-real evaluator — disposition replace — owner @suhjungdae — link(-) — due 2024-09-30
-- src/constelx/physics/proxima_eval.py:229 — Replace forward_metrics placeholder fallback with constellaration-backed error handling — disposition replace — owner @suhjungdae — link(-) — due 2024-09-30
 
 Productionization checklist (enforcement)
 
@@ -60,39 +58,39 @@ Productionization checklist (enforcement)
 - [ ] Docs/examples: move synthetic examples under `examples/dev/`, keep `examples/` real by default with small, reproducible inputs.
 
 - Synthetic data paths (dev/CI only)
-  - `src/constelx/cli.py` now defaults to `source="hf"`; pass `--source synthetic` for dev fixtures (guarded in non‑dev when enforcement is ON).
-  - `src/constelx/cli.py` `eval forward --example` uses a synthetic example boundary (guarded; see README Dev-only section).
-  - `src/constelx/data/dataset.py` deterministic synthetic fallback via `_synthetic_examples()` used by tests and CI.
-  - Docs callouts: update ROADMAP/GUIDELINE to reflect real-first defaults (TODO).
+  - [x] `src/constelx/cli.py` now defaults to `source="hf"`; pass `--source synthetic` for dev fixtures (guarded in non‑dev when enforcement is ON).
+  - [x] `src/constelx/cli.py` `eval forward --example` uses a synthetic example boundary (guarded; see README Dev-only section).
+  - [x] `src/constelx/data/dataset.py` deterministic synthetic fallback via `_synthetic_examples()` used by tests and CI.
+  - [ ] Docs callouts: update ROADMAP/GUIDELINE to reflect real-first defaults (TODO).
 
 - Placeholder evaluator paths (development fallback; provenance recorded)
-  - `src/constelx/eval/__init__.py:1102` placeholder evaluator helper and path; metrics include `source=placeholder` and `agg_score` distinct from `evaluator_score`.
-  - `src/constelx/physics/proxima_eval.py:244` synthetic objectives for placeholder path; `_fallback_metrics` used when physics stack is missing.
-  - `src/constelx/physics/constel_api.py:48-99` lightweight placeholder evaluator and norms for `placeholder_metric`.
-  - `README.md:268` explicitly documents fallback behavior when physics extras are unavailable.
-  - `src/constelx/eval/__init__.py` also sets `source=placeholder` across forward/forward_many fallbacks (e.g., lines 433, 453, 611, 628, 839–842, 895, 913, 920, 942, 1003, 1031–1042, 1083, 1091, 1099–1110).
-  - `src/constelx/agents/simple_agent.py` records placeholder provenance in several branches (e.g., lines ~769, 856, 875, 936, 959, 1191, 1206).
+  - [x] `src/constelx/eval/__init__.py:1102` placeholder evaluator helper and path; metrics include `source=placeholder` and `agg_score` distinct from `evaluator_score`.
+  - [x] `src/constelx/physics/proxima_eval.py:244` synthetic objectives for placeholder path; `_fallback_metrics` used when physics stack is missing.
+  - [x] `src/constelx/physics/constel_api.py:48-99` lightweight placeholder evaluator and norms for `placeholder_metric`.
+  - [x] `README.md:268` explicitly documents fallback behavior when physics extras are unavailable.
+  - [x] `src/constelx/eval/__init__.py` also sets `source=placeholder` across forward/forward_many fallbacks (e.g., lines 433, 453, 611, 628, 839–842, 895, 913, 920, 942, 1003, 1031–1042, 1083, 1091, 1099–1110).
+  - [x] `src/constelx/agents/simple_agent.py` records placeholder provenance in several branches (e.g., lines ~769, 856, 875, 936, 959, 1191, 1206).
 
 - Diagnostic CMA‑ES baseline and related
-  - `src/constelx/optim/evolution.py` synthetic dev fixture score path for the tiny CMA‑ES baseline (guarded).
-  - `src/constelx/cli.py` `--toy` sphere objective switch (guarded); README marks as dev‑only.
-  - `src/constelx/optim/baselines.py:97` ALM docstring documents feasibility-aware dev fallback when physics is unavailable.
-  - `src/constelx/cli.py:659-675` Pareto command supports `--no-use-physics` (dev-only; guarded).
+  - [x] `src/constelx/optim/evolution.py` synthetic dev fixture score path for the tiny CMA‑ES baseline (guarded).
+  - [x] `src/constelx/cli.py` `--toy` sphere objective switch (guarded); README marks as dev‑only.
+  - [x] `src/constelx/optim/baselines.py:97` ALM docstring documents feasibility-aware dev fallback when physics is unavailable.
+  - [x] `src/constelx/cli.py:659-675` Pareto command supports `--no-use-physics` (dev-only; guarded).
 
 - Provenance handling
-  - `src/constelx/physics/metrics.py:69` treats `source in {"placeholder","synthetic"}` consistently for provenance.
+  - [x] `src/constelx/physics/metrics.py:69` treats `source in {"placeholder","synthetic"}` consistently for provenance.
 
 - Physics placeholders (module‑level docstrings)
-  - `src/constelx/physics/constraints.py:1` documents lightweight constraint proxies.
-  - `src/constelx/physics/pbfm.py:1` documents available PBFM helpers (conflict-free updates).
+  - [x] `src/constelx/physics/constraints.py:1` documents lightweight constraint proxies.
+  - [x] `src/constelx/physics/pbfm.py:1` documents available PBFM helpers (conflict-free updates).
 
 - Documentation references (non‑code)
-  - `README.md:100,103,149` mention placeholder paths (P3 placeholder, fallback evaluator, and gating routing wording).
-  - `AGENTS.md:154` documents `source=placeholder|real` in CSV columns.
-  - `docs/ARCHITECTURE.md:18` notes `constel_api.py` as a lightweight placeholder evaluator.
-  - `docs/STRATEGY.md:7` mentions placeholder in the metrics/proxy context.
-  - `docs/ALPHA_FOLD_INSPIRED.md:204,223` discuss synthetic dataset coverage and caveats.
-  - Tests: `tests/test_agent_mf_integration.py:29` uses the placeholder path (`use_physics=False`) in a smoke.
+  - [x] `README.md:100,103,149` mention placeholder paths (P3 placeholder, fallback evaluator, and gating routing wording).
+  - [x] `AGENTS.md:154` documents `source=placeholder|real` in CSV columns.
+  - [x] `docs/ARCHITECTURE.md:18` notes `constel_api.py` as a lightweight placeholder evaluator.
+  - [x] `docs/STRATEGY.md:7` mentions placeholder in the metrics/proxy context.
+  - [x] `docs/ALPHA_FOLD_INSPIRED.md:204,223` discuss synthetic dataset coverage and caveats.
+  - [x] Tests: `tests/test_agent_mf_integration.py:29` uses the placeholder path (`use_physics=False`) in a smoke.
 
 ## Completed Recently
 - Flip defaults to real (data fetch HF; eval/agent real by default); guards for dev-only paths; packaging guard with --allow-dev; enforcement helpers and pre‑flight checks.

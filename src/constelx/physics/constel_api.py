@@ -1,27 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional, Tuple, cast
 
-
-def _try_import_surface_rz_fourier() -> Optional[Any]:
-    # Avoid importing heavy physics by default; only attempt when explicitly requested.
-    import os as _os
-
-    if _os.getenv("CONSTELX_USE_REAL_EVAL", "0").lower() not in {"1", "true", "yes"}:
-        return None
-    try:
-        from constellaration.geometry import surface_rz_fourier
-
-        return surface_rz_fourier
-    except Exception:
-        return None
+from ..dev import is_dev_mode, require_dev_for_placeholder
 
 
 def example_boundary() -> dict[str, Any]:
-    """Return a tiny example stellarator-symmetric boundary as a plain dict.
+    """Return a tiny example stellarator-symmetric boundary as a plain dict."""
 
-    This avoids importing constellaration by default for stability in light-weight runs.
-    """
     r_cos = [[0.0] * 9 for _ in range(5)]
     z_sin = [[0.0] * 9 for _ in range(5)]
     r_cos[0][4] = 1.0
@@ -40,42 +26,62 @@ def example_boundary() -> dict[str, Any]:
 def evaluate_boundary(
     boundary_json: dict[str, Any], use_real: Optional[bool] = None
 ) -> dict[str, Any]:
-    """Compute metrics for a boundary.
+    """Compute metrics for a boundary, preferring the real evaluator path."""
 
-    Feature flag behavior:
-    - If use_real is True (or env var CONSTELX_USE_REAL_EVAL is truthy), try
-      to compute metrics using real evaluator paths; if unavailable, fall back
-      to placeholder metrics.
-    - Otherwise return lightweight placeholder metrics.
-    """
     import os
 
     if use_real is None:
         use_real = os.getenv("CONSTELX_USE_REAL_EVAL", "0").lower() in {"1", "true", "yes"}
 
-    srf = _try_import_surface_rz_fourier()
     if use_real:
         try:
-            # Local imports to avoid hard dependency at module import time
-            from constellaration.metrics import scoring
-            from constellaration.mhd import vmec_utils
+            metrics = _evaluate_with_real_physics(boundary_json)
+        except Exception as exc:  # pragma: no cover - depends on optional deps
+            if is_dev_mode():
+                return _compute_placeholder_metrics(boundary_json)
+            raise RuntimeError(
+                "Real physics evaluation failed. Install extras via "
+                "pip install -e '.[physics]' or set CONSTELX_DEV=1 to allow "
+                "placeholder metrics explicitly."
+            ) from exc
+        _add_proxy_metrics(boundary_json, metrics)
+        return metrics
 
-            if srf is not None:
-                boundary = srf.SurfaceRZFourier.model_validate(boundary_json)
-                vmecpp_wout = vmec_utils.minimal_wout_from_boundary(boundary)
-                metrics = cast(dict[str, Any], scoring.geom_metrics(boundary, vmecpp_wout))
-                _add_proxy_metrics(boundary_json, metrics)
-                return metrics
-        except Exception:
-            # fall back to placeholder below
-            pass
+    return _compute_placeholder_metrics(boundary_json)
 
-    # Placeholder path: compute norms from plain lists without importing physics
+
+def _evaluate_with_real_physics(boundary_json: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate metrics using the official constellaration adapter."""
+
+    boundary_payload, problem = _strip_problem(boundary_json)
+    from .proxima_eval import forward_metrics  # Lazy import to avoid cycles
+
+    metrics_raw, info = forward_metrics(boundary_payload, problem=problem)
+    metrics = dict(metrics_raw)
+    if isinstance(info, dict):
+        source = info.get("source")
+        if isinstance(source, str):
+            metrics.setdefault("source", source)
+        feasible = info.get("feasible")
+        if isinstance(feasible, bool):
+            metrics.setdefault("feasible", feasible)
+        reason = info.get("reason") or info.get("fail_reason")
+        if isinstance(reason, str) and reason:
+            metrics.setdefault("fail_reason", reason)
+    metrics.setdefault("source", "real")
+    return metrics
+
+
+def _compute_placeholder_metrics(boundary_json: dict[str, Any]) -> dict[str, Any]:
+    """Return lightweight placeholder metrics (dev flows and tests only)."""
+
+    require_dev_for_placeholder("Placeholder evaluation (constel_api.evaluate_boundary)")
+
     try:
         import numpy as _np_mod
 
         np = cast(Any, _np_mod)
-    except Exception:
+    except Exception:  # pragma: no cover - numpy missing in constrained envs
         np = None
 
     r_cos = boundary_json.get("r_cos")
@@ -90,6 +96,7 @@ def evaluate_boundary(
 
         r_cos_norm = _norm2(r_cos) if r_cos is not None else 0.0
         z_sin_norm = _norm2(z_sin) if z_sin is not None else 0.0
+
     objectives = [r_cos_norm, z_sin_norm]
     metrics = {
         "r_cos_norm": r_cos_norm,
@@ -98,9 +105,18 @@ def evaluate_boundary(
         "stellarator_symmetric": bool(boundary_json.get("is_stellarator_symmetric", True)),
         "placeholder_metric": r_cos_norm + z_sin_norm,
         "objectives": objectives,
+        "source": "placeholder",
     }
     _add_proxy_metrics(boundary_json, metrics)
     return metrics
+
+
+def _strip_problem(boundary_json: dict[str, Any]) -> Tuple[dict[str, Any], str]:
+    """Return a boundary dict suitable for VMEC validation and the problem key."""
+
+    clean = dict(boundary_json)
+    problem = clean.pop("problem", None) or clean.pop("_problem", None) or "p1"
+    return clean, str(problem)
 
 
 def _add_proxy_metrics(boundary_json: dict[str, Any], metrics: Dict[str, Any]) -> None:
@@ -110,7 +126,7 @@ def _add_proxy_metrics(boundary_json: dict[str, Any], metrics: Dict[str, Any]) -
         from ..eval.boozer import compute_boozer_proxies
 
         proxies = compute_boozer_proxies(boundary_json)
-    except Exception:
+    except Exception:  # pragma: no cover - optional physics dependency
         return
 
     proxy_values = proxies.to_dict()
