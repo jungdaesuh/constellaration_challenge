@@ -2,21 +2,27 @@
 
 ## Sequential Tasks (next up)
 
-- [ ] Flip defaults to real stack — set `constelx data fetch` default to `--source hf` and `constelx agent run` default to `--use-real`; require explicit dev opt‑in for any synthetic path via `CONSTELX_DEV=1` + `--synthetic/--dev-smoke` flags.
+- [x] Flip defaults to real stack — set `constelx data fetch` default to `--source hf` and agent/eval defaults to real when unspecified; require explicit dev opt‑in for synthetic via `CONSTELX_DEV=1` and guards.
 - [x] Guard placeholders in non‑dev — implemented behind `CONSTELX_ENFORCE_REAL=1` + `CONSTELX_DEV` opt‑in; raises helpful errors when `source in {placeholder,synthetic}` without dev opt‑in.
 - [ ] CI prod‑smoke — add a tiny real run (`--nfp 3 --budget 3 --seed 0 --limit 8`) gated on label/path filters; target ≤2 minutes with evaluator/data caching; assert all rows have `source=real` and `evaluator_score` present.
+  - [x] PR path filters + pip/evaluator cache scaffolded in `.github/workflows/real-smoke.yml`.
+  - [ ] Ensure physics extras/evaluator are available in CI or gate behind label to guarantee `source=real`.
 - [ ] Split examples — move synthetic/dev smokes under `examples/dev/`; add `examples/real_quickstart/` with a minimal, reproducible config and expected `best.json`.
 - [x] Packaging guard — `constelx submit pack` rejects runs with non‑real rows when `CONSTELX_ENFORCE_REAL=1` unless `--allow-dev` or `CONSTELX_DEV=1` is set; override documented in CLI help.
 - [ ] Provenance tests — add unit/integration asserts that fail CI (non‑dev) if any `metrics.csv` row has `source≠real`.
 - [ ] Docs quickstart — update README/AGENTS to show real quickstart by default; move dev/synthetic guidance to a clearly marked dev section.
-- [ ] Optional: add `.gitattributes` with `TODO.md merge=union` to reduce low‑risk conflicts during parallel PRs.
+  - [x] README updated to real-first quickstart; added Dev-only section and enforcement notes.
+  - [ ] Update AGENTS.md to mirror the README changes.
+- [x] Optional: add `.gitattributes` with `TODO.md merge=union` to reduce low‑risk conflicts during parallel PRs.
 
 - [ ] Shepherd PR #100 to merge and close [#27]; confirm maintainers are satisfied once the checklist lands on main.
 - [ ] [#45] Data-driven seeds prior polish — rerun the prior against the HF Parquet cache, compare GMM vs flow outputs, wire the HF seeds into `agent run --seed-mode prior`, and update README/AGENTS with the findings.
 - [ ] [#44] Pareto sweep QA — produce a physics-enabled Pareto sweep (JSON + plot), archive it under `examples/` (or `runs/`) and document the workflow/results.
 - [ ] [#43] Nevergrad NGOpt baseline — run parity vs the challenge ALM baseline using the official evaluator, capture the metrics, and document the comparison.
 - [ ] [#42] DESC gradient trust-region baseline — execute a real DESC ladder with VMEC validation enabled, log the outcomes, and extend the docs with usage guidance and caveats.
-- [ ] Remove "toy" naming — rename to "synthetic dev fixture"; restrict usage to tests/dev smokes; keep one tiny synthetic boundary/objective only for deterministic unit tests. Update references at `src/constelx/cli.py:508-520`, `README.md:79`, `docs/ROADMAP.md:13`, `src/constelx/surrogate/train.py:66`.
+- [ ] Remove "toy" naming — rename to "synthetic dev fixture"; restrict usage to tests/dev smokes; keep one tiny synthetic boundary/objective only for deterministic unit tests.
+  - [x] CLI docstring/help updated; surrogate/train comments updated.
+  - [ ] Sweep remaining mentions in docs (ROADMAP/GUIDELINE/STRATEGY) and README references.
 - [ ] Replace "stub" references — refresh guidance in `AGENTS.md:116`, `CONSTELX_ANALYSIS_REPORT.md:15`, `docs/GUIDELINE.md:532-543`, and `docs/STRATEGY.md:491,720` to describe production extension hooks instead of TODO stubs.
 
 ## Parallelizable Tasks
@@ -39,17 +45,20 @@ Short instructions (how to address this section)
 
 Productionization checklist (enforcement)
 
-- Defaults use real stack: set CLI defaults to `--source hf` and `--use-real`; require explicit opt‑in for `--synthetic`/`--toy` in dev.
+- Defaults use real stack: CLI defaults set to `--source hf` and real evaluator; require explicit opt‑in for `--synthetic`/`--toy` in dev.
 - CI “prod‑smoke”: run a tiny `agent run --use-real --budget 3` and assert all rows have `source=real`.
+  - [x] Workflow scaffolded with PR path filters and cache.
+  - [ ] Install physics extras in CI or gate behind label so real path is available.
 - Tests/linters fail if placeholder paths execute: add a guard that fails when `source in {placeholder, synthetic}` in non‑dev CI jobs.
+  - [x] Enforcement helpers added; unit test added (tests/test_enforcement.py).
 - Artifacts gate: submission packaging rejects placeholder metrics by default; allow override only with `CONSTELX_DEV=1`.
 - Docs/examples: move synthetic examples under `examples/dev/`, keep `examples/` real by default with small, reproducible inputs.
 
 - Synthetic data paths (dev/CI only)
-  - `src/constelx/cli.py:63` `data fetch` defaults to `source="synthetic"`; pass `--source hf` for the real dataset.
-  - `src/constelx/cli.py:307` `eval forward --example` uses a synthetic example boundary (see `README.md:24`).
-  - `src/constelx/data/dataset.py:3,25,59` deterministic synthetic fallback via `_synthetic_examples()` used by tests and CI.
-  - Docs callouts: `docs/ROADMAP.md:49` (synthetic as CI default), `docs/GUIDELINE.md:574` (synthetic-boundary smoke).
+  - `src/constelx/cli.py` now defaults to `source="hf"`; pass `--source synthetic` for dev fixtures (guarded in non‑dev when enforcement is ON).
+  - `src/constelx/cli.py` `eval forward --example` uses a synthetic example boundary (guarded; see README Dev-only section).
+  - `src/constelx/data/dataset.py` deterministic synthetic fallback via `_synthetic_examples()` used by tests and CI.
+  - Docs callouts: update ROADMAP/GUIDELINE to reflect real-first defaults (TODO).
 
 - Placeholder evaluator paths (development fallback; provenance recorded)
   - `src/constelx/eval/__init__.py:1102` placeholder evaluator helper and path; metrics include `source=placeholder` and `agg_score` distinct from `evaluator_score`.
@@ -60,8 +69,8 @@ Productionization checklist (enforcement)
   - `src/constelx/agents/simple_agent.py` records placeholder provenance in several branches (e.g., lines ~769, 856, 875, 936, 959, 1191, 1206).
 
 - Diagnostic CMA‑ES baseline and related
-  - `src/constelx/optim/evolution.py` “toy/placeholder” score path for the tiny CMA‑ES baseline (dev smoke).
-  - `src/constelx/cli.py:508-520` `--toy` sphere objective switch; `README.md:79` notes it as development‑only.
+  - `src/constelx/optim/evolution.py` synthetic dev fixture score path for the tiny CMA‑ES baseline (guarded).
+  - `src/constelx/cli.py` `--toy` sphere objective switch (guarded); README marks as dev‑only.
   - `src/constelx/optim/baselines.py:97` ALM docstring references placeholder feasibility integration when available.
   - `src/constelx/cli.py:670-673` Pareto command docstring refers to the P3 placeholder.
 
@@ -81,6 +90,10 @@ Productionization checklist (enforcement)
   - Tests: `tests/test_agent_mf_integration.py:29` uses the placeholder path (`use_physics=False`) in a smoke.
 
 ## Completed Recently
+- Flip defaults to real (data fetch HF; eval/agent real by default); guards for dev-only paths; packaging guard with --allow-dev; enforcement helpers and pre‑flight checks.
+- Real-smoke workflow scaffolded (PR path filters + pip/evaluator cache); follow-up to ensure evaluator availability in CI.
+- README quickstart updated to real-first; Dev-only section and enforcement notes.
+- CSV `nfp` column stability and surrogate dtype coercion for robustness.
 - [#40] BoTorch qNEI baseline — import-guarded feasibility-aware qNEI baseline with CLI/tests/docs.
 - [#28] ConStellaration evaluator wiring follow-ups — README/AGENTS now document `--use-real`
   usage, parity workflow, and environment knobs (PR #98 follow-up).
