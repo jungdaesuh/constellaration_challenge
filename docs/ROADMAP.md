@@ -5,12 +5,12 @@ behaviors, modules, tests, and CI gates. For a higher‑level research/agent
 strategy (model portfolio, agent loop, physics heuristics), see
 `docs/STRATEGY.md`.
 
-This repository ships with stubs and guardrails so you can iterate quickly. A recommended path:
+The repository ships production-ready pathways with lightweight fallbacks for local iteration. A recommended path:
 
 1. **Dataset access**: `constelx data fetch` to materialize a filtered subset (e.g., NFP=3) into Parquet.
 2. **Forward model sanity checks**: `constelx eval forward --example` and `--random` to verify metrics computation.
 3. **Baselines**:
-   - Start with `constelx opt cmaes --toy` (sphere) and `constelx opt cmaes --nfp 3 --budget 50` (boundary mode).
+   - Start with `constelx opt cmaes --nfp 3 --budget 50` (boundary mode) for physics-driven runs. Use the `--toy` sphere objective only when validating local installations.
    - Train a simple surrogate with `constelx surrogate train` (MLP baseline). A separate `surrogate eval` may be added later.
 4. **Agent loop**: glue propose→simulate→select with `constelx agent run` (supports random and CMA‑ES, resume, correction hooks).
 5. **Physics‑constrained generation (optional)**:
@@ -92,6 +92,6 @@ Testing anchors (additions beyond the existing suite)
 
 ## Usage pointers
 
-- Placeholder smoke: `constelx agent run --nfp 3 --budget 6 --seed 0 --guard-simple`
+- Development smoke (fallback evaluator): `constelx agent run --nfp 3 --budget 6 --seed 0 --guard-simple`
 - Physics micro: `CONSTELX_USE_REAL_EVAL=1 constelx agent run --nfp 3 --budget 10 --seed 0 --use-physics --problem p1`
 - PCFM examples: see `examples/pcfm_*.json` (including `pcfm_qs_band.json` for Boozer-driven QS constraints) and use `--correction pcfm --constraints-file <json>` with optional `--pcfm-gn-iters/--pcfm-damping/--pcfm-tol`.

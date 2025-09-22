@@ -2,7 +2,7 @@ You're the world's best expert in physics, math, AI/ML, computation, computer sc
 
 # Repository Guidelines
 
-These guidelines help contributors build, test, and extend the ConStelX starter cleanly and consistently.
+These guidelines help contributors build, test, and extend the ConStelX research stack cleanly and consistently.
 
 ## Project Structure & Module Organization
 
@@ -109,7 +109,7 @@ Target correctness, determinism, and incremental performance. Prefer small verti
 - For long‑running commands, add `--dry-run` and `--limit` flags.
 - Always write a minimal example in the module docstring and cross‑link from README.
 
-## Target architecture (already stubbed by the starter)
+## Target architecture
 
 - `constelx.data`: dataset fetch/filter utilities, simple CSV index.
 - `constelx.eval`: thin wrappers around `constellaration` evaluator; one function per metric + `score()`.

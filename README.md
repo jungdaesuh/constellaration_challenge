@@ -1,8 +1,8 @@
-# constelx — Starter repo for the ConStellaration challenge
+# constelx — ConStellaration research platform
 
-**Goal:** provide a clean, extensible Python codebase for ML + physics-based optimization of stellarator plasma boundaries using the [ConStellaration dataset] and the [`constellaration`] evaluation tools.
+**Goal:** deliver a production-oriented Python stack for ML + physics-based optimization of stellarator plasma boundaries using the [ConStellaration dataset] and the [`constellaration`] evaluation tools.
 
-> This is a skeleton repo: modules and CLIs are stubbed with TODOs and simple working examples so you can plug in your models and agents immediately.
+The repository now targets serious research runs by default: all primary CLIs route cleanly to the official evaluator, parity tests gate releases, and documentation reflects the live architecture. Lightweight fallback paths remain available for offline development, but they are treated as optional test fixtures rather than the primary workflow.
 
 ## Quick start (macOS)
 
@@ -28,17 +28,17 @@ constelx data prior-sample models/seeds_prior.joblib --count 16 --nfp 3 --min-fe
 ```
 
 Notes:
-- Python: this repo targets Python 3.10+ (`requires-python >=3.10`). Use `python3` on macOS.
-- Apple Silicon (arm64): PyTorch is optional in this starter and not auto-installed on macOS arm64. If you plan to train surrogates, install a compatible PyTorch build from pytorch.org.
+- Python: the repo targets Python 3.10+ (`requires-python >=3.10`). Use `python3` on macOS.
+- Apple Silicon (arm64): PyTorch is optional and not auto-installed on macOS arm64. Install a compatible PyTorch build from pytorch.org when training surrogates locally.
 - Linux users: on Ubuntu, install `libnetcdf-dev` (and `cmake`) instead of Homebrew `netcdf`.
 
 ## What’s inside
 
 - CLI (`constelx`): `data` (fetch/filter/csv), `eval` (forward metrics, scoring), `opt` (baselines), `surrogate` (train/serve simple models), `agent` (multi-step propose→simulate→select loop).
 - Physics wrappers: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects, plus bounded Boozer-space QS/QI proxies (`constelx.physics.booz_proxy`).
-- Proxy metrics: Boozer-space quasi-symmetry/isodynamic proxies with bounded residuals (`constelx.eval.boozer`). Placeholder + real evaluator paths populate `proxy_qs_*` / `proxy_qi_*` fields for early-stage guards.
-- Optimization: CMA-ES and (optional) BoTorch Bayesian optimization stubs.
-- Models: simple MLP baseline + placeholders for FNO/transformers.
+- Proxy metrics: Boozer-space quasi-symmetry/isodynamic proxies with bounded residuals (`constelx.eval.boozer`). Real evaluator paths populate `proxy_qs_*` / `proxy_qi_*`; lightweight fallbacks mirror the schema for local tests.
+- Optimization: CMA-ES, DESC trust-region, Nevergrad NGOpt, and BoTorch qNEI baselines ship out of the box; additional optimizers plug into the same interface.
+- Models: simple MLP baseline with documented extension points for FNO/transformers.
 - Hard-constraint tooling: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
 
 See `docs/ROADMAP.md` (engineering roadmap) and `docs/STRATEGY.md`
@@ -76,7 +76,7 @@ Evaluator knobs & parity
   local scorer matches the official ConStellaration aggregation.
 
 Optimization
-- Toy sphere: `constelx opt cmaes --toy --budget 20 --seed 0`
+- Development-only sphere check: `constelx opt cmaes --toy --budget 20 --seed 0`
 - Boundary mode: `constelx opt cmaes --nfp 3 --budget 50 --seed 0`
 
 Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
