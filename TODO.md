@@ -34,25 +34,25 @@
 
 Short instructions (how to address this section)
 
-- Purpose: make this repo research‑production‑grade producing real physics results; keep dev‑only/placeholder code out of runtime, and record remaining items with clear owners and due dates.
-- Audit: `rg -n "TODO|FIXME|placeholder|WIP|debug|print\(" src tests examples docs` and skim hits.
-- Classify each hit: stub, debug/log, mock data, experiment script, temp API, doc placeholder.
-- Act now when possible: remove, move to `tests/` or `examples/`, guard behind a `--dev` flag or `CONSTELX_DEV=1`, or replace with a real implementation.
-- Record only items that cannot be fixed immediately here, and open/link issues for each.
-- Entry format (one line):
+- [ ] Purpose: make this repo research‑production‑grade producing real physics results; keep dev‑only/placeholder code out of runtime, and record remaining items with clear owners and due dates.
+- [ ] Audit: `rg -n "TODO|FIXME|placeholder|WIP|debug|print\(" src tests examples docs` and skim hits.
+- [ ] Classify each hit: stub, debug/log, mock data, experiment script, temp API, doc placeholder.
+- [ ] Act now when possible: remove, move to `tests/` or `examples/`, guard behind a `--dev` flag or `CONSTELX_DEV=1`, or replace with a real implementation.
+- [ ] Record only items that cannot be fixed immediately here, and open/link issues for each.
+- [ ] Entry format (one line):
   - `path:line — short title — disposition [keep|move|guard|replace|remove] — owner — link(issue/PR) — due YYYY-MM-DD`
-- Exit criteria: this section trends toward empty; CI green; no unguarded dev-only paths under `src/constelx/`.
+- [ ] Exit criteria: this section trends toward empty; CI green; no unguarded dev-only paths under `src/constelx/`.
 
 Productionization checklist (enforcement)
 
-- Defaults use real stack: CLI defaults set to `--source hf` and real evaluator; require explicit opt‑in for `--synthetic`/`--toy` in dev.
-- CI “prod‑smoke”: run a tiny `agent run --use-real --budget 3` and assert all rows have `source=real`.
+- [x] Defaults use real stack: CLI defaults set to `--source hf` and real evaluator; require explicit opt‑in for `--synthetic`/`--toy` in dev.
+- [ ] CI “prod‑smoke”: run a tiny `agent run --use-real --budget 3` and assert all rows have `source=real`.
   - [x] Workflow scaffolded with PR path filters and cache.
   - [ ] Install physics extras in CI or gate behind label so real path is available.
-- Tests/linters fail if placeholder paths execute: add a guard that fails when `source in {placeholder, synthetic}` in non‑dev CI jobs.
+- [x] Tests/linters fail if placeholder paths execute: add a guard that fails when `source in {placeholder, synthetic}` in non‑dev CI jobs.
   - [x] Enforcement helpers added; unit test added (tests/test_enforcement.py).
-- Artifacts gate: submission packaging rejects placeholder metrics by default; allow override only with `CONSTELX_DEV=1`.
-- Docs/examples: move synthetic examples under `examples/dev/`, keep `examples/` real by default with small, reproducible inputs.
+- [x] Artifacts gate: submission packaging rejects placeholder metrics by default; allow override only with `CONSTELX_DEV=1`.
+- [ ] Docs/examples: move synthetic examples under `examples/dev/`, keep `examples/` real by default with small, reproducible inputs.
 
 - Synthetic data paths (dev/CI only)
   - `src/constelx/cli.py` now defaults to `source="hf"`; pass `--source synthetic` for dev fixtures (guarded in non‑dev when enforcement is ON).
