@@ -75,7 +75,7 @@ def train_simple_mlp(
             for p in model.parameters()
         ]
 
-        # Residual loss: encourage small outputs (acts as a physics-like residual placeholder)
+        # Residual loss: encourage small outputs (acts as a physics-inspired residual proxy)
         opt.zero_grad()
         pred2 = model(X)
         resid_loss = (pred2**2).mean()

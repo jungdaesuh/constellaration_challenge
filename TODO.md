@@ -43,6 +43,11 @@ Short instructions (how to address this section)
   - `path:line — short title — disposition [keep|move|guard|replace|remove] — owner — link(issue/PR) — due YYYY-MM-DD`
 - [ ] Exit criteria: this section trends toward empty; CI green; no unguarded dev-only paths under `src/constelx/`.
 
+### Recorded items
+
+- src/constelx/physics/constel_api.py:73 — Replace placeholder metric fallback with fully-real evaluator — disposition replace — owner @suhjungdae — link(-) — due 2024-09-30
+- src/constelx/physics/proxima_eval.py:229 — Replace forward_metrics placeholder fallback with constellaration-backed error handling — disposition replace — owner @suhjungdae — link(-) — due 2024-09-30
+
 Productionization checklist (enforcement)
 
 - [x] Defaults use real stack: CLI defaults set to `--source hf` and real evaluator; require explicit opt‑in for `--synthetic`/`--toy` in dev.
@@ -71,15 +76,15 @@ Productionization checklist (enforcement)
 - Diagnostic CMA‑ES baseline and related
   - `src/constelx/optim/evolution.py` synthetic dev fixture score path for the tiny CMA‑ES baseline (guarded).
   - `src/constelx/cli.py` `--toy` sphere objective switch (guarded); README marks as dev‑only.
-  - `src/constelx/optim/baselines.py:97` ALM docstring references placeholder feasibility integration when available.
-  - `src/constelx/cli.py:670-673` Pareto command docstring refers to the P3 placeholder.
+  - `src/constelx/optim/baselines.py:97` ALM docstring documents feasibility-aware dev fallback when physics is unavailable.
+  - `src/constelx/cli.py:659-675` Pareto command supports `--no-use-physics` (dev-only; guarded).
 
 - Provenance handling
   - `src/constelx/physics/metrics.py:69` treats `source in {"placeholder","synthetic"}` consistently for provenance.
 
 - Physics placeholders (module‑level docstrings)
-  - `src/constelx/physics/constraints.py:1` constraint placeholders note.
-  - `src/constelx/physics/pbfm.py:1` PBFM placeholder tooling (training utilities), dev path only.
+  - `src/constelx/physics/constraints.py:1` documents lightweight constraint proxies.
+  - `src/constelx/physics/pbfm.py:1` documents available PBFM helpers (conflict-free updates).
 
 - Documentation references (non‑code)
   - `README.md:100,103,149` mention placeholder paths (P3 placeholder, fallback evaluator, and gating routing wording).

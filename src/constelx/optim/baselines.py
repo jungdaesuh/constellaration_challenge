@@ -94,7 +94,7 @@ def run_trust_constr(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
 def run_alm(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
     """Simple augmented-Lagrangian-like penalty loop.
 
-    This placeholder uses a feasibility signal when available; otherwise it
+    This dev-friendly path uses a feasibility signal when available; otherwise it
     reduces to plain trust-constr on the aggregated objective.
     """
     rho = 10.0
