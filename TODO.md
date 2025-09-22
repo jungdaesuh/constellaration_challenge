@@ -27,13 +27,29 @@
   - `src/constelx/physics/proxima_eval.py:244` synthetic objectives for placeholder path; `_fallback_metrics` used when physics stack is missing.
   - `src/constelx/physics/constel_api.py:48-99` lightweight placeholder evaluator and norms for `placeholder_metric`.
   - `README.md:268` explicitly documents fallback behavior when physics extras are unavailable.
+  - `src/constelx/eval/__init__.py` also sets `source=placeholder` across forward/forward_many fallbacks (e.g., lines 433, 453, 611, 628, 839–842, 895, 913, 920, 942, 1003, 1031–1042, 1083, 1091, 1099–1110).
+  - `src/constelx/agents/simple_agent.py` records placeholder provenance in several branches (e.g., lines ~769, 856, 875, 936, 959, 1191, 1206).
 
 - Diagnostic CMA‑ES baseline and related
   - `src/constelx/optim/evolution.py` “toy/placeholder” score path for the tiny CMA‑ES baseline (dev smoke).
   - `src/constelx/cli.py:508-520` `--toy` sphere objective switch; `README.md:79` notes it as development‑only.
+  - `src/constelx/optim/baselines.py:97` ALM docstring references placeholder feasibility integration when available.
+  - `src/constelx/cli.py:670-673` Pareto command docstring refers to the P3 placeholder.
 
 - Provenance handling
   - `src/constelx/physics/metrics.py:69` treats `source in {"placeholder","synthetic"}` consistently for provenance.
+
+- Physics placeholders (module‑level docstrings)
+  - `src/constelx/physics/constraints.py:1` constraint placeholders note.
+  - `src/constelx/physics/pbfm.py:1` PBFM placeholder tooling (training utilities), dev path only.
+
+- Documentation references (non‑code)
+  - `README.md:100,103,149` mention placeholder paths (P3 placeholder, fallback evaluator, and gating routing wording).
+  - `AGENTS.md:154` documents `source=placeholder|real` in CSV columns.
+  - `docs/ARCHITECTURE.md:18` notes `constel_api.py` as a lightweight placeholder evaluator.
+  - `docs/STRATEGY.md:7` mentions placeholder in the metrics/proxy context.
+  - `docs/ALPHA_FOLD_INSPIRED.md:204,223` discuss synthetic dataset coverage and caveats.
+  - Tests: `tests/test_agent_mf_integration.py:29` uses the placeholder path (`use_physics=False`) in a smoke.
 
 ## Completed Recently
 - [#40] BoTorch qNEI baseline — import-guarded feasibility-aware qNEI baseline with CLI/tests/docs.
