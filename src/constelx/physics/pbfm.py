@@ -1,4 +1,4 @@
-"""Physics-Based Flow Matching (PBFM) — placeholder.
+"""Physics-Based Flow Matching (PBFM) helpers.
 
 Training utilities to add a physics residual term to the FM objective with *conflict-free* updates:
 - Compute g_FM and g_R (residual) and align them using ConFIG-style projection.

@@ -517,6 +517,12 @@ def opt_baseline(
 ) -> None:
     random.seed(seed)
     if algo == "cma-es":
+        try:
+            from .dev import require_dev_for_placeholder
+
+            require_dev_for_placeholder("Optimization baseline uses placeholder CMA-ES objective")
+        except RuntimeError as exc:
+            raise typer.BadParameter(str(exc))
         from .optim.evolution import run_cma_es_baseline
 
         best = run_cma_es_baseline(steps=steps)
@@ -559,6 +565,13 @@ def opt_cmaes(
         )
         console.print(f"Best x: {best_x}\nBest score: {min(hist) if hist else float('inf')}")
         return
+
+    try:
+        from .dev import require_dev_for_placeholder
+
+        require_dev_for_placeholder("CMA-ES boundary placeholder objective")
+    except RuntimeError as exc:
+        raise typer.BadParameter(str(exc))
 
     # Boundary-mode objective using placeholder evaluator
     from .physics.constel_api import example_boundary  # noqa: I001
@@ -712,7 +725,7 @@ def opt_pareto(
         help="Problem id when using --use-physics (defaults to p3 placeholder).",
     ),
 ) -> None:
-    """Run a lightweight Pareto sweep for the P3 multi-objective placeholder."""
+    """Run a lightweight Pareto sweep for the P3 multi-objective problem."""
 
     from .eval import forward as eval_forward_metrics
     from .eval.boundary_param import sample_random, validate as validate_boundary
@@ -730,6 +743,14 @@ def opt_pareto(
     problem_norm = problem.strip() or "p3"
     if use_physics and not problem_norm:
         raise typer.BadParameter("--use-physics requires a valid --problem id")
+
+    if not use_physics:
+        try:
+            from .dev import require_dev_for_placeholder
+
+            require_dev_for_placeholder("Pareto sweep placeholder metrics (--no-use-physics)")
+        except RuntimeError as exc:
+            raise typer.BadParameter(str(exc))
 
     for _ in range(int(max(1, budget))):
         boundary = sample_random(nfp=nfp, seed=rng.randint(0, 2**32 - 1))

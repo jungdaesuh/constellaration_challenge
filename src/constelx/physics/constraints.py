@@ -1,4 +1,4 @@
-"""Constraint placeholders for physics-aware optimization/generation."""
+"""Lightweight constraint proxies for physics-aware optimization/generation."""
 
 from __future__ import annotations
 
