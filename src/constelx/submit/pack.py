@@ -5,6 +5,8 @@ import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..dev import enforce_real_enabled, is_dev_mode
+
 
 def _find_best_record(run_dir: Path) -> tuple[Dict[str, Any], Dict[str, Any]]:
     """Return (best_row_from_metrics, boundary_from_proposals).
@@ -154,7 +156,7 @@ def _collect_topk_records(run_dir: Path, k: int) -> List[Tuple[Dict[str, Any], D
     return out
 
 
-def pack_run(run_dir: Path, out_path: Path, top_k: int = 1) -> Path:
+def pack_run(run_dir: Path, out_path: Path, top_k: int = 1, *, allow_dev: bool = False) -> Path:
     """Pack a run directory into a submission zip.
 
     Contents:
@@ -167,6 +169,31 @@ def pack_run(run_dir: Path, out_path: Path, top_k: int = 1) -> Path:
     out_path = Path(out_path)
     if not run_dir.exists():
         raise FileNotFoundError(f"run directory not found: {run_dir}")
+    # Guard: reject packaging runs that contain non-real rows unless allowed
+    try:
+        import csv as _csv
+
+        any_non_real = False
+        metrics_csv = run_dir / "metrics.csv"
+        if metrics_csv.exists():
+            with metrics_csv.open("r", newline="") as f:
+                reader = _csv.DictReader(f)
+                for row in reader:
+                    src = str(row.get("source") or "").strip().lower()
+                    if src and src != "real":
+                        any_non_real = True
+                        break
+        if any_non_real and not allow_dev and enforce_real_enabled():
+            raise ValueError(
+                "Run contains non-real rows (source!=real). Use --allow-dev or set CONSTELX_DEV=1."
+            )
+    except Exception as _guard_exc:
+        if allow_dev or is_dev_mode():
+            pass
+        else:
+            # Surface guard exceptions to the caller to keep behavior explicit
+            raise
+
     # Load best row and boundary
     best_row, boundary = _find_best_record(run_dir)
     # Validate boundary using local validator

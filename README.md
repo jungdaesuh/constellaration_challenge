@@ -19,10 +19,9 @@ pip install -e ".[dev,bo,evolution]"
 
 # (4) sanity check
 constelx --help
-constelx data fetch --nfp 3 --limit 32
-constelx data fetch --source hf --nfp 3 --limit 128  # real dataset → Parquet cache
-constelx eval forward --example  # runs an example boundary through metrics
-constelx eval forward --random --nfp 3 --seed 0
+constelx data fetch --nfp 3 --limit 32  # defaults to HF (real)
+constelx eval forward --random --nfp 3 --seed 0  # defaults to real evaluator
+constelx agent run --nfp 3 --budget 5  # defaults to real evaluator (problem=p1)
 constelx data prior-train data/dataset.jsonl --out models/seeds_prior.joblib
 constelx data prior-sample models/seeds_prior.joblib --count 16 --nfp 3 --min-feasibility 0.3
 ```
@@ -53,8 +52,7 @@ See `docs/ROADMAP.md` (engineering roadmap) and `docs/STRATEGY.md`
 
 ## CLI usage
 
-Evaluation
-- `constelx eval forward --example`
+Evaluation (real by default)
 - `constelx eval forward --random --nfp 3 --seed 0`
 - Near-axis QS/QI-friendly seed: `constelx eval forward --near-axis --nfp 3 --seed 0`
 - `constelx eval score --metrics-json examples/metrics_small.json`
@@ -62,10 +60,9 @@ Evaluation
 Evaluator knobs & parity
 - `constelx eval problems` lists each challenge problem together with the metrics the
   evaluator expects so you can sanity-check parity before long runs.
-- Real evaluator path: append `--use-physics --use-real --problem p1` (or export
-  `CONSTELX_USE_REAL_EVAL=1`) on `constelx eval forward`, `opt run`, or `agent run` to
-  route calls through the official ConStellaration evaluator. Example:
-  `constelx eval forward --boundary-json examples/boundary.json --use-real --use-physics --problem p1`.
+- Real evaluator path is default for `eval forward`, `opt run`, and `agent run`. To force
+  placeholder/dev paths, use `--no-use-physics` or set `CONSTELX_USE_REAL_EVAL=0`.
+  Example real run: `constelx eval forward --boundary-json examples/boundary.json --problem p1`.
 - Timeout/backoff knobs: `CONSTELX_REAL_TIMEOUT_MS`, `CONSTELX_REAL_RETRIES`, and
   `CONSTELX_REAL_BACKOFF` tune the real evaluator timeout loop.
 - Logging: set `CONSTELX_EVAL_LOG_DIR=/path/to/logs` to capture one JSON file per
@@ -76,8 +73,8 @@ Evaluator knobs & parity
   local scorer matches the official ConStellaration aggregation.
 
 Optimization
-- Development-only sphere check: `constelx opt cmaes --toy --budget 20 --seed 0`
 - Boundary mode: `constelx opt cmaes --nfp 3 --budget 50 --seed 0`
+  (Dev-only synthetic sphere: `constelx opt cmaes --toy --budget 20 --seed 0`)
 
 Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
 - Trust‑constr (2D helical coefficients):
@@ -198,6 +195,16 @@ Submission
 - Pack a completed run into a submission zip:
   `constelx submit pack runs/<ts> --out submissions/run_<ts>.zip`
   Includes `boundary.json`, `best.json` (if present), and a small `metadata.json`.
+
+## Dev only paths and enforcement
+
+- Dev-only examples:
+  - Synthetic example boundary: `constelx eval forward --example`
+  - Synthetic sphere objective: `constelx opt cmaes --toy`
+- Dev opt-in: set `CONSTELX_DEV=1` to enable dev-only paths.
+- Real-only enforcement: set `CONSTELX_ENFORCE_REAL=1` to reject placeholder/synthetic paths.
+  - Packaging guard: `constelx submit pack` rejects runs with non‑real rows unless `--allow-dev` or `CONSTELX_DEV=1`.
+  - Proxy gating (mf_proxy) uses placeholders and is disallowed when enforcement is ON.
  - Include the top-K boundaries by aggregate score:
    `constelx submit pack runs/<ts> --out submissions/run_<ts>.zip --top-k 5`
    This adds `boundaries.jsonl` with records of the form `{iteration,index,agg_score,evaluator_score,feasible,fail_reason,source,scoring_version,boundary}`.
