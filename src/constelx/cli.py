@@ -19,7 +19,7 @@ import-time coupling and keep simple commands lightweight.
 
 app = typer.Typer(
     help=(
-        "ConstelX CLI — ConStellaration starter tools\n\n"
+        "ConstelX CLI — ConStellaration research toolkit\n\n"
         "Data: 'data fetch --source hf' mirrors a thin Parquet slice to 'cache_dir/subset.parquet'."
     )
 )

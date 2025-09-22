@@ -24,7 +24,7 @@ def boundary_to_vmec(boundary: Mapping[str, Any]) -> Any:
 
 
 def _fallback_metrics(boundary: Mapping[str, Any]) -> dict[str, Any]:
-    # Lightweight placeholder using existing starter path
+    # Lightweight placeholder using the existing development path
     from .constel_api import evaluate_boundary as _eval
 
     return _eval(dict(boundary), use_real=False)
@@ -156,7 +156,7 @@ def forward_metrics(
 ) -> Tuple[dict[str, Any], dict[str, Any]]:
     """Compute metrics via the official constellaration evaluator.
 
-    Returns (metrics, info). Falls back to starter placeholder metrics if the
+    Returns (metrics, info). Falls back to lightweight placeholder metrics if the
     physics stack is unavailable so that callers can degrade gracefully.
     """
     opts = vmec_opts or {}
