@@ -15,6 +15,26 @@
 
   (De-dup with Sequential list as work starts.)
 
+## Dev-only and placeholder inventory (recorded)
+- Synthetic data paths (dev/CI only)
+  - `src/constelx/cli.py:63` `data fetch` defaults to `source="synthetic"`; pass `--source hf` for the real dataset.
+  - `src/constelx/cli.py:307` `eval forward --example` uses a synthetic example boundary (see `README.md:24`).
+  - `src/constelx/data/dataset.py:3,25,59` deterministic synthetic fallback via `_synthetic_examples()` used by tests and CI.
+  - Docs callouts: `docs/ROADMAP.md:49` (synthetic as CI default), `docs/GUIDELINE.md:574` (synthetic-boundary smoke).
+
+- Placeholder evaluator paths (development fallback; provenance recorded)
+  - `src/constelx/eval/__init__.py:1102` placeholder evaluator helper and path; metrics include `source=placeholder` and `agg_score` distinct from `evaluator_score`.
+  - `src/constelx/physics/proxima_eval.py:244` synthetic objectives for placeholder path; `_fallback_metrics` used when physics stack is missing.
+  - `src/constelx/physics/constel_api.py:48-99` lightweight placeholder evaluator and norms for `placeholder_metric`.
+  - `README.md:268` explicitly documents fallback behavior when physics extras are unavailable.
+
+- Diagnostic CMA‑ES baseline and related
+  - `src/constelx/optim/evolution.py` “toy/placeholder” score path for the tiny CMA‑ES baseline (dev smoke).
+  - `src/constelx/cli.py:508-520` `--toy` sphere objective switch; `README.md:79` notes it as development‑only.
+
+- Provenance handling
+  - `src/constelx/physics/metrics.py:69` treats `source in {"placeholder","synthetic"}` consistently for provenance.
+
 ## Completed Recently
 - [#40] BoTorch qNEI baseline — import-guarded feasibility-aware qNEI baseline with CLI/tests/docs.
 - [#28] ConStellaration evaluator wiring follow-ups — README/AGENTS now document `--use-real`
