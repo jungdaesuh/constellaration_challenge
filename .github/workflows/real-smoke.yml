@@ -48,7 +48,7 @@ jobs:
           CONSTELX_USE_REAL_EVAL: "1"
           CONSTELX_ENFORCE_REAL: "1"
         run: |
-          constelx agent run --nfp 3 --budget 3 --use-physics --problem p1 --seed 0 --limit 8 --runs-dir runs/smoke
+          constelx agent run --nfp 3 --budget 3 --use-physics --problem p1 --seed 0 --runs-dir runs/smoke
       - name: Check provenance
         run: |
           python - <<'PY'
