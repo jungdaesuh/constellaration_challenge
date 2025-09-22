@@ -185,7 +185,7 @@ def validate(boundary: Mapping[str, Any], *, coeff_abs_max: float = 2.0) -> None
     if not isinstance(boundary["n_field_periods"], int) or boundary["n_field_periods"] <= 0:
         raise ValueError("n_field_periods must be a positive int")
     if boundary["is_stellarator_symmetric"] is not True:
-        raise ValueError("is_stellarator_symmetric must be True in this starter")
+        raise ValueError("is_stellarator_symmetric must be True for ConStelX runs")
 
     def as_coeff(name: str) -> Coeff2D:
         v = boundary[name]

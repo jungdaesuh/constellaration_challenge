@@ -27,7 +27,7 @@ def finite_diff_jacobian(
 
     Uses simple forward differences with element-wise step sizes scaled to the
     magnitude of ``u``. This is sufficient for the small dimensionalities used
-    in the starter and keeps dependencies minimal.
+    in ConStelX and keeps dependencies minimal.
     """
     u = np.asarray(u, dtype=float)
     f0 = np.asarray(fun(u), dtype=float)
@@ -105,7 +105,7 @@ def project_gauss_newton(
 
 
 def guided_step(u: Any, model: Any, t: float, dt: float, constraint: Callable[[Any], Any]) -> Any:
-    """Placeholder for a PCFM-guided update step (not used in starter)."""
+    """Placeholder for a PCFM-guided update step (not used by default)."""
     # Intentionally left minimal; end-to-end uses the projector above.
     return u
 

@@ -43,8 +43,8 @@ constelx opt baseline --algo cma-es --steps 50
 # Surrogate model training
 constelx surrogate train
 
-# Agent loop (stub)
-constelx agent run --iterations 3 --population 8
+# Agent loop
+constelx agent run --nfp 3 --budget 20 --seed 0
 ```
 
 ## Architecture Overview
@@ -56,11 +56,11 @@ This is a Python package for ML + physics-based optimization of stellarator plas
 - **`constelx.cli`**: Main CLI interface with typer, organized into subcommands (`data`, `eval`, `opt`, `surrogate`, `agent`)
 - **`constelx.physics`**: Physics wrappers around the `constellaration` package
   - `constel_api.py`: Core evaluation functions using ConStellaration metrics
-  - `pcfm.py`, `pbfm.py`: Physics-constrained generation modules (stubs)
+  - `pcfm.py`, `pbfm.py`: Physics-constrained generation modules
   - `constraints.py`: Hard constraint tooling
 - **`constelx.data`**: Dataset access via HuggingFace datasets (`proxima-fusion/constellaration`)
-- **`constelx.optim`**: Optimization algorithms (CMA-ES baseline, BoTorch stubs)
-- **`constelx.surrogate`**: Simple MLP baseline + placeholders for advanced models
+- **`constelx.optim`**: Optimization algorithms (CMA-ES, DESC trust-region, BoTorch qNEI, Nevergrad NGOpt)
+- **`constelx.surrogate`**: Baseline MLP surrogate with extension points for advanced models
 
 ### Data Flow
 
@@ -88,7 +88,7 @@ This is a Python package for ML + physics-based optimization of stellarator plas
 
 - The codebase uses modern Python features (`from __future__ import annotations`)
 - Ruff configuration: line length 100, basic linting enabled
-- This is a starter/skeleton repo with many TODO stubs for extension
+- This is a production-focused repository with clear extension points for additional research tooling
 - Physics constraints (PCFM/PBFM) are placeholder modules for future implementation
 
 ## PR etiquette: auto-close issues

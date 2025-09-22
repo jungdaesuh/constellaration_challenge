@@ -9,8 +9,8 @@ class ProblemSpec:
     """Lightweight problem specification for P1–P3.
 
     Fields are intentionally minimal and decoupled from the external evaluator
-    so the starter can document expectations and perform gentle validation
-    without adding hard dependencies.
+    so ConStelX can document expectations and perform gentle validation without
+    adding hard dependencies.
     """
 
     pid: str
