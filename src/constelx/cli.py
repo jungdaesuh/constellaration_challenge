@@ -60,9 +60,19 @@ def data_fetch(
         None, help="Filter by number of field periods (boundary.n_field_periods)."
     ),
     limit: Optional[int] = typer.Option(1000, help="Take first N examples for quick experiments."),
-    source: str = typer.Option("synthetic", help="Data source: synthetic|hf"),
+    source: str = typer.Option("hf", help="Data source: synthetic|hf"),
 ) -> None:
-    if source == "hf":
+    source_norm = str(source).strip().lower()
+    # Enforce real-only mode when configured
+    if source_norm != "hf":
+        try:
+            from .dev import require_dev_for_placeholder
+
+            require_dev_for_placeholder("Synthetic data fetch")
+        except RuntimeError as exc:
+            raise typer.BadParameter(str(exc))
+
+    if source_norm == "hf":
         try:
             from .data.constellaration import (
                 filter_nfp as hf_filter,
@@ -74,15 +84,24 @@ def data_fetch(
                 to_parquet as hf_to_parquet,
             )
         except Exception as e:
-            raise typer.BadParameter(f"HF dataset path unavailable: {e}")
-        ds = hf_load()
-        if nfp is not None:
-            ds = hf_filter(ds, int(nfp))
-        if limit is not None:
-            ds = ds.select(range(min(int(limit), len(ds))))
-        out = hf_to_parquet(ds, cache_dir / "subset.parquet")
-        console.print(f"Saved HF subset to: [bold]{out}[/bold]")
-        return
+            # Fallback to synthetic dev fixture unless real-only enforcement is enabled
+            try:
+                from .dev import enforce_real_enabled
+
+                if enforce_real_enabled():
+                    raise typer.BadParameter(f"HF dataset unavailable and real-only enforced: {e}")
+            except Exception:
+                pass
+            source_norm = "synthetic"
+        if source_norm == "hf":
+            ds = hf_load()
+            if nfp is not None:
+                ds = hf_filter(ds, int(nfp))
+            if limit is not None:
+                ds = ds.select(range(min(int(limit), len(ds))))
+            out = hf_to_parquet(ds, cache_dir / "subset.parquet")
+            console.print(f"Saved HF subset to: [bold]{out}[/bold]")
+            return
 
     # synthetic path
     from .data.dataset import fetch_dataset, save_subset
@@ -304,7 +323,7 @@ def eval_forward(
     boundary_json: Optional[Path] = typer.Option(
         None, help="Path to a JSON boundary (SurfaceRZFourier)."
     ),
-    example: bool = typer.Option(False, "--example", help="Use a synthetic example."),
+    example: bool = typer.Option(False, "--example", help="Use a synthetic example (dev-only)."),
     random_boundary: bool = typer.Option(
         False, "--random", help="Use a random sampled boundary (deterministic with --seed)."
     ),
@@ -319,10 +338,9 @@ def eval_forward(
         Path(".cache/eval"), help="Cache directory for metrics (diskcache/json)."
     ),
     use_physics: bool = typer.Option(
-        False,
-        "--use-physics",
-        "--use-real",
-        help="Use real evaluator if available.",
+        True,
+        "--use-physics/--no-use-physics",
+        help="Use real evaluator if available (default on).",
     ),
     problem: str = typer.Option("p1", help="Problem id for scoring/metrics (e.g., p1/p2/p3)."),
     json_out: bool = typer.Option(False, "--json", help="Emit raw JSON metrics."),
@@ -346,6 +364,13 @@ def eval_forward(
         )
 
     if example:
+        # Guard dev-only synthetic example
+        try:
+            from .dev import require_dev_for_placeholder
+
+            require_dev_for_placeholder("Synthetic example boundary (--example)")
+        except RuntimeError as exc:
+            raise typer.BadParameter(str(exc))
         from .physics.constel_api import example_boundary
 
         b = example_boundary()
@@ -505,15 +530,24 @@ def opt_cmaes(
     nfp: int = typer.Option(3, help="Boundary NFP for boundary-mode optimization."),
     budget: int = typer.Option(50, help="Number of CMA-ES iterations."),
     seed: int = typer.Option(0, help="Random seed."),
-    toy: bool = typer.Option(False, help="Use toy sphere objective instead of boundary."),
+    toy: bool = typer.Option(
+        False, help="Use synthetic dev fixture (sphere) objective instead of boundary."
+    ),
 ) -> None:
-    """Run a CMA-ES optimization on a toy sphere objective for a quick smoke test."""
+    """Run a CMA-ES optimization on a synthetic dev fixture objective (sphere)."""
     try:
         from .optim.cmaes import optimize
     except Exception as e:  # pragma: no cover - import-time error
         raise typer.BadParameter(str(e))
 
     if toy:
+        # Dev-only guard for synthetic sphere objective
+        try:
+            from .dev import require_dev_for_placeholder
+
+            require_dev_for_placeholder("CMA-ES synthetic sphere objective (--toy)")
+        except RuntimeError as exc:
+            raise typer.BadParameter(str(exc))
         from typing import Sequence
 
         def sphere(x: Sequence[float]) -> float:
@@ -563,8 +597,10 @@ def opt_run(
     nfp: int = typer.Option(3, help="Boundary NFP for boundary-mode optimization."),
     budget: int = typer.Option(50, help="Iteration budget (outer*inner for ALM)."),
     seed: int = typer.Option(0, help="Random seed (reserved for future use)."),
-    use_physics: bool = typer.Option(
-        False, "--use-physics", help="Use official evaluator when available."
+    use_physics: Optional[bool] = typer.Option(
+        None,
+        "--use-physics/--no-use-physics",
+        help="Use official evaluator when available (default on).",
     ),
     problem: Optional[str] = typer.Option(
         None, help="Problem id when using --use-physics (p1|p2|p3)."
@@ -584,10 +620,16 @@ def opt_run(
     ),
 ) -> None:
     """Run an optimization baseline in boundary mode (2D helical coefficients)."""
-    if use_physics and not problem:
-        # Emit a simple, testable message and exit with error code.
+    # Normalize tri-state flag
+    explicit_use_physics = use_physics is not None
+    use_phys = True if use_physics is None else bool(use_physics)
+    # When the flag is explicitly provided without a problem id, error out for clarity
+    if explicit_use_physics and use_phys and not problem:
         typer.echo("--problem is required", err=True)
         raise typer.Exit(code=2)
+    # Default to p1 when using physics if no problem id is provided
+    if use_phys and not problem:
+        problem = "p1"
 
     if baseline.lower() == "cmaes":
         # Delegate to existing CMA-ES command with boundary mode settings
@@ -606,7 +648,7 @@ def opt_run(
         nfp=nfp,
         budget=budget,
         seed=seed,
-        use_physics=use_physics,
+        use_physics=use_phys,
         problem=(problem or "p1"),
         vmec_level=vmec_level,
         vmec_hot_restart=vmec_hot_restart,
@@ -633,9 +675,9 @@ def opt_run(
                 nfp=nfp,
                 budget=budget,
                 seed=seed,
-                use_physics=use_physics,
+                use_physics=use_phys,
                 problem=(problem or "p1"),
-                prefer_vmec_validation=use_physics,
+                prefer_vmec_validation=use_phys,
             )
             x, val = run_desc_trust_region(desc_cfg)
         else:
@@ -661,7 +703,7 @@ def opt_pareto(
         help="Optional path to write sweep results (objectives + scalar scores).",
     ),
     use_physics: bool = typer.Option(
-        False,
+        True,
         "--use-physics/--no-use-physics",
         help="Route metrics through the real evaluator (requires problem id).",
     ),
@@ -806,10 +848,13 @@ def agent_run(
     resume: Optional[Path] = typer.Option(None, help="Resume from an existing run directory."),
     max_workers: int = typer.Option(1, help="Parallel evaluator workers for agent evals."),
     cache_dir: Optional[Path] = typer.Option(None, help="Cache directory for agent evals."),
-    use_physics: bool = typer.Option(
-        False,
-        "--use-physics",
-        help="Prefer VMEC validation if constellaration is installed; fallback otherwise.",
+    use_physics: Optional[bool] = typer.Option(
+        None,
+        "--use-physics/--no-use-physics",
+        help=(
+            "Prefer VMEC validation if constellaration is installed; "
+            "fallback otherwise (default on)."
+        ),
     ),
     problem: Optional[str] = typer.Option(
         None, help="Problem id when using --use-physics (p1|p2|p3)."
@@ -962,9 +1007,16 @@ def agent_run(
     from .agents.simple_agent import AgentConfig, run as run_agent  # noqa: I001
 
     runs_dir.mkdir(parents=True, exist_ok=True)
-    if use_physics and not problem:
+    # Normalize tri-state flag
+    explicit_use_physics = use_physics is not None
+    use_phys = True if use_physics is None else bool(use_physics)
+    # Enforce: explicit --use-physics requires a problem id; default path uses p1
+    if explicit_use_physics and use_phys and not problem:
         typer.echo("--problem is required", err=True)
         raise typer.Exit(code=2)
+    # Default to p1 when using physics if no problem id is provided
+    if use_phys and not problem:
+        problem = "p1"
     # Load constraints if provided
     constraints: list[dict[str, Any]] | None = None
     # Allow constraints JSON to be a dict with overrides {constraints:[...], gn_iters, damping, tol}
@@ -1026,7 +1078,7 @@ def agent_run(
             cache_dir=cache_dir,
             correction=correction,
             constraints=constraints,
-            use_physics=use_physics,
+            use_physics=use_phys,
             problem=problem,
             vmec_level=vmec_level,
             vmec_hot_restart=vmec_hot_restart,
@@ -1077,6 +1129,14 @@ def submit_pack(
     run_dir: Path = typer.Argument(..., help="Path to a completed run directory (runs/<ts>)."),
     out: Path = typer.Option(Path("submission.zip"), help="Output zip file path"),
     top_k: int = typer.Option(1, help="Include top-K boundaries as boundaries.jsonl (K>1)"),
+    allow_dev: bool = typer.Option(
+        False,
+        "--allow-dev/--no-allow-dev",
+        help=(
+            "Allow packaging runs that contain non-real rows (source!=real). "
+            "Defaults to rejecting such runs unless CONSTELX_DEV=1."
+        ),
+    ),
 ) -> None:
     """Pack a run directory into a submission zip.
 
@@ -1090,7 +1150,7 @@ def submit_pack(
     """
     from .submit.pack import pack_run
 
-    out_path = pack_run(run_dir, out, top_k=top_k)
+    out_path = pack_run(run_dir, out, top_k=top_k, allow_dev=allow_dev)
     console.print(f"Created submission: [bold]{out_path}[/bold]")
 
 
@@ -1119,8 +1179,10 @@ def ablate_run(
     ),
     cache_dir: Path = typer.Option(Path(".cache/eval"), help="Cache directory for evals."),
     max_workers: int = typer.Option(1, help="Worker count for evaluator."),
-    use_physics: bool = typer.Option(
-        False, "--use-physics", help="Use official evaluator when available."
+    use_physics: Optional[bool] = typer.Option(
+        None,
+        "--use-physics/--no-use-physics",
+        help="Use official evaluator when available (default on).",
     ),
     problem: Optional[str] = typer.Option(
         None, help="Problem id when using --use-physics (p1|p2|p3)."
@@ -1137,9 +1199,15 @@ def ablate_run(
     It writes per-variant/per-seed folders and summary CSVs.
     Without --spec, it runs a baseline and one run per component toggle.
     """
-    if use_physics and not problem:
+    # Enforce: explicit --use-physics requires a problem id; default path uses p1
+    explicit_use_physics = use_physics is not None
+    use_phys = True if use_physics is None else bool(use_physics)
+    if explicit_use_physics and use_phys and not problem:
         typer.echo("--problem is required", err=True)
         raise typer.Exit(code=2)
+    # Default to p1 when using physics if no problem id is provided
+    if use_phys and not problem:
+        problem = "p1"
 
     from .agents.simple_agent import AgentConfig
 
@@ -1181,7 +1249,7 @@ def ablate_run(
         resume=None,
         max_workers=max_workers,
         cache_dir=cache_dir,
-        use_physics=use_physics,
+        use_physics=use_phys,
         problem=(problem or "p1"),
     )
     comps = [c.strip() for c in components.split(",") if c.strip()]

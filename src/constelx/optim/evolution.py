@@ -12,7 +12,7 @@ from ..physics.constel_api import evaluate_boundary, example_boundary
 
 
 def score_from_boundary(b: Dict[str, Any]) -> float:
-    """Toy score based on available placeholder metrics.
+    """Synthetic dev fixture score using available placeholder metrics.
 
     Prefer the combined placeholder metric; fall back to the sum of norms.
     Lower is better.

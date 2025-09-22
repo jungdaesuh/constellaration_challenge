@@ -35,6 +35,7 @@ from math import inf, isinf, isnan
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
 
+from ..dev import enforce_real_enabled, require_dev_for_placeholder
 from ..optim.pareto import DEFAULT_P3_SCALARIZATION, extract_objectives, scalarize
 from ..physics.booz_proxy import BOOZER_PROXY_KEYS, compute_proxies
 from ..physics.constel_api import evaluate_boundary
@@ -437,6 +438,9 @@ def forward(
         import os
 
         use_real = os.getenv("CONSTELX_USE_REAL_EVAL", "0").lower() in {"1", "true", "yes"}
+    # Enforce real-only mode early when explicitly asked to use placeholder
+    if (use_real is False) and enforce_real_enabled():
+        require_dev_for_placeholder("Placeholder evaluation (forward)")
     if use_real:
         try:
             result = _real_eval_with_timeout(boundary, problem, vmec_opts)
@@ -468,6 +472,14 @@ def forward(
     result = _annotate_vmec_metadata(result, vmec_opts)
 
     _log_eval_event(boundary, result, problem=problem, vmec_opts=vmec_opts, cache_hit=False)
+
+    # Enforce real-only mode when configured
+    try:
+        src = str(result.get("source") or "").strip().lower() if isinstance(result, dict) else ""
+        if src and src != "real" and enforce_real_enabled():
+            require_dev_for_placeholder("Placeholder evaluation (forward)")
+    except Exception:
+        pass
 
     if cache is not None:
         reason_val = str(result.get("fail_reason") or "").strip()
@@ -568,6 +580,15 @@ def forward_many(
                     metrics[key] = payload[key]
         if phase_override is not None:
             metrics.setdefault("phase", phase_override)
+
+    # Enforce pre-flight when real-only is enabled
+    if enforce_real_enabled():
+        # Proxy gating uses placeholder proxies and is disallowed in real-only mode
+        if mf_proxy:
+            require_dev_for_placeholder("Proxy gating (forward_many)")
+        # Explicit placeholder request is disallowed
+        if use_real is False:
+            require_dev_for_placeholder("Placeholder evaluation (forward_many)")
 
     # Compute missing
     if to_compute:
@@ -969,6 +990,18 @@ def forward_many(
             vmec_opts=vmec_opts,
             cache_hit=cache_hits[i],
         )
+
+    # Enforce real-only mode when configured: any non-real result triggers an error
+    try:
+        if enforce_real_enabled():
+            for rec in out:
+                if isinstance(rec, dict):
+                    src = str(rec.get("source") or "").strip().lower()
+                    if src and src != "real":
+                        require_dev_for_placeholder("Placeholder evaluation (forward_many)")
+                        break
+    except Exception:
+        pass
 
     # Strip non-deterministic timing before caching/returning to keep cache equality stable
     if cache is not None:

@@ -571,11 +571,14 @@ def run(config: AgentConfig) -> Path:
         if "score" in metrics_no_collision:
             # Remove original "score" to prevent ambiguity in CSV header
             metrics_no_collision.pop("score", None)
+        # Ensure local nfp (int) wins over any evaluator-provided 'nfp' value
+        if "nfp" in metrics_no_collision:
+            metrics_no_collision.pop("nfp", None)
         row = {
             "iteration": it,
             "index": idx,
-            "nfp": nfp_val,
             **metrics_no_collision,
+            "nfp": nfp_val,
             "evaluator_score": evaluator_score,
             "agg_score": agg_s,
             "elapsed_ms": elapsed_ms,

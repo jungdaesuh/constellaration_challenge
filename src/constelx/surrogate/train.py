@@ -39,8 +39,9 @@ def train_simple_mlp(
 ) -> None:
     df = pd.read_parquet(Path(cache_dir) / "subset.parquet")
     feature_cols = _boundary_cols(df)
-    X = df[feature_cols].fillna(0.0).to_numpy()
-    # Toy target: pick one available scalar metric if present, else zeros
+    # Coerce boundary columns to numeric to tolerate object dtypes from heterogeneous sources
+    X = df[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy()
+    # Synthetic dev target: pick one available scalar metric if present, else zeros
     target_col = next(
         (c for c in df.columns if c.startswith("metrics.") and df[c].dtype != object),
         None,
@@ -63,7 +64,7 @@ def train_simple_mlp(
             opt.step()
             continue
 
-        # PBFM path: combine FM loss and a toy residual loss via conflict-free update
+        # PBFM path: combine FM loss and a synthetic residual proxy via conflict-free update
         # FM loss: match target
         opt.zero_grad()
         pred = model(X)
