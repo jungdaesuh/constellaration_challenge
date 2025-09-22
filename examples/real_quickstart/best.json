@@ -1,0 +1,17 @@
+{
+  "objective": 1.1261108574106895,
+  "score": 0.0,
+  "feasibility": 4.333333333333637,
+  "source": "real",
+  "feasible": true,
+  "scoring_version": "0.2.3",
+  "vmec_level": "auto",
+  "vmec_hot_restart": false,
+  "fail_reason": "",
+  "nfp": 3,
+  "stellarator_symmetric": true,
+  "qs_residual": 0.0003626784463759468,
+  "qi_residual": 0.003264106017383522,
+  "helical_energy": 0.9999999998648388,
+  "mirror_ratio": 0.12164354024785755
+}

@@ -1,0 +1,9 @@
+run:
+  nfp: 3
+  budget: 3
+  algo: random
+  seed: 0
+  use_physics: true
+  problem: p1
+  max_workers: 1
+  mf_proxy: false

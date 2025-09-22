@@ -1,0 +1,19 @@
+{
+  "r_cos_norm": 1.0025,
+  "z_sin_norm": 0.0025000000000000005,
+  "nfp": 3,
+  "stellarator_symmetric": true,
+  "placeholder_metric": 1.005,
+  "objectives": [
+    1.0025,
+    0.0025000000000000005
+  ],
+  "source": "placeholder",
+  "proxy_boozer_b_mean": 1.0012523486435176,
+  "proxy_boozer_b_std_fraction": 0.03417899367998704,
+  "proxy_boozer_mirror_ratio": 0.09523809523800475,
+  "proxy_qs_residual": 0.0311809106829901,
+  "proxy_qs_quality": 0.9688190893170099,
+  "proxy_qi_residual": 8.541864968330158e-05,
+  "proxy_qi_quality": 0.9999145813503167
+}
