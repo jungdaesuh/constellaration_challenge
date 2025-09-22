@@ -5,6 +5,8 @@ from contextlib import contextmanager
 from math import inf, isnan
 from typing import Any, Callable, Generator, Mapping, Tuple
 
+from ..dev import is_dev_mode, require_dev_for_placeholder
+
 
 def boundary_to_vmec(boundary: Mapping[str, Any]) -> Any:
     """Validate and convert a boundary dict to a constellaration VMEC boundary model.
@@ -226,32 +228,35 @@ def forward_metrics(
         if restart_key is not None:
             info["vmec_restart_key"] = restart_key
         return metrics, info
-    except Exception:
+    except Exception as exc:
+        if not is_dev_mode():
+            raise RuntimeError(
+                "Real physics evaluation failed. Install extras via pip install -e '.[physics]' "
+                "or set CONSTELX_DEV=1 to allow placeholder metrics explicitly."
+            ) from exc
+        require_dev_for_placeholder("Placeholder evaluation (proxima_eval.forward_metrics)")
         m = _fallback_metrics(boundary)
-        # Best-effort cast to float values for compatibility
         metrics_f: dict[str, Any] = {
             k: float(v) for k, v in m.items() if isinstance(v, (int, float))
         }
-        # Derive a bounded aggregate score in (0, 1]
+        metrics_f["source"] = "placeholder"
         try:
             pm = float(m.get("placeholder_metric", 0.0))
         except Exception:
             pm = 0.0
         metrics_f["score"] = float(1.0 / (1.0 + max(0.0, pm)))
-        # For multi-objective (p3), expose an objectives list to satisfy shape expectations
         prob_key = problem.lower().strip()
         if prob_key in {"p3", "multi", "mhd", "qi_stable"}:
-            # Two synthetic objectives derived from simple placeholder norms
             r = float(m.get("r_cos_norm", 0.0))
             z = float(m.get("z_sin_norm", 0.0))
             metrics_f["objectives"] = [r, z]
-        # Mark provenance correctly as placeholder
         info_placeholder = {
             "problem": problem,
             "feasible": True,
             "source": "placeholder",
             "vmec_level": level,
             "vmec_hot_restart": hot_restart,
+            "reason": f"real_eval_error: {exc}",
         }
         if restart_key is not None:
             info_placeholder["vmec_restart_key"] = restart_key
