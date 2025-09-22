@@ -1,8 +1,8 @@
 """Boundary Fourier helpers (R,Z in cylindrical coordinates).
 
 This module provides a small convenience wrapper around a truncated Fourier
-representation compatible with the starter's `SurfaceRZFourier` dictionary
-format used throughout the repo. It intentionally supports a configurable
+representation compatible with ConStelX's `SurfaceRZFourier` dictionary
+format used throughout the project. It intentionally supports a configurable
 `n_offset` to allow addressing negative toroidal mode numbers (n < 0) via a
 single 0-based index.
 

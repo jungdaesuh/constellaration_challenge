@@ -517,13 +517,13 @@ Runs a boundary through the forward/evaluator wrapper (metrics scaffolded).
 • constelx opt baseline --algo cma-es --steps 50
 Simple CMA‑ES baseline over a tiny boundary subspace (optional cma extra).
 • constelx surrogate train
-Trains a small MLP on (boundary._) → (metrics.\*) as a placeholder surrogate.
+Trains a small MLP on (boundary._) → (metrics.\*) as a lightweight baseline surrogate.
 • constelx agent run
-Skeleton multi‑step propose → simulate → select → refine loop to plug your agents into.
+Production multi‑step propose → simulate → select → refine loop with clear extension points for custom agents.
 
 ⸻
 
-What the skeleton implements (and what’s stubbed)
+What ships today (and where to extend)
 
 Data & evaluation
 • Dataset access via datasets.load_dataset("proxima-fusion/constellaration"); loader keeps Fourier boundary and metrics columns for speed, but it’s easy to widen the slice. Example usage in the README mirrors the Hub’s dataset card. ￼
@@ -532,7 +532,7 @@ Data & evaluation
 • compute compactness/smoothness style geometry metrics (scaffolded in code; swap in the exact scoring functions you’ll target from the repo). ￼
 
 Baselines and surrogates
-• CMA‑ES baseline (optim/evolution.py) exposes a tiny two‑parameter helical perturbation and a toy score aggregator. It’s deliberately small so you can quickly verify end‑to‑end evaluation and swap in your true objective(s).
+• CMA‑ES baseline (optim/evolution.py) exposes a two‑parameter helical perturbation and a compact score aggregator. Use it for end‑to‑end verification before swapping in heavier objectives.
 • MLP surrogate (surrogate/train.py) shows the full loop (boundary coeffs) → (one scalar metric). Replace with FNO/DiT later.
 
 Physics-constrained ML hooks (PBFM / PCFM)
@@ -563,7 +563,7 @@ Notes your agent will care about
 • System dependency: on Ubuntu, install libnetcdf-dev (and equivalent on macOS) before using the forward model in constellaration. The official README shows the exact apt / brew commands and a Dockerfile; CI in this repo mirrors that. ￼
 • Dataset schema: the dataset ships two parts linked by plasma_config_id (default with boundary + metrics and vmecpp_wout with the VMEC outputs). Columns like boundary.r_cos, boundary.z_sin, and JSON payloads for vmecpp_wout are documented on the dataset card; the loader and the surrogate examples rely on these names. ￼
 • VMEC++: modern C++ rewrite with Python integration and hot‑restart for faster sweeps — useful if you later step outside the provided forward tools. ￼
-• Repo with evaluator & notebooks: Proxima’s proximafusion/constellaration repo contains the forward model, scoring, notebooks, and an installable PyPI package (pip install constellaration). This starter repo imports it directly. ￼
+• Repo with evaluator & notebooks: Proxima’s proximafusion/constellaration repo contains the forward model, scoring, notebooks, and an installable PyPI package (pip install constellaration). This repository imports it directly. ￼
 
 ⸻
 
@@ -671,7 +671,7 @@ Concrete recommendations for you
 
 This split gives you fast iteration locally, and real acceleration only when/where it matters—exactly aligned with how the ConStellaration challenge is set up (dataset at scale, physics‑based scoring via VMEC++, leaderboard submissions). ￼ ￼
 
-If you’d like, I can add a cloud/ folder to the starter repo with:
+If you’d like, I can add a cloud/ folder to the repository with:
 • Dockerfile.cuda + Dockerfile.cpu,
 • a minimal terraform or modal script to bring up an A100 VM,
 • Ray/Slurm job templates for VMEC++ batch evaluation,
@@ -721,7 +721,7 @@ Target correctness, determinism, and incremental performance. Prefer small verti
 - For long‑running commands, add `--dry-run` and `--limit` flags.
 - Always write a minimal example in the module docstring and cross‑link from README.
 
-## Target architecture (already stubbed by the starter)
+## Target architecture
 
 - `constelx.data`: dataset fetch/filter utilities, simple CSV index.
 - `constelx.eval`: thin wrappers around `constellaration` evaluator; one function per metric + `score()`.
@@ -916,9 +916,9 @@ If you want, I can also provide:
 
 But you can already proceed now: add the agent prompt, open the issues, and send the agent the first task message.
 
-Amazing—now that constelx_starter is live and your GPT‑5 coding agent is wired up, the fastest way to a production‑grade, actually‑result‑producing, self‑improving system is to take one thin end‑to‑end slice to production and then deepen each layer behind safety rails.
+Amazing—now that constelx is live and your GPT‑5 coding agent is wired up, the fastest way to a production‑grade, actually‑result‑producing, self‑improving system is to take one thin end‑to‑end slice to production and then deepen each layer behind safety rails.
 
-Below is a concrete, execution‑ready plan the agent can follow now. It turns the starter repo into a robust, continuously learning optimizer with physics‑aware generation and constraint enforcement.
+Below is a concrete, execution‑ready plan the agent can follow now. It deepens the repository into a continuously learning optimizer with physics‑aware generation and constraint enforcement.
 
 ⸻
 

@@ -401,7 +401,7 @@ def forward(
     Returns
     - Dict of metric names to values (numeric or informative non-numeric entries).
 
-    This starter delegates to `constelx.physics.constel_api.evaluate_boundary` which
+    The ConStelX implementation delegates to `constelx.physics.constel_api.evaluate_boundary` which
     provides lightweight, deterministic metrics. Replace with direct evaluator calls
     to compute physical figures of merit once available.
     """
@@ -1000,7 +1000,7 @@ def score(metrics: Mapping[str, Any], problem: Optional[str] = None) -> float:
     - If any considered value is NaN, return +inf (treat as invalid/bad).
     - Otherwise return the sum of numeric values (lower is better).
 
-    This is a placeholder aggregation compatible with the starter's toy metrics.
+    This is a placeholder aggregation compatible with the lightweight development metrics.
     Swap in evaluator-default aggregation when integrating the real metrics.
     """
 

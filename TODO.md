@@ -7,6 +7,8 @@
 - [ ] [#44] Pareto sweep QA — produce a physics-enabled Pareto sweep (JSON + plot), archive it under `examples/` (or `runs/`) and document the workflow/results.
 - [ ] [#43] Nevergrad NGOpt baseline — run parity vs the challenge ALM baseline using the official evaluator, capture the metrics, and document the comparison.
 - [ ] [#42] DESC gradient trust-region baseline — execute a real DESC ladder with VMEC validation enabled, log the outcomes, and extend the docs with usage guidance and caveats.
+- [ ] Retire "toy" fallback defaults — tighten docs/tests around the development-only sphere objective (`src/constelx/cli.py:508-520`, `README.md:79`, `docs/ROADMAP.md:13`, `src/constelx/surrogate/train.py:66`) so CI and primary docs emphasize physics-backed runs.
+- [ ] Replace "stub" references — refresh guidance in `AGENTS.md:116`, `CONSTELX_ANALYSIS_REPORT.md:15`, `docs/GUIDELINE.md:532-543`, and `docs/STRATEGY.md:491,720` to describe production extension hooks instead of TODO stubs.
 
 ## Parallelizable Tasks
 - [ ] Backlog grooming — review the open issues monthly to keep Sequential and Completed lists honest.

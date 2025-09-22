@@ -306,7 +306,7 @@ Below is a **concise high‑level strategy** followed by a **detailed, repo‑al
 
 ## B. What’s already in your repo and how it maps
 
-Your `constelx` code (consolidated extract) already implements a solid skeleton:
+Your `constelx` code (consolidated extract) already implements a solid foundation:
 
 - **CLI & workflow.** `constelx agent run | ablate run | submit pack`. The agent loop drives proposal → evaluate (placeholder or physics) → log/export; the ablation harness toggles components or runs a JSON spec; the submitter packages top‑K designs into the expected ZIP.&#x20;
 - **Physics adapters.** Fallback metrics with an optional **“real evaluator” path** that imports `constellaration` scoring + VMEC utilities when available; Boozer **QS/QI heuristic proxies** (bounded, normalized).
