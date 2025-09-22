@@ -76,7 +76,7 @@ Evaluator knobs & parity
 
 Optimization
 - Boundary mode: `constelx opt cmaes --nfp 3 --budget 50 --seed 0`
-  (Dev-only synthetic sphere: `constelx opt cmaes --toy --budget 20 --seed 0`)
+  (Dev-only synthetic fixture: `constelx opt cmaes --toy --budget 20 --seed 0`)
 
 Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
 - Trust‑constr (2D helical coefficients):
@@ -106,7 +106,7 @@ Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
 Agent
 - Random search: `constelx agent run --nfp 3 --budget 6 --seed 0 --runs-dir runs`
 - Near-axis seeding: `constelx agent run --nfp 3 --budget 6 --seed-mode near-axis`
-- Data prior seeding: `constelx agent run --nfp 3 --budget 10 --seed-mode prior --seed-prior models/seeds_prior.joblib`
+- Data prior seeding: `constelx agent run --nfp 3 --budget 10 --seed-mode prior --seed-prior models/seeds_prior_hf_gmm.joblib` (default shipped; see `docs/SEEDS_PRIOR.md`)
 - CMA-ES (falls back to random if cma missing):
   `constelx agent run --nfp 3 --budget 20 --algo cmaes --seed 0`
 - Resume a run: `constelx agent run --nfp 3 --budget 10 --resume runs/<ts>`
@@ -206,7 +206,7 @@ Submission
 
 - Dev-only examples:
   - Synthetic example boundary: `constelx eval forward --example`
-  - Synthetic sphere objective: `constelx opt cmaes --toy`
+- Synthetic dev fixture objective: `constelx opt cmaes --toy`
 - Dev opt-in: set `CONSTELX_DEV=1` to enable dev-only paths.
 - Real-only enforcement: set `CONSTELX_ENFORCE_REAL=1` to reject placeholder/synthetic paths.
   - Packaging guard: `constelx submit pack` rejects runs with non‑real rows unless `--allow-dev` or `CONSTELX_DEV=1`.

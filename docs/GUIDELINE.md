@@ -397,7 +397,7 @@ Why this? PBFM shows (i) joint residual + flow‑matching without loss‑weight 
     • Local evaluation: re‑implement the organizer’s scoring logic (single‑objective re‑scaling with feasibility cutoff; multi‑objective HV). Validate on the baseline configs and ensure scores match (±1e‑6). ￼
     • Submission packaging: format Fourier series exactly as specified on the dataset card/paper; include NFP & symmetry flags. Validate with the repo’s utilities (to_vmec2000_wout_file etc.) for sanity plots. ￼
     • CI checks:
-    – Quick PCFM projection unit test on toy affine constraints (compares to closed‑form projection) – recovers ECI case. ￼
+    – Quick PCFM projection unit test on synthetic affine fixtures (compares to closed-form projection) – recovers ECI case. ￼
     – Surrogate Jacobian gradients finite‑difference check on a random batch.
     – VMEC++ mini‑batch run (3 candidates) both coarse/fine, ensure successful convergence and metric extraction.
 
@@ -468,9 +468,9 @@ constelx/
 │ │ └── dataset.py # HF dataset loading & parquet export
 │ ├── physics/
 │ │ ├── constel_api.py # thin wrapper around `constellaration`
-│ │ ├── constraints.py # stubs for aspect ratio, smoothness, etc.
-│ │ ├── pbfm.py # Physics-Based Flow Matching skeleton
-│ │ └── pcfm.py # Physics-Constrained Flow Matching skeleton
+│ │ ├── constraints.py # constraint proxies (aspect ratio, smoothness, etc.)
+│ │ ├── pbfm.py # Physics-Based Flow Matching helpers
+│ │ └── pcfm.py # Physics-Constrained Flow Matching (Gauss–Newton corrections)
 │ ├── optim/
 │ │ └── evolution.py # CMA-ES baseline (optional extra)
 │ └── surrogate/
@@ -536,10 +536,10 @@ Baselines and surrogates
 • MLP surrogate (surrogate/train.py) shows the full loop (boundary coeffs) → (one scalar metric). Replace with FNO/DiT later.
 
 Physics-constrained ML hooks (PBFM / PCFM)
-• PBFM training utilities (stub) in physics/pbfm.py: add a physics residual alongside flow‑matching and combine gradients with a conflict‑free update direction (ConFIG‑style) to avoid trading off distributional vs physics loss; includes temporal unrolling notes to improve the final prediction used for residuals and a stochastic sampler option at inference. ￼
-• PCFM sampling utilities (stub) in physics/pcfm.py: guide sampling with Gauss–Newton projections onto the constraint manifold, a reverse update via OT displacement, an optional relaxed penalty correction, and a final hard projection to satisfy equality constraints exactly at the end of the trajectory. Use this to enforce mass/flux/boundary consistency on generated fields. ￼
+• PBFM training utilities in physics/pbfm.py: add a physics residual alongside flow‑matching and combine gradients with a conflict-free update direction (ConFIG-style) to avoid trading off distributional vs physics loss; includes temporal unrolling notes to improve the final prediction used for residuals and a stochastic sampler option at inference. ￼
+• PCFM sampling utilities in physics/pcfm.py: guide sampling with Gauss–Newton projections onto the constraint manifold, a reverse update via OT displacement, an optional relaxed penalty correction, and a final hard projection to satisfy equality constraints exactly at the end of the trajectory. Use this to enforce mass/flux/boundary consistency on generated fields. ￼
 
-These stubs are documented inline with TODOs and function names that match the papers’ core steps, so your agent can implement them incrementally.
+These modules are documented inline with TODOs and function names that match the papers’ core steps, so your agent can extend them incrementally.
 
 ⸻
 
@@ -725,7 +725,7 @@ Target correctness, determinism, and incremental performance. Prefer small verti
 
 - `constelx.data`: dataset fetch/filter utilities, simple CSV index.
 - `constelx.eval`: thin wrappers around `constellaration` evaluator; one function per metric + `score()`.
-- `constelx.opt`: optimizers (`cmaes`, `bo_torch` stub).
+- `constelx.opt`: optimizers (CMA-ES, Nevergrad NGOpt, BoTorch qNEI, DESC trust-region).
 - `constelx.models`: baseline MLP + scaffolding for FNO/transformers.
 - `constelx.agents`: propose→simulate→select loop; checkpointing & resumability.
 - `constelx.cli`: `constelx [data|eval|opt|surrogate|agent] ...`
@@ -844,7 +844,7 @@ Milestone “Sprint 1 — Physics constraints & speed”
 • AC:
 • Pluggable correct(boundary) that solves one Gauss–Newton projection step; Jacobian via jax or torch.autograd depending on the boundary representation.
 • --pcfm-steps k applies k corrections before evaluation.
-• Small regression test on a toy constraint.
+• Small regression test on a synthetic constraint fixture.
 
 #9 Parallel evaluation & caching
 • Deliver: process‑pool evaluator + disk cache (diskcache).
@@ -856,13 +856,13 @@ Milestone “Sprint 2 — Surrogates & PBFM hooks”
 #10 Surrogate trainer skeleton
 • Deliver: constelx/models/mlp.py, constelx/surrogate/train.py, CLI constelx surrogate train|predict.
 • AC:
-• Overfits a micro‑dataset (e.g., 1k proposals) and predicts metrics with R² > 0.8 on toy target.
+• Overfits a micro‑dataset (e.g., 1k proposals) and predicts metrics with R² > 0.8 on a synthetic target.
 • Saves and loads a .pt or .pth file; unit test runs CPU‑only.
 
 #11 PBFM training hook (conflict‑free loss)
 • Deliver: constelx/models/pbfm.py with a conflict‑free combination of FM loss and residual; unrolling support.
 • AC:
-• Unit test checks gradients flow and residual decreases on a toy residual.
+• Unit test checks gradients flow and residual decreases on a synthetic residual fixture.
 
 ⸻
 

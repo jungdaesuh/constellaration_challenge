@@ -180,6 +180,14 @@ def data_prior_train(
         256,
         help="Quantile bins when using the flow generator.",
     ),
+    coeff_abs_max: float = typer.Option(
+        1.2,
+        help="Clamp magnitude of Fourier coefficients reconstructed from the prior.",
+    ),
+    base_radius_min: float = typer.Option(
+        0.05,
+        help="Minimum allowed base radius (R0) when reconstructing boundaries.",
+    ),
     min_feasible: int = typer.Option(
         8,
         help="Minimum feasible examples required to fit the generative model.",
@@ -226,6 +234,8 @@ def data_prior_train(
         gmm_components=int(gmm_components),
         quantile_bins=int(quantile_bins),
         random_state=int(seed),
+        coeff_abs_max=float(coeff_abs_max),
+        base_radius_min=float(base_radius_min),
     )
     spec = FeasibilitySpec(
         field=feasible_field,
@@ -1060,6 +1070,25 @@ def agent_run(
             )
         constraints = [dict(x) for x in raw]
 
+    seed_mode_norm = (seed_mode or "random").strip().lower()
+    if seed_mode_norm == "":
+        seed_mode_norm = "random"
+
+    if seed_mode_norm == "prior" and seed_prior is None:
+        for cand in (
+            Path("models/seeds_prior_hf_gmm.joblib"),
+            Path("models/seeds_prior_hf.joblib"),
+            Path("models/seeds_prior.joblib"),
+        ):
+            if cand.exists():
+                seed_prior = cand
+                break
+        if seed_prior is None:
+            raise typer.BadParameter(
+                "seed_mode=prior requires --seed-prior pointing to a trained model; "
+                "no default prior found under models/. Train one with 'constelx data prior-train'."
+            )
+
     if mf_proxy:
         try:
             from constelx.eval import MF_PROXY_METRICS
@@ -1119,7 +1148,7 @@ def agent_run(
             mf_quantile=mf_quantile,
             mf_max_high=mf_max_high,
             mf_proxy_metric=mf_proxy_metric,
-            seed_mode=seed_mode,
+            seed_mode=seed_mode_norm,
             seed_prior=seed_prior,
             seed_prior_min_feasibility=seed_prior_min_prob,
             seed_prior_batch_size=seed_prior_batch,
