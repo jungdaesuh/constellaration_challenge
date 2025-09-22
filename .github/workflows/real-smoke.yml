@@ -25,6 +25,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e '.[dev,physics]'
+      - name: Verify real evaluator available
+        run: |
+          python - <<'PY'
+          from importlib import import_module
+
+          for mod in [
+              "constellaration",
+              "constelx.physics.constel_api",
+          ]:
+              import_module(mod)
+          PY
       - name: Cache evaluator results
         uses: actions/cache@v4
         with:
@@ -35,15 +46,16 @@ jobs:
       - name: Real smoke run
         env:
           CONSTELX_USE_REAL_EVAL: "1"
+          CONSTELX_ENFORCE_REAL: "1"
         run: |
-          constelx agent run --nfp 3 --budget 3 --use-physics --problem p1 --seed 0 --runs-dir runs/smoke
+          constelx agent run --nfp 3 --budget 3 --use-physics --problem p1 --seed 0 --limit 8 --runs-dir runs/smoke
       - name: Check provenance
         run: |
           python - <<'PY'
-          import csv, pathlib, sys
-          p = next(pathlib.Path('runs/smoke').glob('*'))/ 'metrics.csv'
-          rows = list(csv.DictReader(p.open()))
-          assert rows, 'no rows'
-          assert all((r.get('source') == 'real') for r in rows), 'non-real rows present'
-          print('OK')
+          from pathlib import Path
+
+          from constelx.metrics import ensure_real_metrics_csv
+
+          run_root = next(Path('runs/smoke').glob('*'))
+          ensure_real_metrics_csv(run_root / 'metrics.csv')
           PY
