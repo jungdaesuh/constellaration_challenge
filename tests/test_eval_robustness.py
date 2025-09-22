@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
+import pytest
+
 from constelx.eval import _log_eval_event, forward, forward_many
 from constelx.eval import score as eval_score
 from constelx.physics import proxima_eval
@@ -70,7 +72,8 @@ def test_forward_respects_vmec_env_defaults(tmp_path: Path) -> None:
         os.environ.pop("CONSTELX_VMEC_HOT_RESTART", None)
 
 
-def test_proxima_forward_metrics_records_vmec_info() -> None:
+def test_proxima_forward_metrics_records_vmec_info(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CONSTELX_DEV", "1")
     b = example_boundary()
     metrics, info = proxima_eval.forward_metrics(
         b,
@@ -80,6 +83,7 @@ def test_proxima_forward_metrics_records_vmec_info() -> None:
     assert info["vmec_level"] == "medium"
     assert info["vmec_hot_restart"] is True
     assert info.get("vmec_restart_key") == "abc"
+    assert info["source"] == "placeholder"
     assert metrics  # basic sanity
 
 
