@@ -34,4 +34,3 @@
 - Update `AGENTS.md` to mirror README real-first quickstart and guards.
 - Split examples: move synthetic under `examples/dev/`, add `examples/real_quickstart/`.
 - Gate real-smoke by label (optional) or ensure physics extras are available in CI.
-

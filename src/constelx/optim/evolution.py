@@ -24,6 +24,13 @@ def score_from_boundary(b: Dict[str, Any]) -> float:
 
 
 def run_cma_es_baseline(steps: int = 50) -> float:
+    try:
+        from ..dev import require_dev_for_placeholder
+
+        require_dev_for_placeholder("CMA-ES placeholder baseline")
+    except RuntimeError as exc:
+        raise RuntimeError(str(exc)) from exc
+
     if cma is None:
         raise RuntimeError(
             "Install extra 'evolution' (pip install -e '.[evolution]') to use CMA-ES."
