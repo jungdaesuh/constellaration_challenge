@@ -80,6 +80,7 @@ This repo’s work is organized into phases with tracked issues. Use these to pl
 
 - Phase 2 — Optimizers
   - #40 (Constrained BoTorch qNEI), #43 (Nevergrad NGOpt), #44 (P3 scalarization + Pareto sweep)
+    - 2025-09-23: NGOpt real-eval parity run recorded (`score=0.0`, feasibility buffer `+4`). Follow-up tuning of the augmented-Lagrangian loop is required before closing #43.
 
 - Phase 3 — Proxies + Seeds
   - #46 (Boozer/QS–QI proxy library ✅), #41 (Integrate QS proxies – depends on #46), #51 (Metrics/constraints consolidation), #45 (Data‑driven seeds prior), #47 (Near‑axis seeding)

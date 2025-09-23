@@ -86,6 +86,7 @@ Aggressive plan to produce top-tier results within 24 hours. No warm‑ups.
 - [x] [#45] Data-driven seeds prior polish — rerun the prior against the HF Parquet cache, compare GMM vs flow outputs, wire the HF seeds into `agent run --seed-mode prior`, and update README/AGENTS with the findings.
 - [ ] [#44] Pareto sweep QA — produce a physics-enabled Pareto sweep (JSON + plot), archive it under `examples/` (or `runs/`) and document the workflow/results.
 - [ ] [#43] Nevergrad NGOpt baseline — run parity vs the challenge ALM baseline using the official evaluator, capture the metrics, and document the comparison.
+  - 2025-09-23: Logged first physics-backed NGOpt run (`score=0.0`, feasibility buffer `+4`). Need ALM comparison + tuning to resolve penalty saturation before closing.
 - [ ] [#42] DESC gradient trust-region baseline — execute a real DESC ladder with VMEC validation enabled, log the outcomes, and extend the docs with usage guidance and caveats.
 - [ ] Remove "toy" naming — rename to "synthetic dev fixture"; restrict usage to tests/dev smokes; keep one tiny synthetic boundary/objective only for deterministic unit tests.
   - [x] CLI docstring/help updated; surrogate/train comments updated.
@@ -199,3 +200,12 @@ Productionization checklist (enforcement)
 - Docs roadmap added (PR #68).
 - Dataset/surrogate speedups (PR #70).
 - Fix: boundary m=1 column mapping (PR #66).
+
+## Misleading outputs audit (2025-09-23)
+- Investigate hard-coded feasibility defaults in `src/constelx/physics/proxima_eval.py:221-229` and `:253-259`; ensure real Constellaration results propagate their true feasibility flags and reasons.
+- Remove blanket `setdefault("feasible", True)` / `setdefault("fail_reason", "")` writes in `src/constelx/physics/metrics.py:76-110` so enrichment cannot mask upstream failures.
+- Fix optimistic defaults in `src/constelx/eval/__init__.py` (`forward`:455-457, proxy path 647-649, placeholder paths 910-917, 939-944, 957-963, worker fallbacks 1122-1143) that mark proxy/placeholder results as feasible with empty fail reasons.
+- Update `_real_eval_task` fallback (`src/constelx/eval/__init__.py:1094-1129`) to bubble up errors instead of silently returning placeholder metrics flagged as real and feasible.
+- Ensure proxy evaluations surfaced through `forward_many` carry an explicit `phase=proxy` plus `feasible=None` (or similar) so downstream consumers cannot confuse them with physics-backed rows.
+- Make the scorer shim (`src/constelx/physics/proxima_eval.py:266-290`) emit a warning/flag when it falls back to the numeric-sum placeholder, avoiding trustworthy-looking scores when the official scorer import fails.
+- Audit `constel_api` placeholder fallbacks (`src/constelx/physics/constel_api.py:56-111`) so forced fallbacks cannot masquerade as successful real-evaluator calls.

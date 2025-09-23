@@ -90,6 +90,9 @@ Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
   scoring via the shared evaluator.
 - Nevergrad NGOpt (augmented-Lagrangian polisher):
   `constelx opt run --baseline ngopt --nfp 3 --budget 10`
+  *2025-09-23 parity note*: the first physics-backed run on P1 returned `score=0.0`
+  with a feasibility buffer violation of `+4.0`. See `CONSTELX_ANALYSIS_REPORT.md`
+  for the full log and tuning backlog.
 - BoTorch qNEI (feasibility-aware acquisition):
   `constelx opt run --baseline qnei --nfp 3 --budget 10`
   - FuRBO (constrained TR‑BO, single‑obj qNEI):
