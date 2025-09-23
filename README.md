@@ -36,7 +36,7 @@ Notes:
 - CLI (`constelx`): `data` (fetch/filter/csv), `eval` (forward metrics, scoring), `opt` (baselines), `surrogate` (train/serve simple models), `agent` (multi-step propose→simulate→select loop).
 - Physics wrappers: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects, plus bounded Boozer-space QS/QI proxies (`constelx.physics.booz_proxy`).
 - Proxy metrics: Boozer-space quasi-symmetry/isodynamic proxies with bounded residuals (`constelx.eval.boozer`). Real evaluator paths populate `proxy_qs_*` / `proxy_qi_*`; lightweight fallbacks mirror the schema for local tests.
-- Optimization: CMA-ES, DESC trust-region, Nevergrad NGOpt, and BoTorch qNEI baselines ship out of the box; additional optimizers plug into the same interface.
+- Optimization: CMA-ES, DESC trust-region, Nevergrad NGOpt, BoTorch qNEI, and FuRBO (constrained trust‑region BO) baselines ship out of the box; additional optimizers plug into the same interface.
 - Models: simple MLP baseline with documented extension points for FNO/transformers.
 - Hard-constraint tooling: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
 
@@ -92,6 +92,8 @@ Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
   `constelx opt run --baseline ngopt --nfp 3 --budget 10`
 - BoTorch qNEI (feasibility-aware acquisition):
   `constelx opt run --baseline qnei --nfp 3 --budget 10`
+  - FuRBO (constrained TR‑BO, single‑obj qNEI):
+  `constelx opt run --baseline furbo --nfp 3 --budget 60 --use-physics --problem p1 --tr-init 0.2 --batch 2`
   Requires `pip install -e ".[bo]"` (or `constelx[bo]`) and optimizes the same
   two-dimensional helical parameterization using a constraint-aware qNEI loop.
 - With physics path (requires problem id):

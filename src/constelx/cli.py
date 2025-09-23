@@ -641,6 +641,25 @@ def opt_run(
         None,
         help="Optional VMEC hot-restart key for shared state.",
     ),
+    # Trust-region BO (FuRBO) tuning (ignored by other baselines)
+    tr_init: Optional[float] = typer.Option(
+        None, help="FuRBO: initial trust-region radius (default 0.2)"
+    ),
+    tr_min: Optional[float] = typer.Option(
+        None, help="FuRBO: minimum trust-region radius (default 0.02)"
+    ),
+    tr_max: Optional[float] = typer.Option(
+        None, help="FuRBO: maximum trust-region radius (default 0.5)"
+    ),
+    tr_gamma_inc: Optional[float] = typer.Option(
+        None, help="FuRBO: multiplicative TR expand factor (default 1.6)"
+    ),
+    tr_gamma_dec: Optional[float] = typer.Option(
+        None, help="FuRBO: multiplicative TR shrink factor (default 0.5)"
+    ),
+    batch: Optional[int] = typer.Option(
+        None, help="FuRBO: number of parallel candidates per BO step (default 1)"
+    ),
 ) -> None:
     """Run an optimization baseline in boundary mode (2D helical coefficients)."""
     # Normalize tri-state flag
@@ -688,6 +707,28 @@ def opt_run(
             x, val = run_ngopt(cfg)
         elif baseline_key in {"qnei", "botorch", "bo", "botorch-qnei"}:
             x, val = run_botorch_qnei(cfg)
+        elif baseline_key in {"furbo", "trbo", "trust-region-bo"}:
+            # Import locally to avoid optional deps unless used
+            from .optim.furbo import FurboConfig, run_furbo
+
+            furbo_cfg = FurboConfig(
+                nfp=cfg.nfp,
+                budget=cfg.budget,
+                seed=cfg.seed,
+                use_physics=cfg.use_physics,
+                problem=cfg.problem,
+                cache_dir=cfg.cache_dir,
+                vmec_level=cfg.vmec_level,
+                vmec_hot_restart=cfg.vmec_hot_restart,
+                vmec_restart_key=cfg.vmec_restart_key,
+                tr_init=float(tr_init) if tr_init is not None else 0.2,
+                tr_min=float(tr_min) if tr_min is not None else 0.02,
+                tr_max=float(tr_max) if tr_max is not None else 0.5,
+                tr_gamma_inc=float(tr_gamma_inc) if tr_gamma_inc is not None else 1.6,
+                tr_gamma_dec=float(tr_gamma_dec) if tr_gamma_dec is not None else 0.5,
+                batch=int(batch) if batch is not None else 1,
+            )
+            x, val = run_furbo(furbo_cfg)
         elif baseline_key in {"desc", "desc-tr", "desc-trust", "desc_trust"}:
             from .optim.desc_trust_region import (
                 DescTrustRegionConfig,
