@@ -39,3 +39,6 @@ def test_agent_run_small_creates_artifacts(tmp_path: Path) -> None:
 
     best = json.loads((out / "best.json").read_text())
     assert "score" in best and isinstance(best["score"], (int, float))
+    assert "agg_score" in best and isinstance(best["agg_score"], (int, float))
+    assert "metrics" in best and isinstance(best["metrics"], dict)
+    assert best["metrics"].get("source") == "placeholder"

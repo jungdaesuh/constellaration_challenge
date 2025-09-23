@@ -12,7 +12,7 @@ ConStelX is a sophisticated Python CLI-first framework for ML + physics-based op
 - **Framework**: CLI-first using Typer with modular components
 - **Modules**:
   - `constelx.eval`: Physics evaluation and scoring
-  - `constelx.optim`: Optimization algorithms (CMA-ES, BoTorch stubs)
+  - `constelx.optim`: Optimization algorithms (CMA-ES, Nevergrad NGOpt, BoTorch qNEI, DESC trust-region)
   - `constelx.agents`: Multi-step optimization loops
   - `constelx.surrogate`: ML models for physics approximation
   - `constelx.submit`: Submission packaging for leaderboard

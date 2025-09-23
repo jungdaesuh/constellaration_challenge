@@ -36,7 +36,7 @@ Notes:
 - CLI (`constelx`): `data` (fetch/filter/csv), `eval` (forward metrics, scoring), `opt` (baselines), `surrogate` (train/serve simple models), `agent` (multi-step propose→simulate→select loop).
 - Physics wrappers: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects, plus bounded Boozer-space QS/QI proxies (`constelx.physics.booz_proxy`).
 - Proxy metrics: Boozer-space quasi-symmetry/isodynamic proxies with bounded residuals (`constelx.eval.boozer`). Real evaluator paths populate `proxy_qs_*` / `proxy_qi_*`; lightweight fallbacks mirror the schema for local tests.
-- Optimization: CMA-ES, DESC trust-region, Nevergrad NGOpt, and BoTorch qNEI baselines ship out of the box; additional optimizers plug into the same interface.
+- Optimization: CMA-ES, DESC trust-region, Nevergrad NGOpt, BoTorch qNEI, and FuRBO (constrained trust‑region BO) baselines ship out of the box; additional optimizers plug into the same interface.
 - Models: simple MLP baseline with documented extension points for FNO/transformers.
 - Hard-constraint tooling: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
 
@@ -76,7 +76,7 @@ Evaluator knobs & parity
 
 Optimization
 - Boundary mode: `constelx opt cmaes --nfp 3 --budget 50 --seed 0`
-  (Dev-only synthetic sphere: `constelx opt cmaes --toy --budget 20 --seed 0`)
+  (Dev-only synthetic fixture: `constelx opt cmaes --toy --budget 20 --seed 0`)
 
 Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
 - Trust‑constr (2D helical coefficients):
@@ -92,6 +92,8 @@ Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
   `constelx opt run --baseline ngopt --nfp 3 --budget 10`
 - BoTorch qNEI (feasibility-aware acquisition):
   `constelx opt run --baseline qnei --nfp 3 --budget 10`
+  - FuRBO (constrained TR‑BO, single‑obj qNEI):
+  `constelx opt run --baseline furbo --nfp 3 --budget 60 --use-physics --problem p1 --tr-init 0.2 --batch 2`
   Requires `pip install -e ".[bo]"` (or `constelx[bo]`) and optimizes the same
   two-dimensional helical parameterization using a constraint-aware qNEI loop.
 - With physics path (requires problem id):
@@ -106,7 +108,7 @@ Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
 Agent
 - Random search: `constelx agent run --nfp 3 --budget 6 --seed 0 --runs-dir runs`
 - Near-axis seeding: `constelx agent run --nfp 3 --budget 6 --seed-mode near-axis`
-- Data prior seeding: `constelx agent run --nfp 3 --budget 10 --seed-mode prior --seed-prior models/seeds_prior.joblib`
+- Data prior seeding: `constelx agent run --nfp 3 --budget 10 --seed-mode prior --seed-prior models/seeds_prior_hf_gmm.joblib` (default shipped; see `docs/SEEDS_PRIOR.md`)
 - CMA-ES (falls back to random if cma missing):
   `constelx agent run --nfp 3 --budget 20 --algo cmaes --seed 0`
 - Resume a run: `constelx agent run --nfp 3 --budget 10 --resume runs/<ts>`
@@ -206,7 +208,7 @@ Submission
 
 - Dev-only examples:
   - Synthetic example boundary: `constelx eval forward --example`
-  - Synthetic sphere objective: `constelx opt cmaes --toy`
+- Synthetic dev fixture objective: `constelx opt cmaes --toy`
 - Dev opt-in: set `CONSTELX_DEV=1` to enable dev-only paths.
 - Real-only enforcement: set `CONSTELX_ENFORCE_REAL=1` to reject placeholder/synthetic paths.
   - Packaging guard: `constelx submit pack` rejects runs with non‑real rows unless `--allow-dev` or `CONSTELX_DEV=1`.

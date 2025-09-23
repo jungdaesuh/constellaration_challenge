@@ -180,6 +180,14 @@ def data_prior_train(
         256,
         help="Quantile bins when using the flow generator.",
     ),
+    coeff_abs_max: float = typer.Option(
+        1.2,
+        help="Clamp magnitude of Fourier coefficients reconstructed from the prior.",
+    ),
+    base_radius_min: float = typer.Option(
+        0.05,
+        help="Minimum allowed base radius (R0) when reconstructing boundaries.",
+    ),
     min_feasible: int = typer.Option(
         8,
         help="Minimum feasible examples required to fit the generative model.",
@@ -226,6 +234,8 @@ def data_prior_train(
         gmm_components=int(gmm_components),
         quantile_bins=int(quantile_bins),
         random_state=int(seed),
+        coeff_abs_max=float(coeff_abs_max),
+        base_radius_min=float(base_radius_min),
     )
     spec = FeasibilitySpec(
         field=feasible_field,
@@ -631,6 +641,25 @@ def opt_run(
         None,
         help="Optional VMEC hot-restart key for shared state.",
     ),
+    # Trust-region BO (FuRBO) tuning (ignored by other baselines)
+    tr_init: Optional[float] = typer.Option(
+        None, help="FuRBO: initial trust-region radius (default 0.2)"
+    ),
+    tr_min: Optional[float] = typer.Option(
+        None, help="FuRBO: minimum trust-region radius (default 0.02)"
+    ),
+    tr_max: Optional[float] = typer.Option(
+        None, help="FuRBO: maximum trust-region radius (default 0.5)"
+    ),
+    tr_gamma_inc: Optional[float] = typer.Option(
+        None, help="FuRBO: multiplicative TR expand factor (default 1.6)"
+    ),
+    tr_gamma_dec: Optional[float] = typer.Option(
+        None, help="FuRBO: multiplicative TR shrink factor (default 0.5)"
+    ),
+    batch: Optional[int] = typer.Option(
+        None, help="FuRBO: number of parallel candidates per BO step (default 1)"
+    ),
 ) -> None:
     """Run an optimization baseline in boundary mode (2D helical coefficients)."""
     # Normalize tri-state flag
@@ -678,6 +707,28 @@ def opt_run(
             x, val = run_ngopt(cfg)
         elif baseline_key in {"qnei", "botorch", "bo", "botorch-qnei"}:
             x, val = run_botorch_qnei(cfg)
+        elif baseline_key in {"furbo", "trbo", "trust-region-bo"}:
+            # Import locally to avoid optional deps unless used
+            from .optim.furbo import FurboConfig, run_furbo
+
+            furbo_cfg = FurboConfig(
+                nfp=cfg.nfp,
+                budget=cfg.budget,
+                seed=cfg.seed,
+                use_physics=cfg.use_physics,
+                problem=cfg.problem,
+                cache_dir=cfg.cache_dir,
+                vmec_level=cfg.vmec_level,
+                vmec_hot_restart=cfg.vmec_hot_restart,
+                vmec_restart_key=cfg.vmec_restart_key,
+                tr_init=float(tr_init) if tr_init is not None else 0.2,
+                tr_min=float(tr_min) if tr_min is not None else 0.02,
+                tr_max=float(tr_max) if tr_max is not None else 0.5,
+                tr_gamma_inc=float(tr_gamma_inc) if tr_gamma_inc is not None else 1.6,
+                tr_gamma_dec=float(tr_gamma_dec) if tr_gamma_dec is not None else 0.5,
+                batch=int(batch) if batch is not None else 1,
+            )
+            x, val = run_furbo(furbo_cfg)
         elif baseline_key in {"desc", "desc-tr", "desc-trust", "desc_trust"}:
             from .optim.desc_trust_region import (
                 DescTrustRegionConfig,
@@ -1060,6 +1111,25 @@ def agent_run(
             )
         constraints = [dict(x) for x in raw]
 
+    seed_mode_norm = (seed_mode or "random").strip().lower()
+    if seed_mode_norm == "":
+        seed_mode_norm = "random"
+
+    if seed_mode_norm == "prior" and seed_prior is None:
+        for cand in (
+            Path("models/seeds_prior_hf_gmm.joblib"),
+            Path("models/seeds_prior_hf.joblib"),
+            Path("models/seeds_prior.joblib"),
+        ):
+            if cand.exists():
+                seed_prior = cand
+                break
+        if seed_prior is None:
+            raise typer.BadParameter(
+                "seed_mode=prior requires --seed-prior pointing to a trained model; "
+                "no default prior found under models/. Train one with 'constelx data prior-train'."
+            )
+
     if mf_proxy:
         try:
             from constelx.eval import MF_PROXY_METRICS
@@ -1119,7 +1189,7 @@ def agent_run(
             mf_quantile=mf_quantile,
             mf_max_high=mf_max_high,
             mf_proxy_metric=mf_proxy_metric,
-            seed_mode=seed_mode,
+            seed_mode=seed_mode_norm,
             seed_prior=seed_prior,
             seed_prior_min_feasibility=seed_prior_min_prob,
             seed_prior_batch_size=seed_prior_batch,

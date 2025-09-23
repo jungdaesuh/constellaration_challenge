@@ -10,7 +10,7 @@ The repository ships production-ready pathways with lightweight fallbacks for lo
 1. **Dataset access**: `constelx data fetch` to materialize a filtered subset (e.g., NFP=3) into Parquet.
 2. **Forward model sanity checks**: `constelx eval forward --example` and `--random` to verify metrics computation.
 3. **Baselines**:
-   - Start with `constelx opt cmaes --nfp 3 --budget 50` (boundary mode) for physics-driven runs. Use the `--toy` sphere objective only when validating local installations.
+   - Start with `constelx opt cmaes --nfp 3 --budget 50` (boundary mode) for physics-driven runs. Use the synthetic dev fixture (`--toy`) only when validating local installations.
    - Train a simple surrogate with `constelx surrogate train` (MLP baseline). A separate `surrogate eval` may be added later.
 4. **Agent loop**: glue propose→simulate→select with `constelx agent run` (supports random and CMA‑ES, resume, correction hooks).
 5. **Physics‑constrained generation (optional)**:

@@ -1,0 +1,1399 @@
+                                             ConStellaration: A dataset of QI-like stellarator
+                                              plasma boundaries and optimization benchmarks
+
+
+                                                Santiago A. Cadena   Andrea Merlo Emanuel Laude Alexander Bauer
+                                                   Atul Agrawal    Maria Pascu Marĳa Savtchouk Enrico Guiraud
+                                                            Lukas Bonauer Stuart Hudson Markus Kaiser
+arXiv:2506.19583v1 [cs.LG] 24 Jun 2025
+
+
+
+
+                                                                               Proxima Fusion
+                                                                    {scadena, amerlo}@proximafusion.com
+
+
+
+                                                                                       Abstract
+                                                  Stellarators are magnetic confinement devices under active development to deliver
+                                                  steady-state carbon-free fusion energy. Their design involves a high-dimensional,
+                                                  constrained optimization problem that requires expensive physics simulations and
+                                                  significant domain expertise. Recent advances in plasma physics and open-source
+                                                  tools have made stellarator optimization more accessible. However, broader com-
+                                                  munity progress is currently bottlenecked by the lack of standardized optimization
+                                                  problems with strong baselines and datasets that enable data-driven approaches,
+                                                  particularly for quasi-isodynamic (QI) stellarator configurations, considered as a
+                                                  promising path to commercial fusion due to their inherent resilience to current-
+                                                  driven disruptions. Here, we release an open dataset of diverse QI-like stellarator
+                                                  plasma boundary shapes, paired with their ideal magnetohydrodynamic (MHD)
+                                                  equilibria and performance metrics. We generated this dataset by sampling a
+                                                  variety of QI fields and optimizing corresponding stellarator plasma boundaries.
+                                                  We introduce three optimization benchmarks of increasing complexity: (1) a single-
+                                                  objective geometric optimization problem, (2) a “simple-to-build" QI stellarator,
+                                                  and (3) a multi-objective ideal-MHD stable QI stellarator that investigates trade-offs
+                                                  between compactness and coil simplicity. For every benchmark, we provide refer-
+                                                  ence code, evaluation scripts, and strong baselines based on classical optimization
+                                                  techniques. Finally, we show how learned models trained on our dataset can effi-
+                                                  ciently generate novel, feasible configurations without querying expensive physics
+                                                  oracles. By openly releasing the dataset (https://huggingface.co/datasets/
+                                                  proxima-fusion/constellaration) along with benchmark problems and base-
+                                                  lines (https://github.com/proximafusion/constellaration), we aim to
+                                                  lower the entry barrier for optimization and machine learning researchers to engage
+                                                  in stellarator design and to accelerate cross-disciplinary progress toward bringing
+                                                  fusion energy to the grid.
+
+
+                                         1   Introduction
+                                         Fusion energy promises virtually limitless, carbon-free power by harness-
+                                         ing the same process that powers the sun. Magnetic confinement fusion
+                                         approaches trap a fully ionized gas (plasma) within magnetic fields to
+                                         sustain the conditions required for fusion. Among these, stellarators
+                                         confine the plasma solely through external coils, which produce three-
+                                         dimensional, twisted magnetic flux surfaces (Figure 1). Unlike tokamaks, Figure 1: Examples of
+                                         stellarators do not rely on large internal plasma currents, thereby avoiding diverse stellarator plasma
+                                         associated instabilities [1, 2]. However, this advantage comes with a boundaries.
+
+                                         Preprint. Under review.
+trade-off. Designing stellarators involves a significantly more complex parameter space: shaping
+the three-dimensional plasma boundary to satisfy multiple physics and engineering constraints is a
+high-dimensional, constrained, optimization problem.
+Stellarator design has been mainly approached as a two-stage process [3]. In stage one, the magnetic
+field that confines the plasma is optimized; in stage two, electromagnetic coils are designed to
+reproduce this field. Stage one, the focus of this work, optimizes a three-dimensional surface that
+defines the boundary condition for the plasma equilibrium magnetic field. The surface is commonly
+parameterized by a truncated Fourier series in cylindrical coordinates (Figure 2, left). A solution
+to the ideal-magnetohydrodynamics (MHD) equations is then computed to determine the magnetic
+field inside the plasma [4]. VMEC [5] and its recent C++ re-implementation [6] are classical physics
+codes that compute a solution to the ideal-MHD model (Figure 2). From the MHD solution, we
+can compute multiple magnetic field properties, e.g. the rotational transform, that we can iteratively
+optimize to target a desired value in an outer optimization loop by updating the plasma boundary.
+
+
+
+
+Figure 2: A plasma boundary is defined by the coefficients 𝑅𝑚𝑛 and 𝑍 𝑚𝑛 of a truncated Fourier
+series in cylindrical coordinates, parametrized by the lab-frame poloidal angle 𝜃 and toroidal angle
+𝜙. This boundary is passed to the VMEC++ code [5, 6] to compute an ideal-MHD equilibrium. In
+this example, the configuration is stellarator symmetric, meaning that 𝑅(𝜃, 𝜙) = 𝑅(−𝜃, −𝜙) and
+𝑍 (𝜃, 𝜙) = − 𝑍 (−𝜃, −𝜙), and the number of repeated field periods (𝑁fp ) is four. The ideal-MHD
+equilibrium defines the magnetic field throughout the plasma volume, comprising nested magnetic
+flux surfaces on which magnetic field lines (depicted in white) lie. We can then compute various
+metrics of interest from the equilibrium field.
+
+Unlike tokamaks, classical or unoptimized stellarators lack toroidal symmetry and inherently suffer
+from poor confinement of high-energy particles: such fusion-born particles often escape the plasma
+volume, striking plasma facing components before depositing their energy back into the plasma.
+This prevents a self-sustained fusion process. The root cause lies in the behavior of particles
+trapped in poloidal, toroidal, or helical magnetic wells, which fail to sample the entire magnetic
+flux surface, experiencing a net radial drift that leads to gradually loosing confinement. These
+challenges are a direct consequence of the non-axisymmetric magnetic geometry of stellarators.
+A particularly effective strategy to suppress these drifts is to optimize stellarators imposing the
+condition of omnigeneity [7, 8], which requires only that the average radial drift of trapped particles
+vanishes. Among omnigenous fields, quasi-isodynamicity (QI) fields have poloidally closed contours
+of the magnetic field strength [9–11], which results in a vanishing net plasma toroidal current. The
+advantages of even approximate QI fields have been validated in laboratory experiments, most notably
+in the Wendelstein-7X (W7-X) stellarator [12]. These compelling benefits have made the QI symmetry
+a target in the design of next-generation stellarator-based fusion power plants [13, 14].
+Major advances in open-source software frameworks for stellarator design have been presented in
+recent years. For example, SIMSOPT [15] provides high-level interfaces to link plasma equilibrium
+solvers such as VMEC [5] or SPEC [16] with numerical optimizers. Moreover, tools like DESC [17]
+
+
+                                                  2
+have leveraged end-to-end automatic differentiation [18] to simultaneously compute MHD equilibria
+and target desired properties. However, these tools still present a high entry barrier for practitioners
+in the optimization and machine learning communities, as they require substantial domain knowledge
+to make meaningful contributions.
+Although significant progress has been made in defining what to target in stellarator design, there
+remains a lack of standardized benchmark problems and evaluation protocols to address stage one
+optimization. This contrasts to other areas of machine learning, where well-defined challenges have
+driven rapid and measurable progress [19]. Establishing such benchmarks in stellarator research
+would offer significant value by enabling systematic comparisons of optimization methods across
+a range of problem formulations. For instance, different representations (parameterizations) of the
+plasma boundary may vary in their effectiveness: some may better avoid local minima, while others
+may facilitate faster or more reliable convergence to feasible solutions. Our contributions are as
+follows.
+
+         • We release a diverse dataset of about 158,000 QI-like stellarator plasma boundaries with their
+           associated ideal-MHD equilibria (in vacuum) computed with VMEC++ [6] and corresponding
+           figures of merit.
+         • We propose three optimization problems of varying complexity and kind, and release
+           associated code.
+         • We provide a set of baselines for these optimization problems using classical optimization
+           approaches.
+         • We show that models trained on our dataset can generate novel configurations that satisfy
+           optimization constraints, even when only a handful of training examples do.
+
+1.1     Related work
+
+Stellarator datasets. Beyond works releasing a small set of plasma configurations [20, 21], large-
+scale datasets have focused on stellarators with quasi-axisymmetry (QA) or quasi-helical symmetry
+(QH) [22–24], but not QI. These studies rely on an expansion about the magnetic axis [25–30] (the
+field line representing the innermost flux surface) that reduces the 3D MHD equations into a 1D
+ordinary differential equation, which is much faster to solve. Landreman [22] sampled ∼ 500𝑘
+QA and QH configurations, while Giuliani [23], Giuliani et al. [24] sampled ∼ 370𝑘 QA and QH
+configurations as part of the QUASR dataset 1. To the best of our knowledge, none of these datasets
+include publicly available computed ideal-MHD equilibria.
+
+Stellarator optimization benchmarks. While several studies have proposed sets of optimization
+problems to test optimization strategies or shape parameterizations (e.g.[31]), and others have surveyed
+optimization approaches [32], there are no standardized benchmarks for stellarator optimization.
+
+1.2     Background
+
+In Boozer coordinates [33] (Figure 3), magnetic field strength contours of QI fields exhibit three
+characteristic properties: (i) the contours close poloidally, appearing as vertically closed loops in a
+Boozer plot; (ii) the magnetic field strength maxima align along straight vertical lines; and (iii) the
+arc length between points of equal magnetic field strength along a field line depends only on the flux
+surface (i.e., it is invariant across field lines) [11]. The targets in Figure 4 and Figure 5 are examples
+of precise QI fields.
+
+2      A diverse dataset of QI-like plasma boundaries and ideal-MHD equilibria
+Directly sampling the Fourier coefficients representing the plasma boundary (Figure 2) would very
+rarely lead to good (or even valid) stellarator fields [34]. To generate a large and diverse dataset of
+stellarator configurations that are approximately QI, we aim to sample diverse QI fields and other
+geometrical properties, and search for plasma boundaries that produce those target fields. These target
+generative factors include the aspect ratio 𝐴 (the ratio between the major and minor toroidal radii:
+      1https://quasr.flatironinstitute.org
+
+
+                                                    3
+Figure 3: Visualization of the iso-contours of the magnetic field strength 𝐵 and a few magnetic field
+lines (black). In the Boozer coordinate system [33], the original poloidal and toroidal angles are
+transformed into Boozer angles 𝜃 𝐵 and 𝜙 𝐵 , respectively, to straighten the magnetic field lines (black).
+
+
+𝑅0 /𝑎), the edge rotational transform 𝜄edge (how far a field line moves around the “short” (poloidal)
+way along the torus each time it goes once around the “long” (toroidal) way), the mirror ratio Δedge
+(defined as (𝐵max − 𝐵min )/(𝐵max + 𝐵min )), and the maximum elongation 𝜖max (the largest cross-section
+elongation across toroidal angles [11]).
+For a given target QI field and set of properties, we generated surfaces either through physics-informed
+heuristics (Section 3 of Goodman et al. [11]), fast near-axis expansion models [29, 35] (using pyQSC
+2), or through stage-one optimization runs. We passed all resulting surfaces to our forward model
+running VMEC++ at high fidelity (Section 3) to obtain ideal-MHD equilibria and metrics of interest
+(Figure 2). All configurations are limited to poloidal and toroidal mode numbers of at most four.
+Assuming stellarator symmetry, 𝑅𝑚,𝑛 = 0; 𝑚 = 0, 𝑛 < 0 and 𝑍 𝑚,𝑛 = 0; 𝑚 = 0, 𝑛 ≤ 0, and fixing the
+major radius 𝑅0,0 = 1, the total number of degrees of freedom is 80 (Figure 2, left).
+
+Sampling targets. To sample diverse QI fields, we used the parameterization for an omnigenous
+field from Dudt et al. [8], imposing stellarator symmetry (Appendix A.1). Notably, our fields span a
+diverse range of magnetic well shapes and show variation in how these wells are stretched along field
+lines (Figure 4). The other target properties were drawn from a uniform distribution spanning a range
+of sensible values (Table 6).
+
+
+
+
+Figure 4: Four optimized samples from our dataset with 1, 2, 4, and 5 field periods. A finite
+computational budget for each sample generation leads to an approximate QI field at the plasma
+boundary. All field plots share the same color bar and the boundary cross-section labels correspond
+to those in Figure 2.
+
+
+Optimization. We implemented stage-one optimization approaches seeded with heuristic or near-
+axis expansion models using DESC or VMEC++ -based frameworks and varying objective settings
+(Appendix A.2). Multiple optimization approaches with finite budget increased diversity in the
+resulting boundaries, even for the same set of target field and properties (Figure 5). Each DESC run
+   2https://github.com/rogeriojorge/pyQIC
+
+
+                                                    4
+took three minutes on average on a 32 vCPU 128GB RAM machine, while each VMEC++ run took
+around one hour on average on a 32 vCPU 32GB RAM machine.
+
+Results. We began by sampling 100k target sets. From this pool, we generated 30k and 49k plasma
+boundary candidates using our heuristic and near-axis-expansion models, respectively. We then
+applied the DESC optimizer twice to each target–once per initialization strategy–yielding an additional
+88k optimized boundaries. A subset of 15k targets was also optimized with VMEC++ in the loop,
+seeded by rotating ellipses. Altogether, this produced roughly 182k candidate configurations, and we
+evaluated equilibria and metrics with the high-fidelity forward model on 158k of them without errors.
+Among these successful cases, 15k, 20k, 68k, 27k, and 28k configurations have 1, 2, 3, 4, and 5 field
+periods, respectively. Our resulting dataset spans a broad range of target metrics (Fig. 6, left) and
+reveals strong correlations between prescribed targets and the achieved values (Figure 6, right).
+
+
+                                                                                  Figure 5: Diverse
+                                                                                  plasma configurations
+                                                                                  obtained for the same
+                                                                                  targets. Optimization
+                                                                                  methods vary in initial-
+                                                                                  ization strategy, frame-
+                                                                                  work, and settings.
+                                                                                  While some runs fa-
+                                                                                  vor matching the tar-
+                                                                                  get QI field and mirror
+                                                                                  ratio, other runs better
+                                                                                  match the remaining
+                                                                                  target properties.
+
+
+
+
+Figure 6: Distribution of metrics and comparisons between targets and outcomes. Pair plots show
+only optimized configurations. Black lines represent the identity. 𝐴, 𝜖 𝑚𝑎𝑥 , and Δ𝑒𝑑𝑔𝑒 were used as
+upper-bound constraints during optimization, while the rotational transform was enforced as equality
+constraint.
+
+
+
+3   Optimization benchmark
+Stellarator design can be naturally formulated as a multi-objective constrained optimization prob-
+lem [32]. The objectives and constraints arise from both engineering and economic considerations
+(e.g., limiting the aspect ratio to achieve a compact device) as well as physics-based requirements (e.g.,
+ensuring a stable MHD plasma). The design process involves translating stakeholder expectations into
+
+
+                                                    5
+a consistent set of feasible requirements, and navigating the trade-offs among conflicting objectives in
+a manner that aligns with the overarching design goals.
+We introduce three prototypical stellarator design tasks with increasing complexity each involving
+different subsets of design metrics (Table 1): (1) Geometric, (2) Simple-to-Build QI, and (3)
+MHD-stable QI, detailed in Table 2.
+
+Forward Model We leverage VMEC++ [6] to compute vacuum 3D ideal-MHD equilibria, scaled
+to 𝑅0 = 1 m, 𝐵0 ≃ 1 T. Each vacuum equilibrium is fully defined by a single flux-surface mapping
+ΣΘ : (𝜃, 𝜑) ↦−→ (𝑅, 𝜙, 𝑍), where 𝜃 and 𝜑 are generic poloidal and toroidal angles, respectively,
+and Θ denotes the set of surface parameters, and (𝑅, 𝜙, 𝑍) are cylindrical coordinates. In VMEC++ ,
+the truncated Fourier series presented in Figure 2 is used for ΣΘ . However, for the purpose of these
+optimization benchmark problems, we make no assumptions about the functional form of ΣΘ . All
+optimization problems have the form:
+
+                                      min ( 𝑓1 (Θ), 𝑓2 (Θ), . . .)
+                                       Θ                                                              (1)
+                                     subject to    𝑐 𝑖 (Θ) ≤ 𝑐∗𝑖 , ∀𝑖 ,
+where 𝑓𝑖 : R𝐷 → R are objective functions, 𝑐 𝑖 : R𝐷 → R are constraint functions, and 𝑐∗𝑖 are
+constraint targets. Each objective and constraint depends directly on the magnetic field, which in turn
+is determined by the surface mapping that defines the boundary condition of the ideal-MHD model.
+
+      (a) Geometric problem                (b) Simple-to-build QI                (c) MHD-stable QI
+                                                                                            
+          min 𝜖max                         min e
+                                               𝐿 ∇𝐵                        min −e
+                                                                                𝐿 ∇𝐵 , 𝐴
+           Θ                                Θ                                Θ
+          s.t. 𝐴 ≤ 𝐴∗ ,               s.t. 𝜄˜ ≥ 𝜄˜∗ , QI ≤ QI ∗       s.t. 𝜄˜ ≥ 𝜄˜∗ , QI ≤ QI ∗
+                                                     ∗       ∗
+               𝛿¯ ≤ 𝛿¯∗ ,                   Δ≤Δ, 𝐴≤𝐴                       Δ ≤ Δ∗ , 𝑊MHD ≥ 0
+                                                       ∗
+              𝜄˜ ≥ 𝜄˜∗ .                    𝜖max ≤ 𝜖max                     ⟨𝜒∇𝑟 ⟩ ≤ ⟨𝜒∇𝑟 ⟩ ∗
+Table 2: Constrained optimization problem formulations. See Table 1 for semantic associations to the
+symbols. All metrics are a function of the boundary
+
+3.1   Problem 1: Geometric
+                                                                Metric                          Acronym
+To onboard contributors to stel-
+larator optimization, we propose        minimum    normalized   magnetic  gradient scale length   𝐿 ∇B
+                                                                                                  e
+                                       edge rotational transform over number of field periods        𝜄˜
+an intuitive, purely geometric                                aspect ratio                          𝐴
+problem (Table 2) where we look                            max elongation                         𝜖 max
+for stellarators that minimize the                   edge magnetic mirror ratio                     Δ
+maximum elongation 𝜖 𝑚𝑎𝑥 for                        quasi isodynamicity residual                   QI
+a given aspect ratio 𝐴, edge                                 vacuum well                        𝑊𝑀 𝐻 𝐷
+rotational transform 𝜄˜, and av-            flux compression in regions of bad curvature         ⟨𝜒∇𝑟 ⟩
+erage triangularity 𝛿. ¯ 𝛿¯ aver-                        average triangularity                      𝛿¯
+ages the triangularity between the
+two stellarator-symmetric cross-          Table 1: Equilibrium field metrics and their acronyms.
+sections (𝜙 = 0 and 𝜙 = 𝜋/𝑁fp ),
+and 𝜄˜ is the edge rotational transform per field period.
+
+3.2   Problem 2: Single-objective simple-to-build QI stellarator
+
+Stellarators are notoriously challenging to construct due to their inherently three-dimensional magnetic
+geometry. Optimized designs like W7-X demand millimeter coil tolerances [36]. Moreover, the
+development and assembly of such devices can run into cost and schedule overruns driven by
+manufacturing complexity, potentially leading to the cancellation of entire projects as it was the
+case for the NCSX stellarator [37, 38]. This raises a key question: Can optimized QI stellarators be
+realized using simpler, easier-to-manufacture coils?
+In a fusion reactor, the spatial region between the plasma and coils must accommodate a divertor,
+first wall (plasma-facing material components), neutron shielding, tritium-breeding blanket, and
+
+
+                                                      6
+magnets structural support. These layers, together with the magnet superconducting technologies
+(e.g., low-temperature superconductors (LTS) or high-temperature superconductors (HTS)), impose
+geometric and engineering constraints on coil design. The feasibility of a stellarator configuration
+depends not only on plasma performance but also on how easily the required magnetic fields can be
+generated using manufacturable coils.
+Not all magnetic fields are equally coil-friendly. We colloquially refer to coil simplicity as the ease
+with which modular coils can be placed and shaped to produce the desired field. For example, surfaces
+with high coil simplicity allow coils to be located further from the plasma and require lower curvature
+and fewer tight bends. We quantify coil simplicity using the normalized magnetic field gradient scale
+length on the plasma boundary, following Kappel et al. [39]. This metric has proven effective in
+guiding optimization towards configurations with simpler, more feasible coil designs [13, 14].
+Historically, QI stellarators have required particularly complex coil geometries compared to other
+quasi-symmetric configurations [40–43]. This benchmark problem challenges that assumption by
+optimizing for precise QI fields that can be generated with simple coils.
+Table 2 introduces the problem definition,
+                                    ∫ ∫          where e𝐿 ∇B is magnetic field gradient scale length [39]
+                                 1         2
+normalized by 𝑎/𝑁fp , QI = 4 𝜋 2         𝑟 𝑄𝐼 d𝜃 d𝜙 quantifies deviation from a precise QI field follow-
+ing Goodman et al. [11], and Δ is the magnetic mirror ratio at the plasma boundary. We normalize the
+objective by 𝑎/𝑁fp to ensure scale invariance across configurations with varying field period numbers.
+Since a QI field is easier to achieve for large aspect ratio configurations, highly elongated flux surfaces,
+and large mirror ratios [11], we explicitly control these quantities through inequality constraints.
+
+3.3   Problem 3: Multi-objective ideal-MHD stable QI stellarators
+
+This optimization problem introduces two new critical constraints for reactor relevant stellarator
+design: ideal-MHD plasma stability and mitigation of turbulent transport.
+Despite the fact that QI configurations eliminate current-driven instabilities (“disruptions") that often
+affect tokamak designs, pressure-driven instabilities persist [9], thus limiting access to high fusion
+power density regimes. To optimize for ideal-MHD stability, we adopt the vacuum magnetic well
+𝑊MHD as a proxy [25, 44]
+Turbulent transport, expected to be dominated by ion-temperature gradient (ITG) turbulence in QI
+stellarators [12, 45, 46], limits the achievable fusion gain. Landreman et al. [47] demonstrated how
+purely geometrical quantities correlate strongly with the turbulence heat flux. As a constraint, we
+compute the “flux-surface compression in regions of bad curvature" given by 𝜒∇𝑟 = H (B × 𝜅 ·
+∇𝛼) ∥∇𝑟 ∥ 22 as a simple geometric proxy. Here H is the Heavyside step function, B × 𝜅 · ∇𝛼 is
+the curvature drift [48] , 𝜅 is the magnetic field curvature, 𝛼 is the field line label, and ∇𝑟 is the
+flux compression. A positive curvature drift represents regions of bad curvature. This quantity is
+evaluated on a single-flux surface at 𝜌 = 𝑟/𝑎 = 0.7.
+In quasi-poloidal (QP) and QI stellarators, 𝐿 ∇B ∝ 𝑅0 /𝑁fp = 𝑎 𝐴/𝑁fp 3. More compact devices (low 𝐴)
+reduce capital cost per unit output power [49, 50] but increase coil complexity (proxied by 𝐿 ∇B ). This
+trade-off motivates a Pareto-optimal search [51] between coil simplicity and compactness. Table 2
+introduces the problem definition, where ⟨·⟩ denotes flux-surface averaging.
+
+3.4   Evaluation metric
+
+We release evaluation code that scores candidate plasma boundaries across benchmarks. Our
+evaluation code requires the plasma boundaries to be represented by the truncated Fourier series in
+cylindrical coordinates (see Figure 2).
+
+Single-objective scoring For single-objective problems, we map each design point to a bounded
+scalar score value 𝑠(Θ) given by:
+                                              
+                                        ℎ 𝑓 (Θ) if 𝑐˜𝑖 (Θ) ≤ 𝜀, ∀𝑖,
+                               𝑠(Θ) =                                                      (2)
+                                        0        otherwise,
+   3Assuming that the characteristic length scale of the magnetic field gradient satisfies 𝐿 ∇B ∝ 𝐿 ∇𝐵 , and
+considering a QP magnetic field where the magnetic field strength forms a single well, i.e., 𝐵(𝜑) = 𝐵0 cos(𝑁fp 𝜑),
+where 𝜑 is a field-aligned coordinate.
+
+
+                                                        7
+where 𝑓 (Θ) is the objective value, ℎ : R → [0, 1] is a linear map that rescales objectives into the
+[0, 1] interval (higher is better), 𝑐˜𝑖 = (𝑐 𝑖 − 𝑐∗𝑖 )/𝑐∗𝑖 is the 𝑖-th normalized constraint violation, and 𝜀 is
+a relative tolerance.
+
+Multi-objective scoring For multi-objective problems, we compute the hypervolume (HV) indica-
+tor [52, 53] over feasible solutions (i.e., those with 𝑐˜𝑖 (Θ) ≤ 𝜀, ∀𝑖 ) using a fixed reference point in
+objectives space.
+
+4       Optimization baselines
+We now provide baselines for the three optimization problems. For all experiments, we target
+stellarators with three field periods and seed optimizations from rotating ellipse configurations. For
+the single-objective case (problem 1 and 2), we benchmark three approaches: a) gradient-based (where
+the gradient of the objective and constraint functions is approximated via forward finite-differences)
+trust-region interior point constrained optimizer [54] (scipy-trust-constr); b) gradient-free
+COBYQA [55] algorithm (scipy-COBYQA); and c) Augmented Lagrangian method (ALM) [56, 57]
+with a non-Euclidean proximal regularization [58, 59] employing the NGOpt gradient-free meta-
+algorithm from Nevergrad [60] (ALM-NGOpt), to solve the subproblem. Implementation specifics are
+provided in the Appendix A.4.
+Only ALM-NGOpt obtains feasible solutions, while both scipy-trust-constr and scipy-COBYQA
+did not (Table 3 and 5). Consequently, our leaderboard (Table 5) reports results exclusively for
+ALM-NGOpt. Figure 9 shows the optimized QI field and a representative coilset for the simple-to-build
+problem.
+The multi-objective problem is decomposed into multiple single-objective problems by treating the
+aspect ratio as an inequality constraint. Using ALM-NGOpt, we found solutions for four of these
+instances. A sparse Pareto front is provided in Figure 7.
+
+                                                         Simple-to-build                          Geometric problem
+              Method
+                                                𝐿˜ ∇𝐵 ↑        norm. constr. viol.          𝜖 max ↓   norm. constr. viol.
+              scipy-trust-constr                 2.10∗                 3.25∗                 15.0∗          0.301∗
+              scipy-COBYQA                       14.4∗                 2.04∗                 1.27            0.953
+              ALM-NGOpt                           8.61                 0.009                 1.27           0.0002
+Table 3: Comparison of baselines for the simple-to-build and the geometric problem. ↑ means that
+a quantity is maximized and ↓ means that a quantity is minimized. Final optimized boundaries for
+which VMEC++ failed to converge at high fidelity (i.e., the fidelity with which we score a plamsa
+boundary) are represented with ∗ ; for them, we report the objective and constraint values from a
+lower fidelity equilibrium computation. scipy-trust-constr and scipy-COBYQA do not produce
+feasible solutions. SciPy-based optimizers ran for ∼ 40 hours on a machine with 4 vCPUs. ALM-NGOpt
+ran on a 96 vCPU machine for 18 hours (geometric problem) and 34 hours (simple-to-build).
+
+        12
+                                                                      12.5                            Figure 7: Pareto-front for
+                                    20
+        10
+                                                                                                      the multi-objective optimiza-
+                                  L̃∇B
+
+
+
+
+                                                                      10.0
+    A
+
+
+
+
+                                                                  A
+
+
+
+
+         8                          10                                                                tion problem of MHD stable
+                                                                       7.5                            QI stellarators obtained with
+         6                                                                                            ALM-NGOpt.
+               5           10             0    100000 200000                 0    100000 200000
+                   L̃∇B                       function calls                     function calls
+
+
+
+                                                         Table 4: Objectives and constraint violations for ALM-NGOpt
+    𝐴↓       𝐿˜ ∇𝐵 ↑      norm. constr. viol.
+                                                         on the multi-objective problem. Optimization was carried
+    6.02      2.98               0.104                   out by solving a sequence of single-objective problems,
+    7.93      5.60              0.00130                  converting one objective into a constraint 𝐴 ≤ 𝐴∗ with
+    9.98      8.45                0.0                    𝐴∗ ∈ {6, 8, 10, 12}. All instances were run on a 96-vCPU
+    11.9      11.1              0.00210                  machine for 15–24 h.
+
+
+                                                                       8
+5   Generative modeling of feasible domains without access to the oracle
+We present a method to generate feasible configurations using
+learning-based models trained on the dataset, without relying                                                             Problem               Score ↑
+on a zero-order oracle (e.g., VMEC++ ) and with limited feasible                                                          Geometrical             0.969
+examples. We test whether this method can produce many valid                                                              Simple-to-build         0.431
+configurations to support downstream tasks like optimization.                                                             MHD-stable              130.0
+We reduce the input dimensionality using Principal Component            Table 5: ALM-NGOpt scores.
+Analysis (PCA) [61] to obtain a low-dimensional latent space.
+In this space, Random Forest classifiers [62, 63] estimate the probability that a configuration is
+feasible. Thresholding this probability (e.g., above 0.8) defines a soft feasible region. Within this
+region, we fit a Gaussian mixture model (GMM) to capture the distribution of feasible points. Treating
+the GMM as a prior and the classifier output as a quasi-likelihood, we use adaptive Markov chain
+Monte Carlo (MCMC) [9, 64] to sample from the posterior. This allows us to generate several new
+configurations that are likely to satisfy constraints without querying the oracle ( Figure 8). Details are
+given in Appendix A.5 with full algorithmic details in Algorithm 2.
+
+                                                                                             2.0
+
+                                                                                             1.8
+
+                                                                                             1.6
+
+                                                                                             1.4
+                                                                                       PC2
+
+
+
+                                                                                             1.2
+
+                                                                                             1.0
+
+                                                                                             0.8                                     MCMC Samples
+                                                                                                                                     VMEC
+                                                                                             0.6                                     Feasible Points in Dataset
+
+
+                                                                                                   0.6          0.7     0.8    0.9     1.0         1.1            1.2
+                                                                                                                              PC1
+
+              (a) geometric problem.                                                                            (b) Simple-to-build problem.
+Figure 8: Posterior estimate of the feasible region in the first two PCA dimensions for two constraint-
+relaxed problems. Blue crosses represent feasible configurations from the dataset. Green dots show
+MCMC samples predicted to be feasible (classifier confidence ≥ 0.99), and red dots indicate predicted
+infeasible samples. Green contours reflect the estimated density of feasible samples. Oracle validation
+of randomly selected MCMC points are marked with green (feasible) and red (infeasible) crosses.
+Both the geometric and simple-to-build problems are initially relaxed, with 41 and 52 feasible points
+available in the dataset (out of ∼ 160𝑘).
+
+When applied to relaxed versions of both the Geometric and Simple-to-build problems, our method
+successfully identifies regions of design space in which sample points are judged feasible by both the
+Random Forest classifier and the oracle model (i.e., using VMEC++ ) (Figure 8).
+
+6   Discussion                                                       6                                           1.90
+                                                                                                                 1.82
+                                          Boozer poloidal angle θB
+
+
+
+
+                                                                     5
+                                                                                                                 1.74                                      |B|[T]
+We released a diverse dataset of ap-                                 4                                           1.66                                             1.90
+proximately 158𝑘 QI-like stellarator                                 3                                           1.58
+plasma boundaries, associated metrics,                               2                                           1.50
+                                                                                                                 1.42                                             1.58
+and ideal-MHD equilibria. Along-                                     1                                           1.34
+side the dataset, we introduced a set                                0                                           1.26
+                                                                         0.0     0.5    1.0        1.5    2.0
+                                                                               Boozer toroidal angle φB                                                           1.27
+of stellarator optimization tasks with
+strong classical baselines, designed        Figure 9: Left: Optimized QI magnetic field contours at the
+to facilitate rigorous and reproducible     plasma boundary in Boozer coordinates for the simple-to-
+evaluation of stellarator optimization      build optimization problem. Right: A representative coilset
+strategies. We further demonstrated a       designed to reproduce the target magnetic field.
+
+                                                                                       9
+data-driven generative approach that can produce feasible plasma configurations without querying
+an expensive physics oracle. Nonetheless, several limitations remain. First, the degree of QI in the
+dataset is inherently limited by the finite-budget, optimization-based sampling process used during
+generation. Second, the dataset is limited to plasma boundaries; while these are usually the seeds in
+stellarator design, a consistent design also requires many additional systems (e.g., electromagnetic
+coils).
+
+Acknowledgments
+This work was independently funded by Proxima Fusion, and supported by the BMBF grant FUSKI
+(FKZ: 13F1012A).
+
+References
+ [1] John Wesson and David J Campbell. Tokamaks, volume 149. Oxford university press, 2011.
+ [2] TC Hender, JC Wesley, J Bialek, A Bondeson, AH Boozer, RJ Buttery, A Garofalo, TP Goodman,
+     RS Granetz, Y Gribov, et al. Mhd stability, operational limits and disruptions. Nuclear fusion,
+     47(6):S128, 2007.
+ [3] S. A. Henneberg, S. R. Hudson, D. Pfefferlé, and P. Helander. Combined plasma–coil
+     optimization algorithms. Journal of Plasma Physics, 87(2):905870226, 2021. doi: 10.1017/
+     S0022377821000271.
+ [4] Jeffrey P Freidberg. ideal MHD. Cambridge University Press, 2014.
+ [5] Steven P Hirshman and JC Whitson. Steepest descent moment method for three-dimensional
+     magnetohydrodynamic equilibria. Technical report, Oak Ridge National Lab.(ORNL), Oak
+     Ridge, TN (United States), 1983.
+ [6] Jonathan Schilling. The numerics of vmec++. arXiv preprint arXiv:2502.04374, 2025.
+ [7] John R Cary and Svetlana G Shasharina. Omnigenity and quasihelicity in helical plasma
+     confinement systems. Physics of Plasmas, 4(9):3323–3333, 1997.
+ [8] Daniel W Dudt, Alan G Goodman, Rory Conlin, Dario Panici, and Egemen Kolemen. Magnetic
+     fields with general omnigenity. Journal of Plasma Physics, 90(1):905900120, 2024.
+ [9] Per Helander and J Nührenberg. Bootstrap current and neoclassical transport in quasi-isodynamic
+     stellarators. Plasma Physics and Controlled Fusion, 51(5):055004, 2009.
+[10] Per Helander. Theory of plasma confinement in non-axisymmetric magnetic fields. Reports on
+     Progress in Physics, 77(8):087001, 2014.
+[11] Alan G Goodman, K Camacho Mata, Sophia A Henneberg, Rogerio Jorge, Matt Landreman,
+     GG Plunk, HM Smith, RJJ Mackenbach, CD Beidler, and P Helander. Constructing precisely
+     quasi-isodynamic magnetic fields. Journal of Plasma Physics, 89(5):905890504, 2023.
+[12] CD Beidler, HM Smith, A Alonso, T Andreeva, J Baldzuhn, MNA Beurskens, Matthias
+     Borchardt, SA Bozhenkov, Kai Jakob Brunner, Hannes Damm, et al. Demonstration of reduced
+     neoclassical energy transport in wendelstein 7-x. Nature, 596(7871):221–226, 2021.
+[13] J Lion, J-C Anglès, L Bonauer, A Bañón Navarro, SA Cadena Ceron, R Davies, M Drevlak,
+     N Foppiani, J Geiger, A Goodman, et al. Stellaris: A high-field quasi-isodynamic stellarator for
+     a prototypical fusion power plant. Fusion Engineering and Design, 214:114868, 2025.
+[14] CC Hegna, DT Anderson, EC Andrew, A Ayilaran, A Bader, TD Bohm, K Camacho Mata,
+     JM Canik, L Carbajal, A Cerfon, et al. The infinity two fusion pilot plant baseline plasma
+     physics design. Journal of Plasma Physics, pages 1–44, 2025.
+[15] Matt Landreman, Bharat Medasani, Florian Wechsung, Andrew Giuliani, Rogerio Jorge, and
+     Caoxiang Zhu. Simsopt: a flexible framework for stellarator optimization. Journal of Open
+     Source Software, 6(65):3525, 2021.
+
+
+                                                 10
+[16] S. R. Hudson, R. L. Dewar, G. Dennis, M. J. Hole, M. McGann, G. von Nessi, and S. Lazerson.
+     Computation of multi-region relaxed magnetohydrodynamic equilibria. Physics of Plasmas, 19
+     (11):112502, 11 2012. ISSN 1070-664X. doi: 10.1063/1.4765691. URL https://doi.org/
+     10.1063/1.4765691.
+[17] DW Dudt and E Kolemen. Desc: a stellarator equilibrium solver. Physics of Plasmas, 27(10),
+     2020.
+[18] Mathieu Blondel and Vincent Roulet. The Elements of Differentiable Programming, March
+     2024. URL http://arxiv.org/abs/2403.14606. arXiv:2403.14606 [cs].
+[19] Moritz Hardt. The emerging science of machine learning benchmarks. Online at https:
+     //mlbenchmarks.org, 2025. Manuscript.
+[20] Richard Nies, Elizabeth J Paul, Dario Panici, Stuart R Hudson, and Amitava Bhattacharjee.
+     Exploration of the parameter space of quasisymmetric stellarator vacuum fields through adjoint
+     optimisation. Journal of Plasma Physics, 90(6):905900620, 2024.
+[21] Stefan Buller, Matt Landreman, John Kappel, and Rahul Gaur. A family of quasi-axisymmetric
+     stellarators with varied rotational transform. Journal of Plasma Physics, 91(1):E18, 2025.
+[22] Matt Landreman. Mapping the space of quasisymmetric stellarators using optimized near-axis
+     expansion. Journal of Plasma Physics, 88(6):905880616, 2022.
+[23] Andrew Giuliani. Direct stellarator coil design using global optimization: application to a
+     comprehensive exploration of quasi-axisymmetric devices. Journal of Plasma Physics, 90(3):
+     905900303, 2024.
+[24] Andrew Giuliani, Eduardo Rodríguez, and Marina Spivak. A comprehensive exploration of
+     quasisymmetric stellarators and their coil sets. arXiv preprint arXiv:2409.04826, 2024.
+[25] Claude Mercier. Equilibrium and stability of a toroidal magnetohydrodynamic system in the
+     neighbourhood of a magnetic axis. Nuclear Fusion, 4(3):213, 1964.
+[26] DA Garren and Allen H Boozer. Existence of quasihelically symmetric stellarators. Physics of
+     Fluids B, 3(10):2822–2834, 1991.
+[27] David Alan Garren and AH Boozer. Magnetic field strength of toroidal plasma equilibria.
+     Physics of Fluids B: Plasma Physics, 3(10):2805–2821, 1991.
+[28] Matt Landreman. Optimized quasisymmetric stellarators are consistent with the garren–boozer
+     construction. Plasma Physics and Controlled Fusion, 61(7):075001, 2019.
+[29] Matt Landreman and Wrick Sengupta. Constructing stellarators with quasisymmetry to high
+     order. Journal of Plasma Physics, 85(6):815850601, 2019.
+[30] Eduardo Rodríguez, Wrick Sengupta, and Amitava Bhattacharjee. Constructing the space of
+     quasisymmetric stellarators through near-axis expansion. Plasma Physics and Controlled Fusion,
+     65(9):095004, 2023.
+[31] Sophia A Henneberg, Per Helander, and Michael Drevlak. Representing the boundary of
+     stellarator plasmas. Journal of Plasma Physics, 87(5):905870503, 2021.
+[32] Rory Conlin, Patrick Kim, Daniel W Dudt, Dario Panici, and Egemen Kolemen. Stellarator
+     optimization with constraints. Journal of Plasma Physics, 90(5):905900501, 2024.
+[33] Allen H Boozer. Plasma equilibrium with rational magnetic surfaces. Technical report, Princeton
+     Plasma Physics Lab.(PPPL), Princeton, NJ (United States), 1981.
+[34] P Curvo, DR Ferreira, and R Jorge. Using deep learning to design high aspect ratio fusion
+     devices. Journal of Plasma Physics, 91(1):E38, 2025.
+[35] R Jorge, W Sengupta, and M Landreman. Near-axis expansion of stellarator equilibrium at
+     arbitrary order in the distance to the axis. Journal of Plasma Physics, 86(1):905860106, 2020.
+
+
+                                                11
+[36] Thomas Rummel, Konrad Risse, Holger Viebke, Torsten Braeuer, and Johann Kisslinger.
+     Accuracy of the construction of the superconducting coils for wendelstein 7-x. IEEE transactions
+     on applied superconductivity, 14(2):1394–1398, 2004.
+
+[37] National compact stellarator experiment (ncsx) project closeout report. Technical report,
+     Princeton Plasma Physics Laboratory, August 2009. URL https://ncsx.pppl.gov/NCSX_
+     Engineering/CloseOut_Documentation/Closeout_Report_20080910.pdf. Prepared
+     for the U.S. Department of Energy Office of Science.
+
+[38] GH Neilson, CO Gruber, Jeffrey H Harris, DJ Rej, RT Simmons, and RL Strykowsky. Lessons
+     learned in risk management on ncsx. IEEE transactions on plasma science, 38(3):320–327,
+     2010.
+
+[39] John Kappel, Matt Landreman, and Dhairya Malhotra. The magnetic gradient scale length
+     explains why certain plasmas require close external magnetic coils. Plasma Physics and
+     Controlled Fusion, 66(2):025018, 2024.
+
+[40] Haifeng Liu, Akihiro Shimizu, Mitsutaka Isobe, Shoichi Okamura, Shin Nishimura, Chihiro
+     Suzuki, Yuhong Xu, Xin Zhang, Bing Liu, Jie Huang, et al. Magnetic configuration and modular
+     coil design for the chinese first quasi-axisymmetric stellarator. Plasma and Fusion Research, 13:
+     3405067–3405067, 2018.
+
+[41] Rogerio Jorge, GG Plunk, M Drevlak, M Landreman, J-F Lobsien, K Camacho Mata, and
+     P Helander. A single-field-period quasi-isodynamic stellarator. Journal of Plasma Physics, 88
+     (5):175880504, 2022.
+
+[42] Florian Wechsung, Matt Landreman, Andrew Giuliani, Antoine Cerfon, and Georg Stadler.
+     Precise stellarator quasi-symmetry can be achieved with electromagnetic coils. Proceedings of
+     the National Academy of Sciences, 119(13):e2202084119, 2022.
+
+[43] Alexander Vyacheslav Wiedman, Stefan Buller, and Matt Landreman. Coil optimization for
+     quasi-helically symmetric stellarator configurations. arXiv preprint arXiv:2311.16386, 2023.
+
+[44] John M Greene. A brief review of magnetic wells. Comments on Plasma Physics and Controlled
+     Fusion, 17:389–402, 1997.
+
+[45] Marc NA Beurskens, Sergey A Bozhenkov, O Ford, Pavlos Xanthopoulos, Alessandro Zocco,
+     Yuri Turkin, A Alonso, Craig Beidler, I Calvo, Daniel Carralero, et al. Ion temperature clamping
+     in wendelstein 7-x electron cyclotron heated plasmas. Nuclear Fusion, 61(11):116072, 2021.
+
+[46] Alan G Goodman, Pavlos Xanthopoulos, Gabriel G Plunk, Håkan Smith, Carolin Nührenberg,
+     Craig D Beidler, Sophia A Henneberg, Gareth Roberg-Clark, Michael Drevlak, and Per Helander.
+     Quasi-isodynamic stellarators with low turbulence as fusion reactor candidates. PRX Energy, 3
+     (2):023010, 2024.
+
+[47] Matt Landreman, Jong Youl Choi, Caio Alves, Prasanna Balaprakash, R Michael Churchill, Rory
+     Conlin, and Gareth Roberg-Clark. How does ion temperature gradient turbulence depend on
+     magnetic geometry? insights from data and machine learning. arXiv preprint arXiv:2502.11657,
+     2025.
+
+[48] GT Roberg-Clark, P Xanthopoulos, and GG Plunk. Reduction of electrostatic turbulence in
+     a quasi-helically symmetric stellarator via critical gradient optimization. Journal of Plasma
+     Physics, 90(3):175900301, 2024.
+
+[49] WR Spears and JA Wesson. Scaling of tokamak reactor costs. Nuclear Fusion, 20(12):1525,
+     1980.
+
+[50] JP Freidberg, FJ Mangiarotti, and J Minervini. Designing a tokamak fusion reactor—how does
+     plasma physics fit in? Physics of Plasmas, 22(7), 2015.
+
+[51] Joaquim RRA Martins and Andrew Ning. Engineering design optimization. Cambridge
+     University Press, 2021.
+
+
+                                                 12
+[52] Eckart Zitzler and Lothar Thiele. Multiobjective optimization using evolutionary algorithms—a
+     comparative case study. In International conference on parallel problem solving from nature,
+     pages 292–301. Springer, 1998.
+[53] Miqing Li and Xin Yao. Quality evaluation of solution sets in multiobjective optimisation: A
+     survey. ACM Computing Surveys (CSUR), 52(2):1–38, 2019.
+[54] Richard H Byrd, Mary E Hribar, and Jorge Nocedal. An interior point algorithm for large-scale
+     nonlinear programming. SIAM Journal on Optimization, 9(4):877–900, 1999.
+[55] Tom M Ragonneau. Model-based derivative-free optimization methods and software. arXiv
+     preprint arXiv:2210.12018, 2022.
+[56] Magnus R Hestenes. Multiplier and gradient methods. Journal of optimization theory and
+     applications, 4(5):303–320, 1969.
+[57] Michael JD Powell. A method for nonlinear constraints in minimization problems. Optimization,
+     pages 283–298, 1969.
+[58] R Tyrrell Rockafellar. Augmented lagrangians and applications of the proximal point algorithm
+     in convex programming. Mathematics of operations research, 1(2):97–116, 1976.
+[59] Emanuel Laude and Panagiotis Patrinos. Anisotropic proximal point algorithm. arXiv preprint
+     arXiv:2312.09834, 2023.
+[60] J. Rapin and O. Teytaud. Nevergrad - A gradient-free optimization platform. https://GitHub.
+     com/FacebookResearch/Nevergrad, 2018.
+[61] Hervé Abdi and Lynne J Williams. Principal component analysis. Wiley interdisciplinary
+     reviews: computational statistics, 2(4):433–459, 2010.
+[62] Christopher M Bishop and Nasser M Nasrabadi. Pattern recognition and machine learning,
+     volume 4. Springer, 2006.
+[63] Kevin P Murphy. Probabilistic machine learning: Advanced topics. MIT press, 2023.
+[64] Russel E Caflisch. Monte Carlo and quasi-Monte Carlo methods. Acta numerica, 7:1–49, 1998.
+[65] F. Pedregosa, G. Varoquaux, A. Gramfort, V. Michel, B. Thirion, O. Grisel, M. Blondel,
+     P. Prettenhofer, R. Weiss, V. Dubourg, J. Vanderplas, A. Passos, D. Cournapeau, M. Brucher,
+     M. Perrot, and E. Duchesnay. Scikit-learn: Machine learning in Python. Journal of Machine
+     Learning Research, 12:2825–2830, 2011.
+[66] W Keith Hastings. Monte Carlo sampling methods using markov chains and their applications.
+     1970.
+[67] Heikki Haario, Eero Saksman, and Johanna Tamminen. An adaptive metropolis algorithm.
+     Bernoulli, pages 223–242, 2001.
+
+
+
+
+                                               13
+A     Technical Appendices
+A.1     Data generation: sampling omnigenous poloidal fields
+
+We leverage the parameterization of an omnigenous poloidal field from Dudt et al. [8] in which the
+1D magnetic well on each flux surface is represented by a spline on the interval [−𝜋/2, 𝜋/2]. The
+well is symmetric about its minimum, so it can simply be parameterized between 𝐵𝑚𝑖𝑛 and 𝐵𝑚𝑎𝑥 .
+The full omnigenous field is then built by “morphing" this one-dimensional well across magnetic
+field lines via a computational coordinate ℎ, which is expanded in a Chebyshev basis (radial index
+𝑙) and Fourier bases (poloidal index 𝑚, toroidal index 𝑛) with coefficients 𝑥𝑙𝑚𝑛 [8]. In practice, we
+generate new omnigenous-poloidal fields by sampling both the spline knots and 𝑥𝑙𝑚𝑛 coefficients. To
+enforce stellarator symmetry (invariance under simultaneous flips of the poloidal and toroidal Boozer
+angles), we set the coefficients of the odd terms of the Fourier basis along the toroidal direction to
+zero, namely 𝑥𝑙𝑚𝑛 = 0 ∀𝑛 >= 0.
+To produce a variety of monotonically increasing 1D well shapes, we draw knot positions from
+Beta(𝛼, 𝛽) cumulative distribution functions and then rescaled them to lie between 𝐵𝑚𝑖𝑛 and 𝐵𝑚𝑎𝑥 .
+Finally, we fix the mean magnetic field at 1 T and sample the mirror ratio Δ to determine the pair
+(𝐵𝑚𝑖𝑛 , 𝐵𝑚𝑎𝑥 ).
+The ranges from which we sample these parameters can be found in Table 6.
+
+                                         Parameter    Min     Max
+                                          𝑁fp           1       5
+                                         𝜄˜            0.1     0.3
+                                          𝐴            4.0    12.0
+                                         𝜖 max         4.0     7.0
+                                         𝛼Beta         2.0     6.0
+                                          𝛽Beta        2.0     6.0
+                                         Δedge         0.1     0.4
+          Table 6: Ranges of sampling parameters with both minimum and maximum values.
+
+
+A.2     Data generation: stage one optimizations using DESC [17]
+
+Given a set of target quantities:
+                                          𝑇 = 𝜄∗ , 𝐴∗ , 𝐸 ∗ , O ∗
+                                                                    
+
+where
+
+         • 𝜄∗ is the desired edge rotational transform,
+         • 𝐴∗ is the target aspect ratio,
+         • 𝐸 ∗ is the maximum elongation,
+         • O ∗ is the target omnigenous field,
+
+we ran numerical optimizations to find a toroidal boundary surface Σ (parameterized in a Fourier-𝑅𝑍
+basis) that simultaneously matches these goals. Note that the mirror ratio Δ is defined within O ∗ .
+
+A.2.1     Initial Guess Generation
+An initial boundary Σ0 is generated either by
+
+        1. Heuristic QP model (Section III from Goodman et al. [11]): prescribing average major
+           radius 𝑅0 , aspect ratio 𝐴∗ , elongation 𝐸 ∗ , mirror ratio, torsion, and field periods; or
+        2. Near-Axis Expansion (NAE) using pyQSC 4: specifying 𝐴∗ , 𝐸 ∗ , 𝜄∗ , mirror ratio, field
+           periods, and mode cutoffs.
+
+This yields a smooth Σ0 expressed in the FourierRZToroidalSurface format of DESC.
+    4https://github.com/rogeriojorge/pyQIC
+
+
+                                                     14
+A.2.2   Equilibrium Solve
+Starting from Σ0 , we form the DESC equilibrium object and solve the force balance
+                                                                  
+                                E (Σ) = Equilibrium Ψ, Σ, 𝑀, 𝑁
+and solve the magnetostatic force-balance equations using
+                                                solve(force)
+                                           E −−−−−−−−−−→ E sol .
+
+A.2.3   Objective Function
+On the solved equilibrium E sol , we define individual objective terms:
+                            𝑅0 (Σ)                                                     2
+                   𝐽 𝐴 (Σ) =       ,                                 𝑓 𝐴 = 𝑤 𝐴 𝐽 𝐴 − 𝐴∗ ,          (3)
+                             𝑎(Σ)
+                                 𝑏(𝜑; Σ)                                               2
+                   𝐽𝐸 (Σ) = max          ,                           𝑓 𝐸 = 𝑤 𝐸 𝐽𝐸 − 𝐸 ∗ ,          (4)
+                             𝜑 𝑎(𝜑; Σ)
+                                                                                        2
+                   𝐽 𝜄 (Σ) = 𝜄 [E sol ],                              𝑓 𝜄 = 𝑤 𝜄 𝐽 𝜄 − 𝜄∗ ,         (5)
+                                                                                  2
+                  J O (Σ) = O E sol , O ∗ ,
+                                        
+                                                                     𝑓 O = 𝑤 O JO 2,               (6)
+where 𝑎, 𝑏 are the minor/major half-axes of the cross-section, 𝜑 is the toroidal angle, and the
+omnigenous residual J O is computed by the DESC Omnigenity objective using the target field O ∗ .
+                                    2
+The omnigenity contribution J O 2 is given by
+                               𝑁 𝜂 ∑︁
+                                   𝑁𝛼
+                           2
+                               ∑︁                                                         2
+                                         𝑤(𝜂𝑖 ) 𝐵eq (𝜌0 , 𝜂𝑖 , 𝛼 𝑗 ) − 𝐵∗ (𝜌0 , 𝜂𝑖 , 𝛼 𝑗 ) ,
+                                               
+                      JO 2 =
+                               𝑖=1 𝑗=1
+
+with the poloidal weight
+                           𝜂weight + 1   𝜂weight − 1                                       
+                𝑤(𝜂) =                 +             cos 𝜂          so 𝑤 ≡ 1 if 𝜂weight = 1 ,
+                                2             2
+where 𝐵eq is the field strength of the equilibrium in (𝜌, 𝜂, 𝛼) coordinates and 𝐵∗ is the perfectly-
+                                                                                        √︁
+omnigenous    target field generated by OmnigenousField as in [8]. The residuals 𝑟 𝑖 𝑗 = 𝑤(𝜂𝑖 ) 𝐵eq −
+𝐵∗ 𝑖 𝑗 are evaluated on the same (𝜂, 𝛼)-grid used by the target field.
+  
+
+On a solved equilibrium E sol at a fixed flux surface 𝜌 = 𝜌0 , we assemble a least-squares objective
+                                     L (Σ) = 𝑓 𝐴 + 𝑓 𝐸 + 𝑓 𝜄 + 𝑓 O .
+
+Internally, DESC invokes JAX to compute residuals, leveraging automatic differentiation to compute
+gradients.
+The objective is then wrapped in an augmented-Lagrangian least-squares optimizer (lsq-auglag)
+[32] to minimize ∥𝑟 ∥ 22 alongside the other terms.
+
+A.2.4   Constraints
+To enforce vacuum equilibrium and fix global invariants, the following constraints are imposed:
+                               𝑅0,0 (Σ) = 1,             (FixBoundaryR)
+                               𝑗 ∥ (Σ) = 0,              (CurrentDensity)
+                               𝑝(Σ) = 0,                 (FixPressure)
+                               𝐽tor (Σ) = 0,             (FixCurrent)
+                               Ψ(Σ) = const.,            (FixPsi)
+where each is implemented via the corresponding DESC linear-objective wrapper.
+
+
+                                                       15
+A.2.5    Nonlinear Optimization
+We employ DESC’s lsq-auglag optimizer [32] to solve
+                                 min L (Σ)            s.t. all linear constraints,
+                                   Σ
+
+using automatic differentiation and a trust-region least-squares augmented-Lagrangian scheme.
+Iterations continue until convergence (up to 200 iterations by default), yielding the optimized
+boundary Σ∗ .
+Our exact implementation               is      available          at   https://github.com/proximafusion/
+constellaration.
+
+A.3     Stage one optimizations using VMEC++ [6] in the loop
+
+We carried out optimizations using the NGOpt algorithm from the Nevergrad 5 library. To improve
+convergence, we preconditioned the problem using a diagonal scaling matrix as detailed in Section
+A.2.1. We parameterized the boundary with up to four poloidal and toroidal Fourier modes and
+ran the optimization on a single machine equipped with 32 vCPUs and 32GB of RAM. Each run is
+allocated a time budget of approximately 1 h.
+The optimization minimizes the following objective function:
+                                   ∫ 2 𝜋 ∫ 𝜋/𝑁fp
+                         𝑓 (Θ) =                          (𝐵(𝜃, 𝜙) − 𝐵∗ (𝜃, 𝜙)) 2 𝑑𝜃 𝑑𝜙
+                                       0        0
+                                       ∫ 2𝜋                                     2
+                                   +                max 𝐵(𝜃, 𝜙) − 𝐵(𝜃, 𝜙 = 0)         𝑑𝜃
+                                           0         𝜙
+                                                     2
+                                            𝐴 − 𝐴∗
+                                       
+                                   +                                                                 (7)
+                                              𝐴∗
+                                                             !2
+                                            𝜄edge − 𝜄∗edge
+                                   +
+                                        𝜄∗edge
+                                                     ∗ 2
+                                               𝜖max − 𝜖max
+                                   + max 0,         ∗        .
+                                                  𝜖max
+
+where 𝐵 denotes the magnetic field strength from the ideal-MHD equilibrium in Boozer coordinates,
+and 𝐵∗ represents the target omnigenous magnetic field strength. The quantities 𝐴, 𝜄edge , and 𝜖max
+correspond to the aspect ratio, edge rotational transform, and maximum elongation, respectively, with
+asterisks denoting their target values. The additional target on the maxima of the magnetic field
+strength guides the optimizer towards more QI fields.
+In the optimization loop, we used VMEC++ within the forward model. To speed up the generation
+of the optimized boundary, we run VMEC++ at a lower resolution than the one used to score plasma
+boundaries in optimization benchmarks (e.g. reduced number of flux surfaces, higher required force
+tolerance to converge).
+Due to the constrained time budget, the optimization may not fully minimize the objective function
+but added the desired diversity to the dataset.
+Our exact implementation               is      available          at   https://github.com/proximafusion/
+constellaration.
+
+A.4     Optimization baselines
+
+A.4.1    Implementation details and hyperparameters
+In this section we provide implementation details for the optimization baseline. For the SciPy-based
+optimizers, we use default parameters, and set the maximum number of iterations to a large value.
+   5https://github.com/facebookresearch/nevergrad
+
+
+                                                             16
+We implement a variant of the proximal ALM [58] where the quadratic proximal term is replaced by
+a trust-region constraint. This can be seen as an instance of the anisotropic proximal ALM [59]. The
+modification is essential for improving convergence when using evolutionary algorithms (such as
+NGOpt), as it restricts the sampling of new candidate solutions to a region around the current iterate.
+As the degrees of freedom Θ operate on different scale, we precondition the problem with a diagonal
+matrix diag(Λ) where the entries Λ decay exponentially. We define the rescaled variables as
+e := diag(Λ) −1 Θ and 𝑓˜( Θ)
+Θ                         e := 𝑓 (diag(Λ) Θ)
+                                          e and 𝑐˜𝑖 ( Θ)
+                                                      e := 𝑐 𝑖 (diag(Λ) Θ).
+                                                                        e In addition, we apply a
+base-10 logarithmic transformation to the QI constraint.
+In each iteration, the algorithm alternates between primal and dual updates. For each constraint 𝑐˜𝑖 ,
+it tracks a penalty parameter 𝜌𝑖𝑘 and a Lagrange multiplier 𝑦 𝑖𝑘 . The complete algorithm is given
+in Algorithm 1.
+
+Algorithm 1 non-Euclidean proximal augmented Lagrangian method
+Require: Θ0 ∈ R𝐷 , 𝜌 0 ∈ R++    𝑚 , 𝑦 0 ∈ R𝑚 , 𝛿 > 0, 0 < 𝜏, 𝛾 < 1, 𝜎 > 1 and 𝛿
+                                           +    0                               min , 𝜌max > 0
+ 1: for 𝑘 ∈ {0, 1, . . . , 𝑁 } do
+ 2:   Primal update
+                                                         𝑚
+                                                        ∑︁                                                          
+                  e 𝑘+1 = arg min
+                  Θ                         𝑓˜( Θ)
+                                                e +1           1                                e 𝑘 )}2 − (𝑦 𝑘 ) 2
+                                                                        max{0, 𝑦 𝑖𝑘 + 𝜌𝑖𝑘 𝑐˜𝑖 ( Θ                        (8)
+                                                   2          𝜌𝑖𝑘                                            𝑖
+                          Θ∈   e 𝑘 , 𝛿𝑘 )
+                          e 𝐵( Θ                        𝑖=1
+
+ 3:     dual update
+                                            𝑦 𝑖𝑘+1 = max{0, 𝑦 𝑖𝑘 + 𝜌𝑖𝑘 𝑐˜𝑖 ( Θ
+                                                                             e 𝑘+1 )}
+
+ 4:     update penalty parameters
+                                           𝑘
+                                           𝜌𝑖                            if 𝑐˜𝑖 ( Θ
+                                                                                  e 𝑘+1 ) ≤ 𝜏 𝑐˜𝑖 ( Θ
+                                                                                                    e𝑘 )
+                                𝜌𝑖𝑘+1 =
+                                           min{𝜌max , 𝜎𝜌𝑖𝑘 }             otherwise.
+
+ 5:     decrease trust-region
+                                                  𝛿 𝑘+1 = max{𝛿min , 𝛾𝛿 𝑘 }
+ 6: end for
+
+
+For the geometric problem we choose 𝜌𝑖0 = 10, 𝜌max = 1𝑒9, 𝛿0 = 0.5, 𝛾 = 0.9, 𝛿min = 0.05, 𝜏 =
+0.8, 𝜎 = 5. The subproblem (8) is solved with NGOpt with a budget of min{20.000, 1500 + 𝑘 · 260}
+forward-model calls.
+For the simple-to-build problem we choose 𝜌𝑖0 = 10, 𝜌max = 1𝑒9, 𝛿0 = 0.5, 𝛾 = 0.95, 𝛿min = 0.05, 𝜏 =
+0.8, 𝜎 = 5. The subproblem (8) is solved with NGOpt with a budget of min{20.000, 1500 + 𝑘 · 260}
+forward-model calls.
+For the MHD-stable problems we choose 𝜌𝑖0 = 10, 𝜌max = 1𝑒8, 𝛿0 = 0.33, 𝛾 = 0.95, 𝛿min = 0.05, 𝜏 =
+0.8, 𝜎 = 5. The subproblem (8) is solved with NGOpt with a budget of min{20.000, 1500 + 𝑘 · 300}
+forward-model calls.
+For all problems, Θ0 is a rotating ellipse configuration. We optimize up to four poloidal and toroidal
+Fourier modes, which results in 𝐷 = 80 degrees of freedom. During the optimization, we run
+VMEC++ at low fidelity.
+
+A.4.2    Additional experimental results
+We provide convergence plots for the three problems obtained with ALM-NGOpt. Green curves
+represent metrics that are constrained. Red colored metrics are maximized and blue colored metrics
+are minimized. Gray curves correspond to metrics that are not part of the optimization problem. The
+blue dashed lines indicate lower bounds and the red dashed lines indicate upper bounds. Figure 11
+provides plots corresponding to the single-objective problem, while Figure 12 provides a plot for one
+instance (𝐴 ≤ 8) of the sequence of single-objective problems corresponding to the multi-objective
+problem.
+
+
+                                                          17
+In Figure 10 we show the initial and final plasma configurations for the different problems.
+
+
+
+                     |B|[T]                                                                                            |B|[T]
+                       1.41                                                                                              2.49
+                                       0.4                                                  ' = 0:00N2¼
+                                                                                                      fp
+
+
+                                                                                            ' = 0:12N2¼
+                                                                                                                                         0.6
+                                                                                                                                                                                                 ' = 0:00N2¼
+                                                                                                      fp                                                                                                   fp
+
+                       1.15            0.2                                                                               1.60                                                                    ' = 0:12N2¼
+                                                                                            ' = 0:25N2¼                                  0.4
+                                                                                                                                                                                                           fp
+                                                                                                      fp
+
+
+
+
+                              Z [m]
+                                                                                            ' = 0:38N2¼                                                                                          ' = 0:25N2¼
+
+
+
+
+                                                                                                                                Z [m]
+                                       0.0                                                                                               0.2
+                                                                                                      fp                                                                                                   fp
+
+
+                       0.89                                                                 ' = 0:50N2¼
+                                                                                                      fp
+                                                                                                                         0.72            0.0
+                                                                                                                                                                                                 ' = 0:38N2¼
+                                                                                                                                                                                                           fp
+                                      −0.2
+                                                                                                                                                                                                 ' = 0:50N2¼
+                                                                                                                                        −0.2                                                               fp
+
+                                      −0.4
+
+
+                                                    0.6    0.8           1.0         1.2                                                       0.6   0.8         1.0         1.2    1.4    1.6
+                                                                 R [m]                                                                                           R [m]
+
+
+
+
+               (a) initial geometric                                                                              (b) final geometric
+
+                                       0.3
+                                                                                            ' = 0:00N2¼
+                                                                                                      fp                                                                                         ' = 0:00N2¼
+                                                                                                                                         0.3                                                               fp
+                                                                                            ' = 0:12N2¼
+                     |B|[T]            0.2
+                                                                                                      fp
+                                                                                                                       |B|[T]                                                                    ' = 0:12N2¼
+                                                                                                                                                                                                           fp
+                       1.91                                                                 ' = 0:25N2¼                  1.90
+                                                                                                      fp                                 0.2                                                     ' = 0:25N2¼
+                                                                                                                                                                                                           fp
+
+                                                                                            ' = 0:38N2¼                                                                                          ' = 0:38N2¼
+                                                                                                      fp
+                                                                                                                                                                                                           fp
+                              Z [m]
+
+
+
+
+                                       0.1                                                                                               0.1
+
+
+
+
+                                                                                                                                Z [m]
+                       1.28                                                                 ' = 0:50N2¼                  1.58                                                                    ' = 0:50N2¼
+                                                                                                      fp
+                                                                                                                                                                                                           fp
+
+
+                                                                                                                                         0.0
+                                       0.0
+
+
+                       0.64                                                                                              1.27
+                                                                                                                                        −0.1
+
+                                      −0.1
+
+                                                                                                                                        −0.2
+
+                                              0.9         1.0                  1.1                                                             0.8         0.9           1.0         1.1
+                                                             R [m]                                                                                               R [m]
+
+
+
+
+             (c) initial simple-to-build                                                                        (d) final simple-to-build
+
+                                                                                                                                         0.4
+
+                                       0.20                                                 ' = 0:00N2¼                                                                                          ' = 0:00N2¼
+                                                                                                      fp
+                                                                                                                                                                                                           fp
+
+                                                                                            ' = 0:12N2¼                                  0.3
+                     |B|[T]            0.15
+                                                                                                      fp               |B|[T]                                                                    ' = 0:12N2¼
+                                                                                                                                                                                                           fp
+                       1.50                                                                 ' = 0:25N2¼                  0.43
+                                                                                                      fp                                 0.2                                                     ' = 0:25N2¼
+                                                                                                                                                                                                           fp
+
+                                       0.10                                                 ' = 0:38N2¼                                                                                          ' = 0:38N2¼
+                                                                                                      fp
+                                                                                                                                                                                                           fp
+                                                                                                                                         0.1
+                              Z [m]
+
+
+
+
+                                                                                                                                Z [m]
+                       1.00                                                                 ' = 0:50N2¼                  0.34                                                                    ' = 0:50N2¼
+                                       0.05                                                           fp
+                                                                                                                                                                                                           fp
+
+                                                                                                                                         0.0
+
+                                       0.00
+
+                       0.50                                                                                              0.26           −0.1
+
+
+                                      −0.05
+                                                                                                                                        −0.2
+
+
+                                      −0.10
+                                                0.95      1.00       1.05            1.10                                                      0.8     0.9             1.0         1.1
+                                                                 R [m]                                                                                           R [m]
+
+
+
+
+              (e) initial MHD-stable                                                                             (f) final MHD-stable
+Figure 10: Initial guesses and final plasma configurations optimized with ALM-NGOpt. We selected
+a low aspect ratio configuration from the Pareto Front of solutions for the multi-objective problem.
+
+
+A.5   Generative modeling details
+
+We use the Random Forest classifier and the GMM implementations from Scikit-learn [65]. We
+use the Random walk Metropolis-Hastings algorithm [66] with adaptive proposal distribution [67]
+as the MCMC sampler. To monitor the convergence of the MCMC sampler, Figure 13 presents
+the log-probability of the posterior distribution evaluated at each sampled point. The rising and
+stabilizing log-probability indicates convergence to high-density regions. Algorithm 2 summarizes
+the formulation discussed in Section 5.
+
+
+
+
+                                                                                                           18
+                                                                                           4.00                                                                                                                            11
+                     4                              0.3                                                                                    20
+                                                                                                                                                                                           0.2
+                                                                                           3.75
+
+
+
+
+              L̃∇B
+
+
+
+
+                                                                                                                                        L̃∇B
+                                                    0.2                                                                                    15                                                                              10
+
+
+
+
+                                                                                      A
+
+
+
+
+                                                                                                                                                                                                                       A
+                                             ι̃
+
+
+
+
+                                                                                                                                                                                      ι̃
+                     3                                                                                                                                                                     0.1
+                                                                                           3.50
+                                                    0.1                                                                                    10                                                                               9
+                     2                                                                     3.25                                                                                            0.0
+                         0       200000                    0       200000                          0        200000                                           0         250000                    0    250000                    0    250000
+                         function calls                    function calls                          function calls                                            function calls                      function calls                 function calls
+                                                                                            101                                                                                            0.8
+                     3                              0.5                                                                                         5
+                                                                                                                                                                                           0.6
+              max
+
+
+
+
+                                                                                                                                         max
+                                                                                                                                                                                                                        10−3
+
+
+
+
+                                                                                       QI
+
+
+
+
+                                                                                                                                                                                                                   QI
+                                                    0.4
+
+
+                                             ∆
+
+
+
+
+                                                                                                                                                                                      ∆
+                                                                                                                                                4
+                     2                                                                                                                                                                     0.4
+                                                    0.3
+                                                                                                                                                3
+                                                                                            100                                                                                            0.2                          10−4
+                         0       200000                    0       200000                         −0.05 0.00    0.05                                         0         250000                    0    250000                    0    250000
+                         function calls                    function calls                          function calls                                            function calls                      function calls                 function calls
+                                                   0.05                                     0.0                                                                                                                         0.05
+                                                                                                                                                                                           1.0
+                                                                                                                                                                                                                        0.00
+WMHD
+
+
+
+
+                                                                                                                                 WMHD
+            −0.2                                                                           −0.2
+                                          hχ∇r i
+
+
+
+
+                                                                                                                                                                                      hχ∇r i
+                                                                                                                                        −0.05
+                                                   0.00
+
+                                                                                      δ̄
+
+
+
+
+                                                                                                                                                                                                                  δ̄
+                                                                                                                                                                                           0.8                         −0.05
+                                                                                           −0.4
+            −0.3                                                                                                                                                                           0.6                         −0.10
+                                              −0.05                                                                                     −0.10
+                         0       200000                   −0.05 0.00     0.05                      0        200000                                           0         250000                    0    250000                    0    250000
+                         function calls                    function calls                          function calls                                            function calls                      function calls                 function calls
+
+
+                                      (a) geometric problem.                                                                                                            (b) Simple-to-build problem.
+                                                          Figure 11: Single-objective problem optimization traces.
+
+                                                                                 20                                                                               12.5
+                                                                                                                     0.2
+                                                                          L̃∇B
+
+
+
+
+                                                                                                                                                                  10.0
+                                                                                                                                                             A
+                                                                                                               ι̃
+
+
+
+
+                                                                                 10                                  0.1
+
+                                                                                                                     0.0                                              7.5
+
+                                                                                       0           200000                  0     200000                                     0       200000
+                                                                                       function calls                      function calls                                   function calls
+
+                                                                                 15                                0.75                                           10−2
+
+                                                                                 10
+                                                                          max
+
+
+
+
+                                                                                                                                                             QI
+                                                                                                               ∆
+
+
+
+
+                                                                                                                   0.50
+                                                                                                                                                                  10−3
+                                                                                  5
+                                                                                                                   0.25
+                                                                                       0           200000                  0     200000                                     0       200000
+                                                                                       function calls                      function calls                                   function calls
+                                                                               0.05
+                                                                                                                      2
+                                                                        WMHD
+
+
+
+
+                                                                                                                                                                      0.5
+                                                                                                                hχ∇r i
+
+
+
+
+                                                                                                                                                                 δ̄
+
+
+
+
+                                                                               0.00                                   1
+                                                                                                                                                                      0.0
+
+                                                                                       0           200000                  0     200000                                     0       200000
+                                                                                       function calls                      function calls                                   function calls
+
+
+                                                                  Figure 12: Multi-objective problem with 𝐴 ≤ 8.
+
+
+                             0                                                                                                                                         0
+
+                                                                                                                                                             −5000
+                  −100000
+                                                                                                                                                             −10000
+Log probability
+
+
+
+
+                                                                                                                                           Log probability
+
+
+
+
+                  −200000
+                                                                                                                                                             −15000
+
+                                                                                                                                                             −20000
+                  −300000
+
+                                                                                                                                                             −25000
+                  −400000
+                                                                                                                                                             −30000
+
+                                                                                                                                                             −35000
+                                 0           1000                2000                 3000             4000                                                                     0            1000         2000             3000         4000
+                                                               Iteration                                                                                                                               Iteration
+
+                                     (a) geometric problem.                                                                                                             (b) Simple-to-build QI problem.
+                             Figure 13: Trace plot of the log-posterior probability values over MCMC iterations.
+
+
+                                                                                                                           19
+Algorithm 2 Generative Inference of Feasible Configurations without Oracle Access
+Require: Dataset D = {𝑥1 , . . . , 𝑥 𝑁 } ⊂ R𝐷 , constraint definition
+Ensure: Set of configurations {𝑥 ∗ } predicted to lie in the feasible domain
+    // Dimensionality Reduction:
+ 1: Compute PCA mapping Φ : R𝐷 → R𝑑 , where 𝑑 ≪ 𝐷
+ 2: Project dataset to latent space: 𝑍 ← {z𝑖 = Φ(𝑥 𝑖 )}𝑖=1
+                                                         𝑁
+
+    // Feasibility Classification:
+                                                𝑁𝑐
+ 3: Train Random Forest classifiers {𝐶𝑖 (z)}𝑖=1    to predict feasibility label 𝑦 ∈ {0, 1}
+                                          Ñ 𝑁𝑐
+ 4: Define soft-feasible region: F̃ ← 𝑖=1 {𝑝(𝐶𝑖 (z) = 1) ≥ 𝜏}, where 𝜏𝑖 = 0.8 ∀𝑖
+    // Density Estimation:
+ 5: Fit Gaussian Mixture Model GMM(z) on data restricted to F̃
+    // Bayesian Refinement:
+ 6: Define prior: 𝑝(z) ← GMM(z)
+                                         Í 𝑁𝑐
+ 7: Define quasi-likelihood: ℓ(z) ← 𝑖=1       log 𝐶𝑖 (z)
+ 8: Compute posterior using MCMC: {z∗ } ∼ 𝑝(z | feasible) ∝ ℓ(z) · 𝑝(z)
+ 9: Inverse transform to original space: 𝑥 ∗ ← Φ −1 (z∗ )
+    // Oracle Validation:
+10: Evaluate 𝑥 ∗ using VMEC++ oracle to confirm feasibility
+11: return {𝑥 ∗ }
+
+
+
+
+                                                   20
+

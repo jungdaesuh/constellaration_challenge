@@ -1,29 +1,102 @@
 # TODOs
 
+## Win-Tomorrow Plan (T-1 day, critical path)
+
+Aggressive plan to produce top-tier results within 24 hours. No warm‑ups.
+
+- [ ] Implement constrained Trust‑Region Bayesian Optimization (FuRBO)
+  - [ ] New baseline `furbo` (single‑objective: constrained qNEI; multi‑objective: constrained qNEHVI)
+  - [ ] Trust‑region loop (init/min/max radius; expand/shrink; success rule)
+  - [ ] Vector constraint modeling: 1 GP per normalized constraint, 1 GP for objective
+  - [ ] Mode‑aware kernel priors (shorter length‑scales for low‑order Fourier modes)
+  - [ ] Async/batch candidates (q>1) compatible with parallel VMEC workers
+- [ ] Constraint extractors (metrics → normalized c̃≤0)
+  - [ ] P1/P2: Δ, A, ι̃, ε_max, QI (and δ̄, if enforced)
+  - [ ] P3: W_MHD ≥ 0, ⟨χ∇r⟩ ≤ threshold
+  - [ ] Unit tests for sign/scale and satisfied‑is‑≤0 behavior
+- [ ] CLI & wiring
+  - [ ] `constelx opt run --baseline furbo [--tr-init --tr-min --tr-max --tr-gamma-inc --tr-gamma-dec --batch]`
+  - [ ] Default to boundary‑mode 2D helical demo; guard full‑boundary extension behind a flag
+- [ ] Logging & provenance
+  - [ ] Add TR radius, acquisition values, predicted feas prob, per‑constraint means/stds to `metrics.csv` (optional columns)
+- [ ] Smoke tests (must pass today)
+  - [ ] Placeholder/dev: `opt run --baseline furbo --budget 6` → finite best score + artifacts
+  - [ ] Physics‑on: tiny P1/P2 run under 2 workers; wall‑clock < 2 min
+
+### Runbook (tonight → tomorrow)
+
+1) Code + tests (H0–H3)
+- [ ] `src/constelx/problems/constraints.py` with vector constraints + tests
+- [ ] `src/constelx/optim/furbo.py` (qNEI + TR; qNEHVI for P3)
+- [ ] Wire CLI & small unit/smoke tests
+
+2) Performance switches (H3–H4)
+- [ ] Enable parallel VMEC: `export CONSTELX_ALLOW_PARALLEL_REAL=1`
+- [ ] Tighten timeouts: `export CONSTELX_REAL_TIMEOUT_MS=20000; export CONSTELX_REAL_RETRIES=0`
+- [ ] Use search fidelity: `--vmec-level low --vmec-hot-restart`; set `--max-workers 4–8` (hardware‑dependent)
+- [ ] Ensure cache dir on fast disk: `--cache-dir .cache/eval`
+
+3) Seeding & gating (H3–H4)
+- [ ] Train/update prior on HF slice (if not present):
+      `constelx data fetch --nfp 3 --limit 1024 && constelx data prior-train data/cache/subset.parquet --out models/seeds_prior_hf_gmm.joblib`
+- [ ] Agent gating knobs: `--mf-proxy --mf-quantile 0.25 --surrogate-screen --surrogate-quantile 0.3 --novelty-skip`
+- [ ] PCFM defaults on proposals: `--correction pcfm --constraints-file examples/pcfm_qs_band.json`
+
+4) Production runs (H4–H12)
+- [ ] P1 (budget 60):
+      `constelx opt run --baseline furbo --nfp 3 --budget 60 --use-physics --problem p1 --tr-init 0.2 --batch 2 --vmec-level low --vmec-hot-restart --cache-dir .cache/eval`
+- [ ] P2 (budget 80):
+      `constelx opt run --baseline furbo --nfp 3 --budget 80 --use-physics --problem p2 --tr-init 0.2 --batch 2 --vmec-level low --vmec-hot-restart --cache-dir .cache/eval --correction pcfm --constraints-file examples/pcfm_qs_band.json`
+- [ ] P3 (budget 100, qNEHVI):
+      `constelx opt run --baseline furbo --nfp 3 --budget 100 --use-physics --problem p3 --tr-init 0.2 --batch 2 --vmec-level low --vmec-hot-restart --cache-dir .cache/eval`
+
+5) High‑fid verification + packaging (H12–H16)
+- [ ] Re‑score top‑K at higher fidelity (`--vmec-level medium`), hot‑restart enabled
+- [ ] Pack submissions: `constelx submit pack runs/<ts> --out submissions/<name>.zip --top-k 5`
+- [ ] Sanity: ensure all `source=real` and `evaluator_score` present; check `best.json`
+
+6) Ablations & report (H16–H20)
+- [ ] Compare `furbo` vs `qnei` vs `ngopt` under same budget (table: feasibles, best score, VMEC calls)
+- [ ] Plot P3 Pareto front; annotate dominated vs non‑dominated counts
+- [ ] Write `runs/<ts>/README.md` with CLI, env, and highlights
+
+### Risks & mitigations
+- VMEC stalls → keep 20s timeout, 0 retries; drop survivors count per step; leverage cache/hot‑restart
+- Poor feasibility rate → raise prior min‑prob to 0.6; tighten PCFM band; gate harder on `qs_residual`
+- Over‑exploration by BO → shrink TR on failure; increase `--batch` for parallel exploitation
+
+---
+
 ## Sequential Tasks (next up)
 
 - [x] Flip defaults to real stack — set `constelx data fetch` default to `--source hf` and agent/eval defaults to real when unspecified; require explicit dev opt‑in for synthetic via `CONSTELX_DEV=1` and guards.
 - [x] Guard placeholders in non‑dev — implemented behind `CONSTELX_ENFORCE_REAL=1` + `CONSTELX_DEV` opt‑in; raises helpful errors when `source in {placeholder,synthetic}` without dev opt‑in.
-- [ ] CI prod‑smoke — add a tiny real run (`--nfp 3 --budget 3 --seed 0 --limit 8`) gated on label/path filters; target ≤2 minutes with evaluator/data caching; assert all rows have `source=real` and `evaluator_score` present.
+- [x] CI prod‑smoke — add a tiny real run (`--nfp 3 --budget 3 --seed 0 --limit 8`) gated on label/path filters; target ≤2 minutes with evaluator/data caching; assert all rows have `source=real` and `evaluator_score` present.
   - [x] PR path filters + pip/evaluator cache scaffolded in `.github/workflows/real-smoke.yml`.
-  - [ ] Ensure physics extras/evaluator are available in CI or gate behind label to guarantee `source=real`.
-- [ ] Split examples — move synthetic/dev smokes under `examples/dev/`; add `examples/real_quickstart/` with a minimal, reproducible config and expected `best.json`.
+  - [x] Ensure physics extras/evaluator are available in CI or gate behind label to guarantee `source=real`.
+- [x] Split examples — move synthetic/dev smokes under `examples/dev/`; add `examples/real_quickstart/` with a minimal, reproducible config and expected `best.json`.
 - [x] Packaging guard — `constelx submit pack` rejects runs with non‑real rows when `CONSTELX_ENFORCE_REAL=1` unless `--allow-dev` or `CONSTELX_DEV=1` is set; override documented in CLI help.
-- [ ] Provenance tests — add unit/integration asserts that fail CI (non‑dev) if any `metrics.csv` row has `source≠real`.
-- [ ] Docs quickstart — update README/AGENTS to show real quickstart by default; move dev/synthetic guidance to a clearly marked dev section.
+- [x] Provenance tests — add unit/integration asserts that fail CI (non‑dev) if any `metrics.csv` row has `source≠real`.
+- [x] Docs quickstart — update README/AGENTS to show real quickstart by default; move dev/synthetic guidance to a clearly marked dev section.
   - [x] README updated to real-first quickstart; added Dev-only section and enforcement notes.
-  - [ ] Update AGENTS.md to mirror the README changes.
+  - [x] Update AGENTS.md to mirror the README changes.
 - [x] Optional: add `.gitattributes` with `TODO.md merge=union` to reduce low‑risk conflicts during parallel PRs.
 
 - [ ] Shepherd PR #100 to merge and close [#27]; confirm maintainers are satisfied once the checklist lands on main.
-- [ ] [#45] Data-driven seeds prior polish — rerun the prior against the HF Parquet cache, compare GMM vs flow outputs, wire the HF seeds into `agent run --seed-mode prior`, and update README/AGENTS with the findings.
+- [x] [#45] Data-driven seeds prior polish — rerun the prior against the HF Parquet cache, compare GMM vs flow outputs, wire the HF seeds into `agent run --seed-mode prior`, and update README/AGENTS with the findings.
 - [ ] [#44] Pareto sweep QA — produce a physics-enabled Pareto sweep (JSON + plot), archive it under `examples/` (or `runs/`) and document the workflow/results.
 - [ ] [#43] Nevergrad NGOpt baseline — run parity vs the challenge ALM baseline using the official evaluator, capture the metrics, and document the comparison.
 - [ ] [#42] DESC gradient trust-region baseline — execute a real DESC ladder with VMEC validation enabled, log the outcomes, and extend the docs with usage guidance and caveats.
 - [ ] Remove "toy" naming — rename to "synthetic dev fixture"; restrict usage to tests/dev smokes; keep one tiny synthetic boundary/objective only for deterministic unit tests.
   - [x] CLI docstring/help updated; surrogate/train comments updated.
-  - [ ] Sweep remaining mentions in docs (ROADMAP/GUIDELINE/STRATEGY) and README references.
-- [ ] Replace "stub" references — refresh guidance in `AGENTS.md:116`, `CONSTELX_ANALYSIS_REPORT.md:15`, `docs/GUIDELINE.md:532-543`, and `docs/STRATEGY.md:491,720` to describe production extension hooks instead of TODO stubs.
+  - [x] Sweep remaining mentions in docs (ROADMAP/GUIDELINE/STRATEGY) and README references.
+- [x] Replace "stub" references — refresh guidance in `AGENTS.md:116`, `CONSTELX_ANALYSIS_REPORT.md:15`, `docs/GUIDELINE.md:532-543`, and `docs/STRATEGY.md:491,720` to describe production extension hooks instead of TODO stubs.
+
+## Stretch (post‑submission hardening)
+- [ ] Multi‑fidelity GP (coarse/fine VMEC) with promotion policy
+- [ ] Agent integration of `furbo` proposer (`--algo furbo`) with online TR state
+- [ ] Ensemble/MC‑dropout surrogates with calibrated uncertainty; UCB gating (`--surrogate-ucb-k`)
+- [ ] HPC harness + job arrays for large P3 sweeps; result concentrator
 
 ## Parallelizable Tasks
 - [ ] Backlog grooming — review the open issues monthly to keep Sequential and Completed lists honest.
