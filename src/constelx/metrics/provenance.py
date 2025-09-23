@@ -33,12 +33,20 @@ def ensure_real_rows(rows: Iterable[Mapping[str, object]]) -> None:
         eval_score = row.get("evaluator_score")
         if eval_score in (None, ""):
             raise ProvenanceError(f"metrics row {idx} missing evaluator_score")
-        try:
+        # Narrow type for mypy: accept strings and real numbers only
+        if isinstance(eval_score, (int, float)):
             numeric = float(eval_score)
-        except (TypeError, ValueError):
+        elif isinstance(eval_score, str):
+            try:
+                numeric = float(eval_score)
+            except ValueError:
+                raise ProvenanceError(
+                    f"metrics row {idx} has non-numeric evaluator_score={eval_score!r}"
+                ) from None
+        else:
             raise ProvenanceError(
                 f"metrics row {idx} has non-numeric evaluator_score={eval_score!r}"
-            ) from None
+            )
         if not math.isfinite(numeric):
             raise ProvenanceError(
                 f"metrics row {idx} has non-finite evaluator_score={eval_score!r}"

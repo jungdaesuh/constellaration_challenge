@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Constrained Trust-Region Bayesian Optimization (FuRBO-style) baselines.
 
 This module implements a lightweight trust-region wrapper around constrained
@@ -13,8 +11,10 @@ Notes
   m=1 helical coefficients r_cos[1][5], z_sin[1][5] in [-0.2, 0.2].
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any, Tuple
+from typing import Any, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -133,14 +133,17 @@ def run_furbo(cfg: FurboConfig) -> Tuple[NDArray[np.float64], float]:
         if len(train_x_list) < 4:
             # Bootstrap with Sobol
             d = lo.shape[0]
-            engine = torch.quasirandom.SobolEngine(
-                dimension=d, scramble=True, seed=int(cfg.seed) + len(train_x_list)
+            # Local wrapper to keep mypy strict: treat SobolEngine as Any
+            engine_cls = cast(Any, torch.quasirandom.SobolEngine)
+            engine = engine_cls(dimension=d, scramble=True, seed=int(cfg.seed) + len(train_x_list))
+            pts = cast(
+                "torch.Tensor",
+                engine.draw(max(cfg.batch, 1)).to(dtype=dtype, device=device),
             )
-            pts = engine.draw(max(cfg.batch, 1)).to(dtype=dtype, device=device)
             cand = torch.from_numpy(lo).to(dtype=dtype, device=device) + (
                 torch.from_numpy(hi - lo).to(dtype=dtype, device=device) * pts
             )
-            return cand.detach().cpu().numpy()
+            return cast(NDArray[np.float64], cand.detach().cpu().numpy())
 
         X = torch.as_tensor(np.asarray(train_x_list), dtype=dtype, device=device)
         y_obj = torch.as_tensor(np.asarray(objs)[:, None], dtype=dtype, device=device)
@@ -195,7 +198,7 @@ def run_furbo(cfg: FurboConfig) -> Tuple[NDArray[np.float64], float]:
             num_restarts=8,
             raw_samples=64,
         )
-        return candidate.detach().cpu().numpy()
+        return cast(NDArray[np.float64], candidate.detach().cpu().numpy())
 
     budget = int(cfg.budget)
     it = 0

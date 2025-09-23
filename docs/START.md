@@ -129,4 +129,3 @@ constelx submit pack runs/<ts> --out submissions/run_<ts>.zip --top-k 5
 # One-liner to verify CLI wiring
 constelx opt run --baseline furbo --nfp 3 --budget 6 --problem p1 --no-use-physics
 ```
-

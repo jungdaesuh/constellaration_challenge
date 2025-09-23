@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Constraint extraction and normalization utilities.
 
 This module converts evaluator metrics into a vector of normalized constraint
@@ -12,6 +10,8 @@ Design notes
 - Keep dependencies minimal; operate on plain dicts.
 - Do not import heavy physics here; this module is used inside BO loops.
 """
+
+from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 

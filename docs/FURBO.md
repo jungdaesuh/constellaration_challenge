@@ -43,4 +43,3 @@ Code: `src/constelx/problems/constraints.py`.
 - Keep search at `--vmec-level low` with `--vmec-hot-restart`, then re‑score
   finalists at higher fidelity.
 - Combine with proxy/surrogate gating in the agent for fastest end‑to‑end runs.
-

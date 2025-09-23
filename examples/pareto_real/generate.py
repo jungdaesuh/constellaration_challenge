@@ -8,7 +8,8 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 
-from constelx.eval import forward as eval_forward, score as eval_score
+from constelx.eval import forward as eval_forward
+from constelx.eval import score as eval_score
 from constelx.optim.pareto import pareto_indices
 from constelx.physics.constel_api import example_boundary
 
