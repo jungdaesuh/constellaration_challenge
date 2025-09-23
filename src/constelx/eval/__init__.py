@@ -91,7 +91,9 @@ def _mark_placeholder_failure(
     if "feasible" not in metrics:
         metrics["feasible"] = False
     existing_reason = str(metrics.get("fail_reason") or "").strip()
-    if reason and (not existing_reason or existing_reason in {"placeholder_metrics", "placeholder_eval"}):
+    if reason and (
+        not existing_reason or existing_reason in {"placeholder_metrics", "placeholder_eval"}
+    ):
         metrics["fail_reason"] = reason
     if placeholder_reason and "placeholder_reason" not in metrics:
         metrics["placeholder_reason"] = placeholder_reason
