@@ -23,6 +23,7 @@ This document maps the conceptual strategy to the actual modules and CLI in this
 - `src/constelx/optim/` — baselines
   - `cmaes.py` — small CMA‑ES wrapper for smoke tests
   - `baselines.py` — trust‑constr and ALM on 2D helical coefficients
+  - `furbo.py` — constrained trust‑region BO (qNEI) over 2D helical coefficients
 - `src/constelx/surrogate/` — simple baseline model
   - `train.py` — MLP trainer; optional `--use-pbfm`
 - `src/constelx/submit/pack.py` — packs a run into a submission zip
@@ -34,6 +35,7 @@ This document maps the conceptual strategy to the actual modules and CLI in this
 - `constelx eval forward --example|--random|--near-axis [--vmec-level|--vmec-hot-restart]` → `eval.forward`
 - `constelx eval score --metrics-json|--metrics-file` → `eval.score`; `--problem p1|p2|p3` uses physics scorer when available
 - `constelx opt cmaes|run` → `optim/cmaes.py`, `optim/baselines.py`
+  - `--baseline furbo` → `optim/furbo.py` (TR‑qNEI; uses evaluator helpers)
 - `constelx surrogate train [--use-pbfm]` → `surrogate/train.py`
 - `constelx agent run` → `agents/simple_agent.py` with options:
   - Correction hooks: `--correction eci_linear|pcfm --constraints-file <json> [--pcfm-gn-iters ...]`
