@@ -33,7 +33,7 @@ import uuid
 from concurrent.futures import ProcessPoolExecutor, TimeoutError, as_completed
 from math import inf, isinf, isnan
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, TypeAlias, cast
+from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, TypeAlias, cast
 
 from ..dev import enforce_real_enabled, require_dev_for_placeholder
 from ..optim.pareto import DEFAULT_P3_SCALARIZATION, extract_objectives, scalarize
@@ -76,6 +76,25 @@ def _normalize_vmec_level(value: Optional[str]) -> str:
     return _VMEC_LEVEL_ALIASES.get(
         normalized, normalized if normalized in {"low", "medium", "high", "auto"} else "auto"
     )
+
+
+def _mark_placeholder_failure(
+    metrics: MutableMapping[str, Any],
+    *,
+    reason: str,
+    placeholder_reason: str | None = None,
+) -> None:
+    """Normalize placeholder fallback payloads without clobbering real metadata."""
+
+    if "source" not in metrics or not str(metrics.get("source") or "").strip():
+        metrics["source"] = "placeholder"
+    if "feasible" not in metrics:
+        metrics["feasible"] = False
+    existing_reason = str(metrics.get("fail_reason") or "").strip()
+    if reason and (not existing_reason or existing_reason in {"placeholder_metrics", "placeholder_eval"}):
+        metrics["fail_reason"] = reason
+    if placeholder_reason and "placeholder_reason" not in metrics:
+        metrics["placeholder_reason"] = placeholder_reason
 
 
 def _env_bool(name: str) -> Optional[bool]:
@@ -359,10 +378,11 @@ def _real_eval_with_timeout(
                 metrics = fut.result(timeout=deadline)
                 # Provenance and versioning
                 try:
-                    metrics.setdefault("source", "real")
+                    if "source" not in metrics:
+                        metrics["source"] = "real"
                     sv = _scoring_version()
-                    if sv:
-                        metrics.setdefault("scoring_version", sv)
+                    if sv and "scoring_version" not in metrics:
+                        metrics["scoring_version"] = sv
                 except Exception:
                     pass
                 return _annotate_vmec_metadata(metrics, vmec_opts)
@@ -376,8 +396,11 @@ def _real_eval_with_timeout(
     failure = {
         "feasible": False,
         "fail_reason": last_err or "timeout",
+        "placeholder_reason": "real_eval_timeout"
+        if "timeout" in (last_err or "")
+        else "real_evaluator_failure",
         "elapsed_ms": (t1_all - t0_all) * 1000.0,
-        "source": "real",
+        "source": "placeholder",
         "scoring_version": _scoring_version() or "",
     }
     return _annotate_vmec_metadata(failure, vmec_opts)
@@ -450,17 +473,14 @@ def forward(
         result = evaluate_boundary(dict(boundary), use_real=False)
     t1 = time.perf_counter()
     # annotate timing and defaults
-    try:
+    if isinstance(result, dict):
         result.setdefault("elapsed_ms", (t1 - t0) * 1000.0)
-        result.setdefault("feasible", True)
-        result.setdefault("fail_reason", "")
-        result.setdefault("source", "real" if use_real else "placeholder")
-        if use_real:
+        if "source" not in result:
+            result["source"] = "real" if use_real else "placeholder"
+        if use_real and "scoring_version" not in result:
             sv = _scoring_version()
             if sv:
-                result.setdefault("scoring_version", sv)
-    except Exception:
-        pass
+                result["scoring_version"] = sv
     # Enrich with canonical metrics (non-destructive; adds proxies/geometry if missing)
     try:
         from ..physics.metrics import enrich as _enrich_metrics
@@ -484,7 +504,7 @@ def forward(
     if cache is not None:
         reason_val = str(result.get("fail_reason") or "").strip()
         feasible_val = result.get("feasible")
-        should_cache = not reason_val and feasible_val is not False
+        should_cache = not reason_val and feasible_val is True
         if should_cache:
             try:
                 to_store = dict(result)
@@ -644,11 +664,13 @@ def forward_many(
                         except Exception:
                             pass
                 m = dict(m_raw) if isinstance(m_raw, Mapping) else {}
-                m.setdefault("feasible", True)
-                m.setdefault("fail_reason", "")
-                m.setdefault("source", "placeholder")
-                m = _annotate_vmec_metadata(m, vmec_opts)
-                m.setdefault("phase", "proxy")
+                if isinstance(m, dict):
+                    m["feasible"] = None
+                    m["source"] = "proxy"
+                    m.pop("fail_reason", None)
+                    m.pop("placeholder_reason", None)
+                    m = _annotate_vmec_metadata(m, vmec_opts)
+                    m.setdefault("phase", "proxy")
                 if not all(key in m for key in BOOZER_PROXY_KEYS):
                     try:
                         proxies = compute_proxies(dict(b))
@@ -695,6 +717,13 @@ def forward_many(
                     out[i] = proxy_metrics[i]
                     if i in proxy_cache_hits:
                         cache_hits[i] = True
+            if use_real is False:
+                for i in survivors:
+                    if out[i] is None and i in proxy_metrics:
+                        out[i] = proxy_metrics[i]
+                        if i in proxy_cache_hits:
+                            cache_hits[i] = True
+                survivors = set()
             to_compute = [(i, b) for (i, b) in to_compute if i in survivors]
 
         allow_parallel = os.getenv("CONSTELX_ALLOW_PARALLEL_REAL", "0").lower() in {
@@ -752,17 +781,18 @@ def forward_many(
                                 except Exception:
                                     pass
                             out[i] = r
-                        except Exception:
+                        except Exception as exc:
                             out[i] = _annotate_vmec_metadata(
                                 {
                                     "feasible": False,
-                                    "fail_reason": "worker_error",
+                                    "fail_reason": f"worker_error: {exc}",
                                     "elapsed_ms": (
                                         time.perf_counter()
                                         - start_times.get(i, time.perf_counter())
                                     )
                                     * 1000.0,
-                                    "source": "real",
+                                    "source": "placeholder",
+                                    "placeholder_reason": "worker_error",
                                     "scoring_version": _scoring_version() or "",
                                     "phase": "real",
                                 },
@@ -776,8 +806,9 @@ def forward_many(
                                 fail_payload = {
                                     "feasible": False,
                                     "fail_reason": f"timeout_after_{int(timeout_s * 1000)}ms",
+                                    "placeholder_reason": "worker_timeout",
                                     "elapsed_ms": elapsed * 1000.0,
-                                    "source": "real",
+                                    "source": "placeholder",
                                     "scoring_version": _scoring_version() or "",
                                 }
                                 out[i] = _annotate_vmec_metadata(fail_payload, vmec_opts)
@@ -803,15 +834,19 @@ def forward_many(
                                     except Exception:
                                         pass
                                 out[i] = r
-                            except Exception:
+                            except Exception as exc:
                                 elapsed = time.perf_counter() - start_times.get(
                                     i, time.perf_counter()
                                 )
+                                reason = f"timeout_after_{int(timeout_s * 1000)}ms"
+                                if exc:
+                                    reason = f"{reason} ({exc})"
                                 fail_payload = {
                                     "feasible": False,
-                                    "fail_reason": f"timeout_after_{int(timeout_s * 1000)}ms",
+                                    "fail_reason": reason,
+                                    "placeholder_reason": "worker_timeout",
                                     "elapsed_ms": elapsed * 1000.0,
-                                    "source": "real",
+                                    "source": "placeholder",
                                     "scoring_version": _scoring_version() or "",
                                     "phase": "real",
                                 }
@@ -829,18 +864,18 @@ def forward_many(
                         # Widen type to allow non-float annotations
                         metrics_any1: Dict[str, Any] = dict(_metrics_raw)
                         _t1 = time.perf_counter()
-                        metrics_any1.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                        if "elapsed_ms" not in metrics_any1:
+                            metrics_any1["elapsed_ms"] = (_t1 - _t0) * 1000.0
                         if isinstance(info, dict):
-                            feasible = bool(info.get("feasible", True))
-                            metrics_any1.setdefault("feasible", feasible)
-                            if not feasible and "fail_reason" not in metrics_any1:
-                                fr = (
-                                    info.get("reason")
-                                    if isinstance(info.get("reason"), str)
-                                    else ""
-                                )
-                                metrics_any1["fail_reason"] = fr
-                        metrics_any1.setdefault("source", "real")
+                            feasible_info = info.get("feasible")
+                            if feasible_info is not None and "feasible" not in metrics_any1:
+                                metrics_any1["feasible"] = bool(feasible_info)
+                            if "fail_reason" not in metrics_any1:
+                                reason_val = info.get("reason")
+                                if isinstance(reason_val, str) and reason_val:
+                                    metrics_any1["fail_reason"] = reason_val
+                        if "source" not in metrics_any1:
+                            metrics_any1["source"] = "real"
                         sv = _scoring_version()
                         if sv:
                             metrics_any1.setdefault("scoring_version", sv)
@@ -870,14 +905,18 @@ def forward_many(
                     _metrics_raw, info = px_forward(dict(b), problem=problem, vmec_opts=vmec_opts)
                     metrics_any2: Dict[str, Any] = dict(_metrics_raw)
                     _t1 = time.perf_counter()
-                    metrics_any2.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
+                    if "elapsed_ms" not in metrics_any2:
+                        metrics_any2["elapsed_ms"] = (_t1 - _t0) * 1000.0
                     if isinstance(info, dict):
-                        feasible = bool(info.get("feasible", True))
-                        metrics_any2.setdefault("feasible", feasible)
-                        if not feasible and "fail_reason" not in metrics_any2:
-                            fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
-                            metrics_any2["fail_reason"] = fr
-                    metrics_any2.setdefault("source", "real")
+                        feasible_info = info.get("feasible")
+                        if feasible_info is not None and "feasible" not in metrics_any2:
+                            metrics_any2["feasible"] = bool(feasible_info)
+                        if "fail_reason" not in metrics_any2:
+                            fr = info.get("reason") if isinstance(info.get("reason"), str) else None
+                            if fr:
+                                metrics_any2["fail_reason"] = fr
+                    if "source" not in metrics_any2:
+                        metrics_any2["source"] = "real"
                     sv = _scoring_version()
                     if sv:
                         metrics_any2.setdefault("scoring_version", sv)
@@ -909,13 +948,11 @@ def forward_many(
                 _t0 = time.perf_counter()
                 metrics = evaluate_boundary(dict(b), use_real=False)
                 _t1 = time.perf_counter()
-                try:
-                    metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
-                    metrics.setdefault("feasible", True)
-                    metrics.setdefault("fail_reason", "")
-                    metrics.setdefault("source", "placeholder")
-                except Exception:
-                    pass
+                if isinstance(metrics, dict):
+                    if "elapsed_ms" not in metrics:
+                        metrics["elapsed_ms"] = (_t1 - _t0) * 1000.0
+                    _mark_placeholder_failure(metrics, reason="placeholder_eval")
+                    metrics.setdefault("phase", "real")
                 if mf_proxy:
                     _attach_proxy_fields(i, metrics, phase_override="proxy")
                 metrics = _annotate_vmec_metadata(metrics, vmec_opts)
@@ -938,7 +975,8 @@ def forward_many(
                         i = futs[fut]
                         r = fut.result()
                         if isinstance(r, dict):
-                            r.setdefault("source", "placeholder")
+                            _mark_placeholder_failure(r, reason="placeholder_eval")
+                            r.setdefault("phase", "real")
                             if mf_proxy:
                                 _attach_proxy_fields(futs[fut], r, phase_override="proxy")
                             r = _annotate_vmec_metadata(r, vmec_opts)
@@ -956,13 +994,9 @@ def forward_many(
                     _t0 = time.perf_counter()
                     metrics = evaluate_boundary(dict(b), use_real=False)
                     _t1 = time.perf_counter()
-                    try:
+                    if isinstance(metrics, dict):
                         metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
-                        metrics.setdefault("feasible", True)
-                        metrics.setdefault("fail_reason", "")
                         metrics.setdefault("source", "placeholder")
-                    except Exception:
-                        pass
                     if mf_proxy:
                         _attach_proxy_fields(i, metrics, phase_override="proxy")
                     metrics = _annotate_vmec_metadata(metrics, vmec_opts)
@@ -1100,31 +1134,36 @@ def _real_eval_task(args: tuple[dict[str, Any], str, Mapping[str, Any]]) -> dict
         _metrics_raw, info = px_forward(b, problem=prob, vmec_opts=vmec_opts)
         metrics: Dict[str, Any] = dict(_metrics_raw)
         _t1 = time.perf_counter()
-        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
-        metrics["source"] = "real"
+        if "elapsed_ms" not in metrics:
+            metrics["elapsed_ms"] = (_t1 - _t0) * 1000.0
+        if "source" not in metrics:
+            metrics["source"] = "real"
         if isinstance(info, dict):
-            feasible = bool(info.get("feasible", True))
-            metrics.setdefault("feasible", feasible)
-            if not feasible and "fail_reason" not in metrics:
-                fr = info.get("reason") if isinstance(info.get("reason"), str) else ""
-                metrics["fail_reason"] = fr
+            feas_info = info.get("feasible")
+            if feas_info is not None and "feasible" not in metrics:
+                metrics["feasible"] = bool(feas_info)
+            if "fail_reason" not in metrics:
+                fr = info.get("reason") if isinstance(info.get("reason"), str) else None
+                if fr:
+                    metrics["fail_reason"] = fr
         sv = _scoring_version()
         if sv:
             metrics.setdefault("scoring_version", sv)
         return _annotate_vmec_metadata(metrics, vmec_opts)
-    except Exception:
+    except Exception as exc:
         # Fallback to placeholder if real path unavailable in worker
         _t0 = time.perf_counter()
         metrics = evaluate_boundary(b, use_real=False)
         _t1 = time.perf_counter()
-        try:
-            metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
-            metrics.setdefault("feasible", True)
-            metrics.setdefault("fail_reason", "")
-            metrics["source"] = "placeholder"
-        except Exception:
-            pass
         if isinstance(metrics, dict):
+            if "elapsed_ms" not in metrics:
+                metrics["elapsed_ms"] = (_t1 - _t0) * 1000.0
+            _mark_placeholder_failure(
+                metrics,
+                reason=f"worker_placeholder: {exc}",
+                placeholder_reason="worker_placeholder",
+            )
+            metrics.setdefault("phase", "real")
             metrics = _annotate_vmec_metadata(metrics, vmec_opts)
         return metrics
 
@@ -1136,13 +1175,11 @@ def _placeholder_eval_task(
     _t0 = time.perf_counter()
     metrics = evaluate_boundary(b, use_real=False)
     _t1 = time.perf_counter()
-    try:
-        metrics.setdefault("elapsed_ms", (_t1 - _t0) * 1000.0)
-        metrics.setdefault("feasible", True)
-        metrics.setdefault("fail_reason", "")
-        metrics.setdefault("source", "placeholder")
-    except Exception:
-        pass
+    if isinstance(metrics, dict):
+        if "elapsed_ms" not in metrics:
+            metrics["elapsed_ms"] = (_t1 - _t0) * 1000.0
+        _mark_placeholder_failure(metrics, reason="placeholder_eval")
+        metrics.setdefault("phase", "real")
     if vmec_opts is not None and isinstance(metrics, dict):
         metrics = _annotate_vmec_metadata(metrics, vmec_opts)
     return metrics

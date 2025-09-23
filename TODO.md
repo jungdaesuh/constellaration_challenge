@@ -25,24 +25,28 @@ Aggressive plan to produce top-tier results within 24 hours. No warm‑ups.
 
 ### Runbook (tonight → tomorrow)
 
-1) Code + tests (H0–H3)
+1. Code + tests (H0–H3)
+
 - [ ] `src/constelx/problems/constraints.py` with vector constraints + tests
 - [ ] `src/constelx/optim/furbo.py` (qNEI + TR; qNEHVI for P3)
 - [ ] Wire CLI & small unit/smoke tests
 
-2) Performance switches (H3–H4)
+2. Performance switches (H3–H4)
+
 - [ ] Enable parallel VMEC: `export CONSTELX_ALLOW_PARALLEL_REAL=1`
 - [ ] Tighten timeouts: `export CONSTELX_REAL_TIMEOUT_MS=20000; export CONSTELX_REAL_RETRIES=0`
 - [ ] Use search fidelity: `--vmec-level low --vmec-hot-restart`; set `--max-workers 4–8` (hardware‑dependent)
 - [ ] Ensure cache dir on fast disk: `--cache-dir .cache/eval`
 
-3) Seeding & gating (H3–H4)
+3. Seeding & gating (H3–H4)
+
 - [ ] Train/update prior on HF slice (if not present):
       `constelx data fetch --nfp 3 --limit 1024 && constelx data prior-train data/cache/subset.parquet --out models/seeds_prior_hf_gmm.joblib`
 - [ ] Agent gating knobs: `--mf-proxy --mf-quantile 0.25 --surrogate-screen --surrogate-quantile 0.3 --novelty-skip`
 - [ ] PCFM defaults on proposals: `--correction pcfm --constraints-file examples/pcfm_qs_band.json`
 
-4) Production runs (H4–H12)
+4. Production runs (H4–H12)
+
 - [ ] P1 (budget 60):
       `constelx opt run --baseline furbo --nfp 3 --budget 60 --use-physics --problem p1 --tr-init 0.2 --batch 2 --vmec-level low --vmec-hot-restart --cache-dir .cache/eval`
 - [ ] P2 (budget 80):
@@ -50,17 +54,20 @@ Aggressive plan to produce top-tier results within 24 hours. No warm‑ups.
 - [ ] P3 (budget 100, qNEHVI):
       `constelx opt run --baseline furbo --nfp 3 --budget 100 --use-physics --problem p3 --tr-init 0.2 --batch 2 --vmec-level low --vmec-hot-restart --cache-dir .cache/eval`
 
-5) High‑fid verification + packaging (H12–H16)
+5. High‑fid verification + packaging (H12–H16)
+
 - [ ] Re‑score top‑K at higher fidelity (`--vmec-level medium`), hot‑restart enabled
 - [ ] Pack submissions: `constelx submit pack runs/<ts> --out submissions/<name>.zip --top-k 5`
 - [ ] Sanity: ensure all `source=real` and `evaluator_score` present; check `best.json`
 
-6) Ablations & report (H16–H20)
+6. Ablations & report (H16–H20)
+
 - [ ] Compare `furbo` vs `qnei` vs `ngopt` under same budget (table: feasibles, best score, VMEC calls)
 - [ ] Plot P3 Pareto front; annotate dominated vs non‑dominated counts
 - [ ] Write `runs/<ts>/README.md` with CLI, env, and highlights
 
 ### Risks & mitigations
+
 - VMEC stalls → keep 20s timeout, 0 retries; drop survivors count per step; leverage cache/hot‑restart
 - Poor feasibility rate → raise prior min‑prob to 0.6; tighten PCFM band; gate harder on `qs_residual`
 - Over‑exploration by BO → shrink TR on failure; increase `--batch` for parallel exploitation
@@ -94,12 +101,14 @@ Aggressive plan to produce top-tier results within 24 hours. No warm‑ups.
 - [x] Replace "stub" references — refresh guidance in `AGENTS.md:116`, `CONSTELX_ANALYSIS_REPORT.md:15`, `docs/GUIDELINE.md:532-543`, and `docs/STRATEGY.md:491,720` to describe production extension hooks instead of TODO stubs.
 
 ## Stretch (post‑submission hardening)
+
 - [ ] Multi‑fidelity GP (coarse/fine VMEC) with promotion policy
 - [ ] Agent integration of `furbo` proposer (`--algo furbo`) with online TR state
 - [ ] Ensemble/MC‑dropout surrogates with calibrated uncertainty; UCB gating (`--surrogate-ucb-k`)
 - [ ] HPC harness + job arrays for large P3 sweeps; result concentrator
 
 ## Parallelizable Tasks
+
 - [ ] Backlog grooming — review the open issues monthly to keep Sequential and Completed lists honest.
 
   (De-dup with Sequential list as work starts.)
@@ -121,7 +130,6 @@ Short instructions (how to address this section)
 
 > None (2025-09-22 audit: all dev-only paths are guarded or documented.)
 
-
 Productionization checklist (enforcement)
 
 - [x] Defaults use real stack: CLI defaults set to `--source hf` and real evaluator; require explicit opt‑in for `--synthetic`/`--toy` in dev.
@@ -134,12 +142,14 @@ Productionization checklist (enforcement)
 - [x] Docs/examples: move synthetic examples under `examples/dev/`, keep `examples/` real by default with small, reproducible inputs.
 
 - Synthetic data paths (dev/CI only)
+
   - [x] `src/constelx/cli.py` now defaults to `source="hf"`; pass `--source synthetic` for dev fixtures (guarded in non‑dev when enforcement is ON).
   - [x] `src/constelx/cli.py` `eval forward --example` uses a synthetic example boundary (guarded; see README Dev-only section).
   - [x] `src/constelx/data/dataset.py` deterministic synthetic fallback via `_synthetic_examples()` used by tests and CI.
   - [x] Docs callouts: update ROADMAP/GUIDELINE to reflect real-first defaults (TODO).
 
 - Placeholder evaluator paths (development fallback; provenance recorded)
+
   - [x] `src/constelx/eval/__init__.py:1102` placeholder evaluator helper and path; metrics include `source=placeholder` and `agg_score` distinct from `evaluator_score`.
   - [x] `src/constelx/physics/proxima_eval.py:244` synthetic objectives for placeholder path; `_fallback_metrics` used when physics stack is missing.
   - [x] `src/constelx/physics/constel_api.py:48-99` lightweight placeholder evaluator and norms for `placeholder_metric`.
@@ -148,15 +158,18 @@ Productionization checklist (enforcement)
   - [x] `src/constelx/agents/simple_agent.py` records placeholder provenance in several branches (e.g., lines ~769, 856, 875, 936, 959, 1191, 1206).
 
 - Diagnostic CMA‑ES baseline and related
+
   - [x] `src/constelx/optim/evolution.py` synthetic dev fixture score path for the tiny CMA‑ES baseline (guarded).
   - [x] `src/constelx/cli.py` `--toy` sphere objective switch (guarded); README marks as dev‑only.
   - [x] `src/constelx/optim/baselines.py:97` ALM docstring documents feasibility-aware dev fallback when physics is unavailable.
   - [x] `src/constelx/cli.py:659-675` Pareto command supports `--no-use-physics` (dev-only; guarded).
 
 - Provenance handling
+
   - [x] `src/constelx/physics/metrics.py:69` treats `source in {"placeholder","synthetic"}` consistently for provenance.
 
 - Physics placeholders (module‑level docstrings)
+
   - [x] `src/constelx/physics/constraints.py:1` documents lightweight constraint proxies.
   - [x] `src/constelx/physics/pbfm.py:1` documents available PBFM helpers (conflict-free updates).
 
@@ -169,6 +182,7 @@ Productionization checklist (enforcement)
   - [x] Tests: `tests/test_agent_mf_integration.py:29` uses the placeholder path (`use_physics=False`) in a smoke.
 
 ## Completed Recently
+
 - Flip defaults to real (data fetch HF; eval/agent real by default); guards for dev-only paths; packaging guard with --allow-dev; enforcement helpers and pre‑flight checks.
 - Real-smoke workflow scaffolded (PR path filters + pip/evaluator cache); follow-up to ensure evaluator availability in CI.
 - README quickstart updated to real-first; Dev-only section and enforcement notes.
@@ -201,11 +215,80 @@ Productionization checklist (enforcement)
 - Dataset/surrogate speedups (PR #70).
 - Fix: boundary m=1 column mapping (PR #66).
 
-## Misleading outputs audit (2025-09-23)
-- Investigate hard-coded feasibility defaults in `src/constelx/physics/proxima_eval.py:221-229` and `:253-259`; ensure real Constellaration results propagate their true feasibility flags and reasons.
-- Remove blanket `setdefault("feasible", True)` / `setdefault("fail_reason", "")` writes in `src/constelx/physics/metrics.py:76-110` so enrichment cannot mask upstream failures.
-- Fix optimistic defaults in `src/constelx/eval/__init__.py` (`forward`:455-457, proxy path 647-649, placeholder paths 910-917, 939-944, 957-963, worker fallbacks 1122-1143) that mark proxy/placeholder results as feasible with empty fail reasons.
-- Update `_real_eval_task` fallback (`src/constelx/eval/__init__.py:1094-1129`) to bubble up errors instead of silently returning placeholder metrics flagged as real and feasible.
-- Ensure proxy evaluations surfaced through `forward_many` carry an explicit `phase=proxy` plus `feasible=None` (or similar) so downstream consumers cannot confuse them with physics-backed rows.
-- Make the scorer shim (`src/constelx/physics/proxima_eval.py:266-290`) emit a warning/flag when it falls back to the numeric-sum placeholder, avoiding trustworthy-looking scores when the official scorer import fails.
-- Audit `constel_api` placeholder fallbacks (`src/constelx/physics/constel_api.py:56-111`) so forced fallbacks cannot masquerade as successful real-evaluator calls.
+### **Goal**
+
+Eliminate false “feasible”/“real” signals so CI, humans, and downstream agents see the true physics status of every evaluation. Break the work into the concrete sub-tasks below; keep provenance accurate end-to-end.
+
+---
+
+#### 1. Remove hard-coded defaults in `proxima_eval.py`
+
+- [x] Remove the hard-coded `feasible=True` defaults in `src/constelx/physics/proxima_eval.py:221-229` and the placeholder branch at 253-259.
+- [x] Ensure placeholder fallbacks set `feasible=False` and include the exception message in `reason`.
+- [x] Ensure `_apply_fallbacks` only fills `feasible`/`fail_reason` when missing, never overwriting evaluator-provided truth.
+- [x] Update unit tests that assumed optimistic defaults (e.g., `tests/physics/test_metrics.py`) to match the new semantics.
+  - _Analysis:_ `_apply_fallbacks` now lives beside `forward_metrics`, only populating missing fields; fallback paths wire the exception string into both `reason` and `fail_reason`, and tests cover placeholder provenance.
+
+---
+
+-#### 2. Clean up optimistic defaults in `eval.forward` / `forward_many`
+
+- [x] Remove `setdefault("feasible", True)` / `fail_reason=""` in `forward` (lines 455-457).
+- [x] Remove defaults in all `forward_many` branches (proxy path 647-649, placeholder paths 910-917, 939-944, 957-963, worker fallbacks 1122-1143).
+- [x] Ensure all code paths trust evaluator metadata or placeholder helpers instead of painting success.
+- [x] Add regression coverage in:
+  - `tests/test_eval_timeout_fallback.py`
+  - `tests/test_eval_parallel_cache.py`
+  - `tests/test_eval_mf_gating.py`
+  - _Analysis:_ `forward`/`forward_many` now rely on `_mark_placeholder_failure`; tests assert failure provenance, cache skips, and proxy `feasible=None` semantics.
+
+---
+
+#### 3. Make `_real_eval_task` failures obvious
+
+- [x] When the worker cannot run the real evaluator, propagate the exception to the parent or return a dict with:
+  - `source="placeholder"`
+  - `feasible=False`
+  - descriptive `fail_reason`
+- [x] Verify parent handling in `forward_many` marks rows as failed rather than caching placeholders as real.
+  - _Analysis:_ Worker fallback now normalizes failure payloads via `_mark_placeholder_failure`; regression test exercises the code path and validates the metadata fields.
+
+---
+
+#### 4. Label proxy rows clearly
+
+- [x] Ensure proxy-only outputs keep `phase="proxy"`, set `feasible=None`, and avoid storing proxy cache entries as real metrics.
+- [x] Adjust downstream ordering (e.g., `src/constelx/submit/pack.py` `_feas_order`) so `None` ranks after true feasibles.
+  - _Analysis:_ Proxy cache entries remain segregated under the `:proxy` namespace; submission ordering already honored `None>True`, documented in README and guarded via mf-gating tests.
+
+---
+
+#### 5. Expose scorer fallbacks
+
+- [x] Add a module-level logger in `src/constelx/physics/proxima_eval.py:266-290`.
+- [x] Emit a warning and annotate metadata when the official scorer import fails.
+- [x] Extend tests (e.g., `tests/test_eval.py` or new coverage) to assert the warning flag surfaces.
+  - _Analysis:_ Scorer fallback now sets `scorer_fallback` + `scorer_warning`; caplog-backed test verifies the warning log and metadata hook.
+
+---
+
+#### 6. Guard `constel_api` fallbacks
+
+- [x] In `src/constelx/physics/constel_api.py:56-111`, on real-eval failure set:
+  - `source="placeholder"`
+  - `feasible=False`
+  - detailed `fail_reason`
+  - optional `placeholder_reason` for diagnostics
+- [x] Confirm direct placeholder requests still work in dev mode and remain clearly marked.
+  - _Analysis:_ `_ensure_placeholder_failure` centralizes provenance for both explicit placeholder requests and real-path fallbacks; downstream tests hit both flows.
+
+---
+
+#### 7. Cross-cutting validation
+
+- [x] Re-run impacted tests and add new ones to cover:
+  - proxy labeling
+  - failure propagation
+  - scorer fallback logging
+- [x] Update `docs/README` to mention stricter provenance (placeholder rows now surface as infeasible unless explicitly verified real).
+  - _Analysis:_ Timeout, cache, mf-gating, and scorer tests cover the new provenance; README documents `placeholder_reason` and proxy semantics for artifact consumers.

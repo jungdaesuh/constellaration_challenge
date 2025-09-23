@@ -49,12 +49,14 @@ def test_mf_gating_selects_by_threshold_and_sets_phase() -> None:
         assert "qi_residual" in rec, "proxy rows should include all Boozer proxies"
         assert "helical_energy" in rec, "proxy rows should include all Boozer proxies"
         assert "mirror_ratio" in rec, "proxy rows should include all Boozer proxies"
-        assert rec.get("source") == "placeholder"
+        assert rec.get("source") == "proxy"
+        assert rec.get("feasible") is None
+        assert "fail_reason" not in rec
     # Expect three results (real for survivors is not used here since use_real=False)
     assert len(results) == 3
     # All rows must carry a phase field when mf_proxy=True on placeholder path
     phases = [r.get("phase") for r in results]
-    assert all(p in {"proxy"} for p in phases)
+    assert all(p == "proxy" for p in phases)
     # Scores should be finite and ordered by our construction
     scores = [float(eval_score(r, problem=None)) for r in results]
     assert all(math.isfinite(s) for s in scores)

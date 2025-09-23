@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple, cast
+from typing import Any, Dict, MutableMapping, Optional, Tuple, cast
 
 from ..dev import is_dev_mode, require_dev_for_placeholder
 
@@ -23,6 +23,25 @@ def example_boundary() -> dict[str, Any]:
     }
 
 
+def _ensure_placeholder_failure(
+    metrics: MutableMapping[str, Any],
+    *,
+    reason: str,
+    placeholder_reason: str | None = None,
+) -> None:
+    """Normalize placeholder results after a failed real evaluation."""
+
+    if "source" not in metrics or str(metrics.get("source")) == "":
+        metrics["source"] = "placeholder"
+    if "feasible" not in metrics:
+        metrics["feasible"] = False
+    existing_reason = str(metrics.get("fail_reason") or "").strip()
+    if reason and (not existing_reason or existing_reason in {"placeholder_metrics", "placeholder_eval"}):
+        metrics["fail_reason"] = reason
+    if placeholder_reason and "placeholder_reason" not in metrics:
+        metrics["placeholder_reason"] = placeholder_reason
+
+
 def evaluate_boundary(
     boundary_json: dict[str, Any], use_real: Optional[bool] = None
 ) -> dict[str, Any]:
@@ -38,7 +57,15 @@ def evaluate_boundary(
             metrics = _evaluate_with_real_physics(boundary_json)
         except Exception as exc:  # pragma: no cover - depends on optional deps
             if is_dev_mode():
-                return _compute_placeholder_metrics(boundary_json)
+                placeholder = _compute_placeholder_metrics(boundary_json)
+                if isinstance(placeholder, dict):
+                    reason = f"real_eval_error: {exc}"
+                    _ensure_placeholder_failure(
+                        placeholder,
+                        reason=reason,
+                        placeholder_reason="real_evaluator_failure",
+                    )
+                return placeholder
             raise RuntimeError(
                 "Real physics evaluation failed. Install extras via "
                 "pip install -e '.[physics]' or set CONSTELX_DEV=1 to allow "
@@ -68,6 +95,12 @@ def _evaluate_with_real_physics(boundary_json: dict[str, Any]) -> dict[str, Any]
         reason = info.get("reason") or info.get("fail_reason")
         if isinstance(reason, str) and reason:
             metrics.setdefault("fail_reason", reason)
+        placeholder_reason = info.get("placeholder_reason")
+        if isinstance(placeholder_reason, str) and placeholder_reason:
+            metrics.setdefault("placeholder_reason", placeholder_reason)
+        phase = info.get("phase")
+        if isinstance(phase, str) and phase:
+            metrics.setdefault("phase", phase)
     metrics.setdefault("source", "real")
     return metrics
 
@@ -107,6 +140,7 @@ def _compute_placeholder_metrics(boundary_json: dict[str, Any]) -> dict[str, Any
         "objectives": objectives,
         "source": "placeholder",
     }
+    _ensure_placeholder_failure(metrics, reason="placeholder_metrics")
     _add_proxy_metrics(boundary_json, metrics)
     return metrics
 

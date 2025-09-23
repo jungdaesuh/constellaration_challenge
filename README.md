@@ -284,6 +284,10 @@ To run with the real evaluator dependencies:
     building on macOS or Linux to satisfy DESC’s geometric I/O dependencies.
 
 When physics extras are unavailable, the CLI and tests use lightweight placeholder evaluators that avoid native builds.
+These placeholder paths deliberately mark metrics with `source=placeholder`, `feasible=False`, a descriptive
+`fail_reason`, and a `placeholder_reason` so downstream tooling never mistakes them for successful real-physics
+evaluations. Proxy-only phases continue to surface with `phase="proxy"` and `feasible=None`, keeping their provenance
+clear in artifacts and caches.
 
 ## Environment (.env) and evaluator knobs
 
