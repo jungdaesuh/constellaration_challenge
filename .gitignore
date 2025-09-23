@@ -16,3 +16,4 @@ runs/
 logs/
 submissions/
 .idea/
+tmp_rescore/
