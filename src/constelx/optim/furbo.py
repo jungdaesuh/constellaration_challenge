@@ -48,9 +48,7 @@ def _make_boundary(x: NDArray[np.float64], nfp: int) -> dict[str, Any]:
     return b
 
 
-def _evaluate(
-    x: NDArray[np.float64], cfg: FurboConfig
-) -> Tuple[float, NDArray[np.float64]]:
+def _evaluate(x: NDArray[np.float64], cfg: FurboConfig) -> Tuple[float, NDArray[np.float64]]:
     """Return (objective, constraints_vector). Lower objective is better.
 
     Constraints vector uses c_tilde<=0 as feasible. Falls back to a single
@@ -80,7 +78,9 @@ def _bounds() -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
     return lo, hi
 
 
-def _truncate_to_box(x: NDArray[np.float64], lo: NDArray[np.float64], hi: NDArray[np.float64]) -> NDArray[np.float64]:
+def _truncate_to_box(
+    x: NDArray[np.float64], lo: NDArray[np.float64], hi: NDArray[np.float64]
+) -> NDArray[np.float64]:
     return np.minimum(hi, np.maximum(lo, x))
 
 
@@ -133,7 +133,9 @@ def run_furbo(cfg: FurboConfig) -> Tuple[NDArray[np.float64], float]:
         if len(train_x_list) < 4:
             # Bootstrap with Sobol
             d = lo.shape[0]
-            engine = torch.quasirandom.SobolEngine(dimension=d, scramble=True, seed=int(cfg.seed) + len(train_x_list))
+            engine = torch.quasirandom.SobolEngine(
+                dimension=d, scramble=True, seed=int(cfg.seed) + len(train_x_list)
+            )
             pts = engine.draw(max(cfg.batch, 1)).to(dtype=dtype, device=device)
             cand = torch.from_numpy(lo).to(dtype=dtype, device=device) + (
                 torch.from_numpy(hi - lo).to(dtype=dtype, device=device) * pts

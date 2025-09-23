@@ -77,4 +77,3 @@ def is_feasible(c_tilde: Sequence[float]) -> bool:
 
 
 __all__ = ["constraints_from_metrics", "is_feasible"]
-

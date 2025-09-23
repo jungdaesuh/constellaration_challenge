@@ -56,7 +56,9 @@ def main(out_dir: Path) -> None:
                         qs_residual=qs_res,
                         helical_energy=he_eng,
                         feasible=bool(metrics.get("feasible", True)),
-                        metrics={k: float(v) for k, v in metrics.items() if isinstance(v, (int, float))},
+                        metrics={
+                            k: float(v) for k, v in metrics.items() if isinstance(v, (int, float))
+                        },
                     )
                 )
             except Exception as exc:  # pragma: no cover - best effort sweep
