@@ -151,7 +151,7 @@ def _build_residual_and_jac(
     def _value_at(var: Var, x: NDArray[np.floating[Any]]) -> float:
         return float(x[index[(var.field, int(var.i), int(var.j))]])
 
-    def _values_at(vars: Sequence[Var], x: NDArray[np.floating[Any]]) -> np.ndarray:
+    def _values_at(vars: Sequence[Var], x: NDArray[np.floating[Any]]) -> NDArray[np.float64]:
         return np.asarray([_value_at(v, x) for v in vars], dtype=float)
 
     def _aspect_ratio_and_grad(

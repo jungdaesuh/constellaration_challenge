@@ -24,3 +24,11 @@ def test_timeout_records_failure_and_fallback(monkeypatch) -> None:
     assert "feasible" in m
     assert "fail_reason" in m
     assert "source" in m
+    if m.get("source") == "real" and m.get("feasible") is True:
+        # Real evaluator returned quickly; fail_reason may be empty.
+        return
+    assert m.get("feasible") is False
+    assert m.get("source") == "placeholder"
+    assert m.get("fail_reason")
+    # Placeholder provenance should carry an explicit reason for downstream auditing.
+    assert m.get("placeholder_reason") in {"real_eval_timeout", "real_evaluator_failure"}

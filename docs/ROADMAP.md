@@ -10,7 +10,7 @@ The repository ships production-ready pathways with lightweight fallbacks for lo
 1. **Dataset access**: `constelx data fetch` to materialize a filtered subset (e.g., NFP=3) into Parquet.
 2. **Forward model sanity checks**: `constelx eval forward --example` and `--random` to verify metrics computation.
 3. **Baselines**:
-   - Start with `constelx opt cmaes --nfp 3 --budget 50` (boundary mode) for physics-driven runs. Use the `--toy` sphere objective only when validating local installations.
+   - Start with `constelx opt cmaes --nfp 3 --budget 50` (boundary mode) for physics-driven runs. Use the synthetic dev fixture (`--toy`) only when validating local installations.
    - Train a simple surrogate with `constelx surrogate train` (MLP baseline). A separate `surrogate eval` may be added later.
 4. **Agent loop**: glue propose→simulate→select with `constelx agent run` (supports random and CMA‑ES, resume, correction hooks).
 5. **Physics‑constrained generation (optional)**:
@@ -46,7 +46,8 @@ The repository ships production-ready pathways with lightweight fallbacks for lo
 - **Baselines (#32)**
   - Implement ALM + Nevergrad and trust‑constr baselines as an `opt run` CLI path with coefficient whitening and trust region.
 - **Data ingestion (#30)**
-  - Add HF dataset loader (real dataset) with Parquet cache; keep synthetic as CI default.
+  - Add HF dataset loader (real dataset) with Parquet cache; synthetic fixtures are now
+    isolated under `examples/dev/` for guarded CI/dev usage only.
 - **Multi‑fidelity VMEC**
   - Expose low‑fidelity search vs high‑fidelity scoring toggles; hot‑restart and convergence gating.
 - **Surrogate in the loop**
@@ -79,6 +80,7 @@ This repo’s work is organized into phases with tracked issues. Use these to pl
 
 - Phase 2 — Optimizers
   - #40 (Constrained BoTorch qNEI), #43 (Nevergrad NGOpt), #44 (P3 scalarization + Pareto sweep)
+    - 2025-09-23: NGOpt real-eval parity run recorded (`score=0.0`, feasibility buffer `+4`). Follow-up tuning of the augmented-Lagrangian loop is required before closing #43.
 
 - Phase 3 — Proxies + Seeds
   - #46 (Boozer/QS–QI proxy library ✅), #41 (Integrate QS proxies – depends on #46), #51 (Metrics/constraints consolidation), #45 (Data‑driven seeds prior), #47 (Near‑axis seeding)

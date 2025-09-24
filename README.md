@@ -36,7 +36,7 @@ Notes:
 - CLI (`constelx`): `data` (fetch/filter/csv), `eval` (forward metrics, scoring), `opt` (baselines), `surrogate` (train/serve simple models), `agent` (multi-step propose→simulate→select loop).
 - Physics wrappers: thin adapters around the `constellaration` package for metrics and VMEC++ boundary objects, plus bounded Boozer-space QS/QI proxies (`constelx.physics.booz_proxy`).
 - Proxy metrics: Boozer-space quasi-symmetry/isodynamic proxies with bounded residuals (`constelx.eval.boozer`). Real evaluator paths populate `proxy_qs_*` / `proxy_qi_*`; lightweight fallbacks mirror the schema for local tests.
-- Optimization: CMA-ES, DESC trust-region, Nevergrad NGOpt, and BoTorch qNEI baselines ship out of the box; additional optimizers plug into the same interface.
+- Optimization: CMA-ES, DESC trust-region, Nevergrad NGOpt, BoTorch qNEI, and FuRBO (constrained trust‑region BO) baselines ship out of the box; additional optimizers plug into the same interface.
 - Models: simple MLP baseline with documented extension points for FNO/transformers.
 - Hard-constraint tooling: PCFM projection helpers and a PBFM conflict-free gradient update for physics-aware generation and training.
 
@@ -55,14 +55,16 @@ See `docs/ROADMAP.md` (engineering roadmap) and `docs/STRATEGY.md`
 Evaluation (real by default)
 - `constelx eval forward --random --nfp 3 --seed 0`
 - Near-axis QS/QI-friendly seed: `constelx eval forward --near-axis --nfp 3 --seed 0`
-- `constelx eval score --metrics-json examples/metrics_small.json`
+- Real quickstart reference (see `examples/real_quickstart/README.md`):
+  `constelx eval forward --near-axis --use-physics --problem p1 --json`
+- Dev fixture scoring (guarded): `constelx eval score --metrics-json examples/dev/metrics_small.json`
 
 Evaluator knobs & parity
 - `constelx eval problems` lists each challenge problem together with the metrics the
   evaluator expects so you can sanity-check parity before long runs.
 - Real evaluator path is default for `eval forward`, `opt run`, and `agent run`. To force
   placeholder/dev paths, use `--no-use-physics` or set `CONSTELX_USE_REAL_EVAL=0`.
-  Example real run: `constelx eval forward --boundary-json examples/boundary.json --problem p1`.
+  Example real run: `constelx eval forward --near-axis --use-physics --problem p1 --json`.
 - Timeout/backoff knobs: `CONSTELX_REAL_TIMEOUT_MS`, `CONSTELX_REAL_RETRIES`, and
   `CONSTELX_REAL_BACKOFF` tune the real evaluator timeout loop.
 - Logging: set `CONSTELX_EVAL_LOG_DIR=/path/to/logs` to capture one JSON file per
@@ -74,7 +76,7 @@ Evaluator knobs & parity
 
 Optimization
 - Boundary mode: `constelx opt cmaes --nfp 3 --budget 50 --seed 0`
-  (Dev-only synthetic sphere: `constelx opt cmaes --toy --budget 20 --seed 0`)
+  (Dev-only synthetic fixture: `constelx opt cmaes --toy --budget 20 --seed 0`)
 
 Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
 - Trust‑constr (2D helical coefficients):
@@ -88,8 +90,13 @@ Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
   scoring via the shared evaluator.
 - Nevergrad NGOpt (augmented-Lagrangian polisher):
   `constelx opt run --baseline ngopt --nfp 3 --budget 10`
+  *2025-09-23 parity note*: the first physics-backed run on P1 returned `score=0.0`
+  with a feasibility buffer violation of `+4.0`. See `CONSTELX_ANALYSIS_REPORT.md`
+  for the full log and tuning backlog.
 - BoTorch qNEI (feasibility-aware acquisition):
   `constelx opt run --baseline qnei --nfp 3 --budget 10`
+  - FuRBO (constrained TR‑BO, single‑obj qNEI):
+  `constelx opt run --baseline furbo --nfp 3 --budget 60 --use-physics --problem p1 --tr-init 0.2 --batch 2`
   Requires `pip install -e ".[bo]"` (or `constelx[bo]`) and optimizes the same
   two-dimensional helical parameterization using a constraint-aware qNEI loop.
 - With physics path (requires problem id):
@@ -104,7 +111,7 @@ Optimization baselines (trust‑constr / ALM / qNEI / NGOpt)
 Agent
 - Random search: `constelx agent run --nfp 3 --budget 6 --seed 0 --runs-dir runs`
 - Near-axis seeding: `constelx agent run --nfp 3 --budget 6 --seed-mode near-axis`
-- Data prior seeding: `constelx agent run --nfp 3 --budget 10 --seed-mode prior --seed-prior models/seeds_prior.joblib`
+- Data prior seeding: `constelx agent run --nfp 3 --budget 10 --seed-mode prior --seed-prior models/seeds_prior_hf_gmm.joblib` (default shipped; see `docs/SEEDS_PRIOR.md`)
 - CMA-ES (falls back to random if cma missing):
   `constelx agent run --nfp 3 --budget 20 --algo cmaes --seed 0`
 - Resume a run: `constelx agent run --nfp 3 --budget 10 --resume runs/<ts>`
@@ -117,6 +124,10 @@ Agent
   `fail_reason=invalid_geometry` without spending evaluator calls.
    - Thresholds can be tuned: `--guard-r0-min`, `--guard-r0-max`, and
      `--guard-helical-ratio-max`.
+
+> **Dev fixtures**: synthetic boundaries and metrics used by tests now live under
+> `examples/dev/`. Commands that rely on those paths require `CONSTELX_DEV=1` or an
+> explicit `--no-use-physics` flag.
 
 Novelty gating (skip near-duplicates)
 - Enable skip: `--novelty-skip` to avoid spending evaluator calls on proposals too close to recent ones.
@@ -200,7 +211,7 @@ Submission
 
 - Dev-only examples:
   - Synthetic example boundary: `constelx eval forward --example`
-  - Synthetic sphere objective: `constelx opt cmaes --toy`
+- Synthetic dev fixture objective: `constelx opt cmaes --toy`
 - Dev opt-in: set `CONSTELX_DEV=1` to enable dev-only paths.
 - Real-only enforcement: set `CONSTELX_ENFORCE_REAL=1` to reject placeholder/synthetic paths.
   - Packaging guard: `constelx submit pack` rejects runs with non‑real rows unless `--allow-dev` or `CONSTELX_DEV=1`.
@@ -273,6 +284,10 @@ To run with the real evaluator dependencies:
     building on macOS or Linux to satisfy DESC’s geometric I/O dependencies.
 
 When physics extras are unavailable, the CLI and tests use lightweight placeholder evaluators that avoid native builds.
+These placeholder paths deliberately mark metrics with `source=placeholder`, `feasible=False`, a descriptive
+`fail_reason`, and a `placeholder_reason` so downstream tooling never mistakes them for successful real-physics
+evaluations. Proxy-only phases continue to surface with `phase="proxy"` and `feasible=None`, keeping their provenance
+clear in artifacts and caches.
 
 ## Environment (.env) and evaluator knobs
 

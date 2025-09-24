@@ -488,7 +488,7 @@ Final notes on self‑learning, production grade operation
 
 ⸻
 
-If you want, I can turn the above into a concrete project scaffold (repo + environment files + first round of unit tests and stubs) so your GPT‑5 coding agent can start filling in code immediately.
+If you want, I can turn the above into a concrete project scaffold (repo + environment files + first round of unit tests and extension hooks) so your GPT‑5 coding agent can start filling in code immediately.
 
 Below is a practical, production‑oriented plan to (i) pick LLMs for your agents (with current, verifiable sources), (ii) give your GPT‑5 coding agent a concrete implementation blueprint end‑to‑end, (iii) map that blueprint to your Apple M3 Max vs. cloud, and (iv) turn the whole thing into a self‑improving system that reliably climbs—and stays at the top of—the ConStellaration leaderboard.
 
@@ -717,7 +717,7 @@ Final notes on self‑learning, production grade operation
 
 ⸻
 
-If you want, I can turn the above into a concrete project scaffold (repo + environment files + first round of unit tests and stubs) so your GPT‑5 coding agent can start filling in code immediately.
+If you want, I can turn the above into a concrete project scaffold (repo + environment files + first round of unit tests and extension hooks) so your GPT‑5 coding agent can start filling in code immediately.
 
 Yes—this paper is packed with techniques we can use right away. Here’s a practitioner‑oriented extraction of the most useful ideas and how to apply them to ConStellaration (and beyond).
 

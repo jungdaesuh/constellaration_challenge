@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, MutableMapping, Optional
 
+from ..dev import is_dev_mode
+
 
 def _as_float(x: Any, default: float = 0.0) -> float:
     try:
@@ -139,7 +141,13 @@ def compute(
             m, info_payload = px_forward(boundary, problem=problem or "p1")
             metrics = dict(m)
             default_source = "real"
-        except Exception:
+        except Exception as exc:
+            if not is_dev_mode():
+                raise RuntimeError(
+                    "Real physics metrics computation failed. Install extras via "
+                    "pip install -e '.[physics]' or set "
+                    "CONSTELX_DEV=1 to allow placeholder metrics explicitly."
+                ) from exc
             from .constel_api import evaluate_boundary
 
             metrics = evaluate_boundary(dict(boundary), use_real=False)

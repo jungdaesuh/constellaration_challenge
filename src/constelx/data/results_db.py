@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import List, Mapping
 
 import numpy as np
+from numpy.typing import NDArray
 
 
 @dataclass
@@ -77,7 +78,7 @@ class ResultsDB:
     # ------------------------------------------------------------------
     # Novelty check
     # ------------------------------------------------------------------
-    def _vector(self, boundary: Mapping[str, float], keys: List[str]) -> np.ndarray:
+    def _vector(self, boundary: Mapping[str, float], keys: List[str]) -> NDArray[np.float64]:
         """Return a vector of boundary values ordered by ``keys``."""
 
         return np.asarray([boundary[k] for k in keys], dtype=float)

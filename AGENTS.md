@@ -20,7 +20,8 @@ These guidelines help contributors build, test, and extend the ConStelX research
 - Tests: `pytest -q` (fast unit + minimal integration)
 - CLI help: `constelx --help`
   - Quick smoke: `constelx data fetch --nfp 3 --limit 8`
-- E2E (small): `constelx agent run --nfp 3 --budget 5 --seed 0`
+- E2E (small, real stack): `constelx agent run --nfp 3 --budget 5 --seed 0 --use-physics --problem p1`
+  (See `examples/real_quickstart/` for reference config, metrics, and best.json.)
   - With PCFM correction (Gauss–Newton projection with clamped steps + geometry revalidation):
     ```json
     [
@@ -39,8 +40,8 @@ These guidelines help contributors build, test, and extend the ConStelX research
     - Tuning: CLI flags `--pcfm-gn-iters/--pcfm-damping/--pcfm-tol` or JSON top-level `{gn_iters,damping,tol}`.
     - See [README.md#pcfm-correction-gaussnewton-projection](README.md#pcfm-correction-gaussnewton-projection) for additional context and safety guidance.
 - ConStellaration parity:
-  - Forward metrics via official evaluator: `constelx eval forward --boundary-json examples/boundary.json --use-real --use-physics --problem p1` (set `CONSTELX_USE_REAL_EVAL=1` to make this the default).
-  - Score aggregation check: `constelx eval score --metrics-json examples/metrics_small.json --problem p1` (or
+  - Forward metrics via official evaluator: `constelx eval forward --near-axis --use-physics --problem p1 --json` (set `CONSTELX_USE_REAL_EVAL=1` to make this the default).
+  - Score aggregation check (dev fixture): `constelx eval score --metrics-json examples/dev/metrics_small.json --problem p1` (or
     `--metrics-file runs/<ts>/metrics.csv --problem p1`).
   - Run gated parity tests (requires `pip install -e ".[physics]"` and the evaluator deps):
     `CONSTELX_RUN_PHYSICS_TESTS=1 pytest -q -k scoring_parity`.
@@ -113,7 +114,7 @@ Target correctness, determinism, and incremental performance. Prefer small verti
 
 - `constelx.data`: dataset fetch/filter utilities, simple CSV index.
 - `constelx.eval`: thin wrappers around `constellaration` evaluator; one function per metric + `score()`.
-- `constelx.opt`: optimizers (`cmaes`, `bo_torch` stub).
+- `constelx.opt`: optimizers (CMA-ES, Nevergrad NGOpt, BoTorch qNEI, DESC trust-region) with extension hooks.
 - `constelx.models`: baseline MLP + scaffolding for FNO/transformers.
 - `constelx.agents`: propose→simulate→select loop; checkpointing & resumability.
 - `constelx.cli`: `constelx [data|eval|opt|surrogate|agent] ...`
@@ -173,14 +174,14 @@ Physics test opt‑in
 ## CLI behavior to implement
 
 - `constelx data fetch --nfp 3 --limit 128`
-- `constelx data prior-train data/cache/subset.jsonl --out models/seeds_prior.joblib`
-- `constelx data prior-sample models/seeds_prior.joblib --count 16 --nfp 3`
-- `constelx eval forward --boundary-file examples/boundary.json`
+- `constelx data prior-train data/cache/subset.parquet --out models/seeds_prior_hf_gmm.joblib`
+- `constelx data prior-sample models/seeds_prior_hf_gmm.joblib --count 16 --nfp 3`
+- `constelx eval forward --boundary-file examples/dev/boundary.json`
 - `constelx eval score --metrics-file runs/<ts>/metrics.csv`
 - `constelx opt cmaes --nfp 3 --budget 50 [--seed 0]`
 - `constelx opt run --baseline trust-constr|alm|cmaes --nfp 3 --budget 50 [--seed 0] [--use-physics --problem p1]`
-- `constelx agent run --nfp 3 --budget 50 [--seed 0] [--resume PATH]`
-- Prior seeding: `constelx agent run --nfp 3 --budget 20 --seed-mode prior --seed-prior models/seeds_prior.joblib`
+- `constelx agent run --nfp 3 --budget 50 --use-physics --problem p1 [--seed 0] [--resume PATH]`
+- Prior seeding: `constelx agent run --nfp 3 --budget 20 --seed-mode prior --seed-prior models/seeds_prior_hf_gmm.joblib`
 
 ### New helper flags (already available)
 
@@ -198,7 +199,7 @@ Physics test opt‑in
 ## Testing checklist
 
 - Unit: boundary validation, scoring math, CMA‑ES step.
-- Integration: one agent run with `--budget 5 --limit 8` finishes < 60s and writes artifacts.
+- Integration: one agent run with `--budget 5 --use-physics --problem p1` finishes < 60s and writes artifacts (see `examples/real_quickstart/`).
 - Golden files: store a tiny fixtures boundary & metrics JSON for regression tests.
 
 ## Performance rules

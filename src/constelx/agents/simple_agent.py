@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Callable
+import numpy as np  # for typing dtypes
+from numpy.typing import NDArray
 
 from ..eval import forward as eval_forward, score as eval_score
 from ..eval.boundary_param import (
@@ -413,7 +415,7 @@ def run(config: AgentConfig) -> Path:
             pass
         return out
 
-    def _flatten_vec(boundary: Mapping[str, Any]) -> tuple[int, _np.ndarray]:
+    def _flatten_vec(boundary: Mapping[str, Any]) -> tuple[int, NDArray[np.float64]]:
         nfp_val = int(boundary.get("n_field_periods", 0) or 0)
         rc = boundary.get("r_cos") or []
         zs = boundary.get("z_sin") or []
@@ -431,19 +433,19 @@ def run(config: AgentConfig) -> Path:
 
     def _novelty_features(
         boundary: Mapping[str, Any],
-    ) -> tuple[Mapping[str, float], int, _np.ndarray]:
+    ) -> tuple[Mapping[str, float], int, NDArray[np.float64]]:
         flat = _flatten_map(boundary)
         nfp_val, vec = _flatten_vec(boundary)
         return flat, nfp_val, vec
 
     def _is_novel_local_vec(
         nfp_val: int,
-        candidate: _np.ndarray,
-        window: dict[int, deque[_np.ndarray]],
+        candidate: NDArray[np.float64],
+        window: dict[int, deque[NDArray[np.float64]]],
         *,
-        extra_vectors: Iterable[_np.ndarray] | None = None,
+        extra_vectors: Iterable[NDArray[np.float64]] | None = None,
     ) -> bool:
-        hist_list: list[_np.ndarray] = []
+        hist_list: list[NDArray[np.float64]] = []
         hist = window.get(nfp_val)
         if hist:
             hist_list.extend(hist)
@@ -455,7 +457,7 @@ def run(config: AgentConfig) -> Path:
         eps = float(config.novelty_eps)
         if metric == "cosine":
 
-            def cdist(a: _np.ndarray, b: _np.ndarray) -> float:
+            def cdist(a: NDArray[np.float64], b: NDArray[np.float64]) -> float:
                 na = _np.linalg.norm(a)
                 nb = _np.linalg.norm(b)
                 if na == 0 or nb == 0:
@@ -464,11 +466,11 @@ def run(config: AgentConfig) -> Path:
                 return 1.0 - cos
         elif metric == "allclose":
 
-            def cdist(a: _np.ndarray, b: _np.ndarray) -> float:
+            def cdist(a: NDArray[np.float64], b: NDArray[np.float64]) -> float:
                 return 0.0 if _np.allclose(a, b, atol=eps, rtol=0.0) else float("inf")
         else:  # l2
 
-            def cdist(a: _np.ndarray, b: _np.ndarray) -> float:
+            def cdist(a: NDArray[np.float64], b: NDArray[np.float64]) -> float:
                 d = a - b
                 return float(_np.sqrt(float(d.dot(d))))
 
@@ -477,9 +479,9 @@ def run(config: AgentConfig) -> Path:
                 return False
         return True
 
-    NoveltyFeature = Tuple[Mapping[str, float], int, _np.ndarray]
+    NoveltyFeature = Tuple[Mapping[str, float], int, NDArray[np.float64]]
 
-    novelty_window: dict[int, deque[_np.ndarray]] = {}
+    novelty_window: dict[int, deque[NDArray[np.float64]]] = {}
     novelty_db = None
     if config.novelty_skip and novelty_db_path is not None:
         try:
@@ -491,7 +493,7 @@ def run(config: AgentConfig) -> Path:
 
     def _check_novelty(
         boundary: Mapping[str, Any],
-        pending_vectors: Mapping[int, Iterable[_np.ndarray]] | None = None,
+        pending_vectors: Mapping[int, Iterable[NDArray[np.float64]]] | None = None,
     ) -> tuple[bool, NoveltyFeature]:
         feats = _novelty_features(boundary)
         if not config.novelty_skip:
@@ -828,7 +830,7 @@ def run(config: AgentConfig) -> Path:
             seeds: List[int] = []
             batch: List[Dict[str, Any]] = []
             batch_features: List[NoveltyFeature] = []
-            pending_vectors: dict[int, list[_np.ndarray]] = {}
+            pending_vectors: dict[int, list[NDArray[np.float64]]] = {}
             sources: List[str] = []
             for _ in range(min(batch_size, budget - completed)):
                 if seed_boundaries:
@@ -1138,7 +1140,7 @@ def run(config: AgentConfig) -> Path:
             xs_params: List[List[float]] = []
             idxs: List[int] = []
             proposal_features: List[NoveltyFeature] = []
-            pending_vectors: dict[int, list[_np.ndarray]] = {}
+            pending_vectors: dict[int, list[NDArray[np.float64]]] = {}
             for j, x in enumerate(xs):
                 if completed >= budget:
                     break

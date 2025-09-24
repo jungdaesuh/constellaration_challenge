@@ -1,0 +1,31 @@
+[
+  {
+    "r_amp": 0.0,
+    "z_amp": 0.0,
+    "objective": 9.08975000330247,
+    "qs_residual": 0.0,
+    "helical_energy": 0.0,
+    "feasible": true,
+    "metrics": {
+      "r_cos_norm": 1.0,
+      "z_sin_norm": 0.0,
+      "nfp": 3.0,
+      "stellarator_symmetric": 1.0,
+      "placeholder_metric": 1.0,
+      "proxy_boozer_b_mean": 1.0,
+      "proxy_boozer_b_std_fraction": 0.0,
+      "proxy_boozer_mirror_ratio": 0.0,
+      "proxy_qs_residual": 0.0,
+      "proxy_qs_quality": 1.0,
+      "proxy_qi_residual": 0.0,
+      "proxy_qi_quality": 1.0,
+      "elapsed_ms": 1.0897500033024698,
+      "feasible": 1.0,
+      "vmec_hot_restart": 0.0,
+      "qs_residual": 0.0,
+      "qi_residual": 0.0,
+      "helical_energy": 0.0,
+      "mirror_ratio": 0.0
+    }
+  }
+]

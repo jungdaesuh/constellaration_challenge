@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence, Tuple
+from typing import Any, Mapping, Sequence, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -69,12 +69,12 @@ def _score_and_penalty(
     return score, penalty
 
 
-def _objective(x: np.ndarray, cfg: BaselineConfig) -> float:
+def _objective(x: NDArray[np.float64], cfg: BaselineConfig) -> float:
     score, _ = _score_and_penalty(x, cfg)
     return score
 
 
-def run_trust_constr(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
+def run_trust_constr(cfg: BaselineConfig) -> Tuple[NDArray[np.float64], float]:
     """Trust-constr baseline over two helical coefficients.
 
     Returns (x_best, best_score).
@@ -91,17 +91,17 @@ def run_trust_constr(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
     return np.asarray(res.x, dtype=float), float(res.fun)
 
 
-def run_alm(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
+def run_alm(cfg: BaselineConfig) -> Tuple[NDArray[np.float64], float]:
     """Simple augmented-Lagrangian-like penalty loop.
 
-    This placeholder uses a feasibility signal when available; otherwise it
+    This dev-friendly path uses a feasibility signal when available; otherwise it
     reduces to plain trust-constr on the aggregated objective.
     """
     rho = 10.0
     x = np.asarray([0.05, 0.05], dtype=float)
     bounds = Bounds([-0.2, -0.2], [0.2, 0.2], keep_feasible=False)
 
-    def penalized_obj(xv: np.ndarray) -> float:
+    def penalized_obj(xv: NDArray[np.float64]) -> float:
         base, pen = _score_and_penalty(xv, cfg)
         return base + rho * pen
 
@@ -123,7 +123,7 @@ def run_alm(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
     return x, final
 
 
-def run_ngopt(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
+def run_ngopt(cfg: BaselineConfig) -> Tuple[NDArray[np.float64], float]:
     """Nevergrad NGOpt baseline with a simple augmented-Lagrangian outer loop."""
 
     try:
@@ -150,7 +150,7 @@ def run_ngopt(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
         optimizer = ng.optimizers.NGOpt(parametrization=parametrization, budget=inner_budget)
         optimizer.parametrization.random_state.seed(cfg.seed + outer_idx)
 
-        def augmented_loss(arr: np.ndarray) -> float:
+        def augmented_loss(arr: NDArray[np.float64]) -> float:
             values = np.asarray(arr, dtype=float)
             base, penalty = _score_and_penalty(values, cfg)
             return base + lam * penalty + 0.5 * rho * penalty * penalty
@@ -177,7 +177,7 @@ __all__ = [
 ]
 
 
-def run_botorch_qnei(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
+def run_botorch_qnei(cfg: BaselineConfig) -> Tuple[NDArray[np.float64], float]:
     """BoTorch qNEI baseline with feasibility-aware acquisition.
 
     The search space matches the other baselines (two helical coefficients bounded
@@ -224,11 +224,16 @@ def run_botorch_qnei(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
             penalty = float(1e2)
         return float(score), float(penalty)
 
+    def _sobol_draw(n: int) -> "torch.Tensor":
+        # Local wrapper to keep mypy strict: treat SobolEngine as Any
+        engine_cls = cast(Any, torch.quasirandom.SobolEngine)
+        engine = engine_cls(dimension=dim, scramble=True, seed=int(cfg.seed))
+        return cast("torch.Tensor", engine.draw(n).to(dtype=dtype, device=device))
+
     def sample_sobol(num: int) -> list[NDArray[np.float64]]:
         if num <= 0:
             return []
-        engine = torch.quasirandom.SobolEngine(dimension=dim, scramble=True, seed=int(cfg.seed))
-        sobol_raw = engine.draw(num).to(dtype=dtype, device=device)
+        sobol_raw = _sobol_draw(num)
         sobol_scaled = bounds[0] + (bounds[1] - bounds[0]) * sobol_raw
         return [row.cpu().numpy().astype(np.float64, copy=True) for row in sobol_scaled]
 
@@ -269,12 +274,17 @@ def run_botorch_qnei(cfg: BaselineConfig) -> Tuple[np.ndarray, float]:
         if len(train_x_list) >= cfg.budget:
             return np.asarray(best_x, dtype=float), float(best_score)
 
-    sobol_fallback = torch.quasirandom.SobolEngine(
+    # Persistent Sobol engine for fallback/random proposals to preserve state
+    _sobol_engine_cls = cast(Any, torch.quasirandom.SobolEngine)
+    _sobol_fallback_engine = _sobol_engine_cls(
         dimension=dim, scramble=True, seed=int(cfg.seed) + 7919
     )
 
-    def next_random() -> np.ndarray:
-        random_draw = sobol_fallback.draw(1).to(dtype=dtype, device=device)[0]
+    def next_random() -> NDArray[np.float64]:
+        random_draw = cast(
+            "torch.Tensor",
+            _sobol_fallback_engine.draw(1).to(dtype=dtype, device=device)[0],
+        )
         candidate = bounds[0] + (bounds[1] - bounds[0]) * random_draw
         return candidate.cpu().numpy().astype(np.float64, copy=True)
 

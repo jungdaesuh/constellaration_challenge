@@ -12,7 +12,7 @@ ConStelX is a sophisticated Python CLI-first framework for ML + physics-based op
 - **Framework**: CLI-first using Typer with modular components
 - **Modules**:
   - `constelx.eval`: Physics evaluation and scoring
-  - `constelx.optim`: Optimization algorithms (CMA-ES, BoTorch stubs)
+  - `constelx.optim`: Optimization algorithms (CMA-ES, Nevergrad NGOpt, BoTorch qNEI, DESC trust-region)
   - `constelx.agents`: Multi-step optimization loops
   - `constelx.surrogate`: ML models for physics approximation
   - `constelx.submit`: Submission packaging for leaderboard
@@ -45,6 +45,12 @@ ConStelX is a sophisticated Python CLI-first framework for ML + physics-based op
 
 ### Open Issues Summary
 - **Strong momentum** with systematic progress on core features; surrogate screening and novelty gating are now part of the agent loop.
+
+### Baseline Parity Snapshot (2025-09-23)
+- **Nevergrad NGOpt (Issue #43)**: first physics-backed parity run on P1 using `constelx opt run --baseline ngopt --use-physics --problem p1 --nfp 3 --budget 50 --seed 0`.
+  - Resulting best iterate: `r_cos[1,5] = 0.05`, `z_sin[1,5] = 0.05` (clamped boundary corner).
+  - Real evaluator metrics: `score = 0.0`, `feasible = True`, `feasibility buffer = +4.0`, `qs_residual ≈ 2.46e-4`, `qi_residual ≈ 2.21e-3`.
+  - Interpretation: NGOpt consistently collides with the feasibility buffer; aggregate score is clamped to zero despite nominal feasibility. Next steps include retuning the augmented-Lagrangian schedule (ρ, λ updates) and exploring a wider/more expressive boundary parameterization before closing #43.
 
 ## 3. Research Papers Analysis
 
